@@ -11,6 +11,12 @@ const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 type ScreenState = "booting" | "syncing" | "ready";
 type InstallMode = "dedicated" | "global";
 type OnboardingStep = "source" | "paths" | "runtime" | "sync";
+type WorkspaceView =
+  | "overview"
+  | "onboarding"
+  | "sourcePaths"
+  | "catalog"
+  | "activity";
 
 interface AppSettings {
   selectedLauncherId: string | null;
@@ -214,6 +220,7 @@ export default function App() {
 
   const [wizardActive, setWizardActive] = useState(false);
   const [wizardStep, setWizardStep] = useState<OnboardingStep>("source");
+  const [activeView, setActiveView] = useState<WorkspaceView>("overview");
   const [wizardProgress, setWizardProgress] = useState(0);
   const [wizardDetection, setWizardDetection] =
     useState<LauncherDetectionResult | null>(null);
@@ -486,6 +493,17 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [runSyncCycle, settings, wizardActive]);
+
+  useEffect(() => {
+    if (wizardActive) {
+      setActiveView("onboarding");
+      return;
+    }
+
+    if (activeView === "onboarding") {
+      setActiveView("overview");
+    }
+  }, [activeView, wizardActive]);
 
   const beginWizardPathsStep = useCallback(async () => {
     if (!settings) {
@@ -1202,179 +1220,347 @@ export default function App() {
     );
   };
 
-  return (
-    <main className="app-shell">
-      <aside className="side-panel">
-        <section className="setting-group">
-          <h3>Sync Schedule</h3>
-          <p className="small">
-            Auto-apply every 30 minutes while the app is open.
+  const renderSourcePaths = () => {
+    return (
+      <div className="workspace-pane">
+        <div className="pane-head">
+          <h2>Source & Paths</h2>
+          <p className="pane-subtitle">
+            Configure profile source, launcher executable, and Minecraft root.
           </p>
-          <p className="small">Last check: {formatTime(lastCheckAt)}</p>
-          <p className="small">Next check: {formatTime(nextCheckAt)}</p>
-        </section>
+        </div>
 
-        <section className="setting-group">
-          <h3>Catalog</h3>
-          <p className="small">Mods: {catalog?.mods.length ?? 0}</p>
-          <p className="small">
-            Resourcepacks: {catalog?.resourcepacks.length ?? 0}
-          </p>
-          <p className="small">Shaders: {catalog?.shaderpacks.length ?? 0}</p>
-          <p className="small">Configs: {catalog?.configs.length ?? 0}</p>
-          <p className="small">
-            Installed lock version: {instance?.installedVersion ?? "none"}
-          </p>
-          <p className="small">
-            Remote lock version: {catalog?.profileVersion ?? "--"}
-          </p>
-          <p className="small">
-            Local lock version: {catalog?.localVersion ?? "--"}
-          </p>
-        </section>
+        <div className="pane-grid">
+          <section className="panel-card">
+            <h3>Profile Source</h3>
+            <input
+              className="input"
+              type="text"
+              value={profileSourceDraft.apiBaseUrl}
+              placeholder="https://api.example.com"
+              onChange={(event) =>
+                setProfileSourceDraft((current) => ({
+                  ...current,
+                  apiBaseUrl: event.target.value,
+                }))
+              }
+            />
+            <input
+              className="input"
+              type="text"
+              value={profileSourceDraft.profileLockUrl}
+              placeholder="Optional direct lock URL"
+              onChange={(event) =>
+                setProfileSourceDraft((current) => ({
+                  ...current,
+                  profileLockUrl: event.target.value,
+                }))
+              }
+            />
+            <button className="btn primary" onClick={() => void saveProfileSource()}>
+              Save Source
+            </button>
+          </section>
 
-        <section className="setting-group">
-          <h3>Profile Source</h3>
-          <input
-            className="input"
-            type="text"
-            value={profileSourceDraft.apiBaseUrl}
-            placeholder="https://api.example.com"
-            onChange={(event) =>
-              setProfileSourceDraft((current) => ({
-                ...current,
-                apiBaseUrl: event.target.value,
-              }))
-            }
-          />
-          <input
-            className="input"
-            type="text"
-            value={profileSourceDraft.profileLockUrl}
-            placeholder="Optional direct lock URL"
-            onChange={(event) =>
-              setProfileSourceDraft((current) => ({
-                ...current,
-                profileLockUrl: event.target.value,
-              }))
-            }
-          />
-          <button
-            className="btn primary"
-            onClick={() => void saveProfileSource()}
-          >
-            Save Source
-          </button>
-        </section>
-
-        <section className="setting-group">
-          <h3>Install Mode</h3>
-          <p className="small">
-            Global mode is enforced. Sync files are written to your Minecraft
-            launcher directory.
-          </p>
-        </section>
-
-        <section className="setting-group">
-          <h3>Launcher</h3>
-          <select
-            className="select"
-            value={settings?.selectedLauncherId ?? ""}
-            onChange={(event) =>
-              void updateLauncherSelection(event.target.value)
-            }
-          >
-            <option value="">No launcher selected</option>
-            {launchers
-              .filter((candidate) => candidate.id !== "custom")
-              .map((candidate) => (
-                <option
-                  key={`${candidate.id}:${candidate.path}`}
-                  value={candidate.id}
+          <section className="panel-card">
+            <h3>Launcher</h3>
+            <select
+              className="select"
+              value={settings?.selectedLauncherId ?? ""}
+              onChange={(event) => void updateLauncherSelection(event.target.value)}
+            >
+              <option value="">No launcher selected</option>
+              {launchers
+                .filter((candidate) => candidate.id !== "custom")
+                .map((candidate) => (
+                  <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+              <option value="custom">Custom path</option>
+            </select>
+            {settings?.selectedLauncherId === "custom" ? (
+              <>
+                <input
+                  className="input"
+                  type="text"
+                  value={settings.customLauncherPath ?? ""}
+                  placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
+                  onChange={(event) => void updateCustomPath(event.target.value)}
+                />
+                <button
+                  className="btn ghost"
+                  onClick={() => void pickManualLauncherFromSettings()}
                 >
-                  {candidate.name}
-                </option>
-              ))}
-            <option value="custom">Custom path</option>
-          </select>
-          {settings?.selectedLauncherId === "custom" ? (
-            <>
-              <input
-                className="input"
-                type="text"
-                value={settings.customLauncherPath ?? ""}
-                placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
-                onChange={(event) => void updateCustomPath(event.target.value)}
-              />
+                  Pick Launcher Path
+                </button>
+              </>
+            ) : null}
+            <button className="btn ghost" onClick={() => void openLauncher()}>
+              Open Launcher
+            </button>
+          </section>
+
+          <section className="panel-card">
+            <h3>Minecraft Root</h3>
+            <input
+              className="input"
+              type="text"
+              value={settings?.minecraftRootOverride ?? ""}
+              placeholder="Leave empty for default launcher dir"
+              onChange={(event) =>
+                settings
+                  ? void saveSettings({
+                      ...settings,
+                      minecraftRootOverride: event.target.value.trim() || null,
+                    })
+                  : undefined
+              }
+            />
+            <div className="actions-row">
               <button
                 className="btn ghost"
-                onClick={() => void pickManualLauncherFromSettings()}
+                onClick={() => void pickMinecraftRootFromSettings()}
               >
-                Pick Launcher Path
+                Pick Minecraft Dir
               </button>
-            </>
-          ) : null}
-        </section>
+              <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
+                Refresh Readiness
+              </button>
+            </div>
+            <p className="small-dark">
+              Readiness:{" "}
+              {versionReadiness?.foundInMinecraftRootDir
+                ? "runtime found"
+                : "runtime missing"}
+            </p>
+            <p className="small-dark">
+              Allowlisted: {versionReadiness?.allowlisted ? "yes" : "no"}
+            </p>
+          </section>
 
-        <section className="setting-group">
-          <h3>Minecraft Root</h3>
-          <input
-            className="input"
-            type="text"
-            value={settings?.minecraftRootOverride ?? ""}
-            placeholder="Leave empty for default launcher dir"
-            onChange={(event) =>
-              settings
-                ? void saveSettings({
-                    ...settings,
-                    minecraftRootOverride: event.target.value.trim() || null,
-                  })
-                : undefined
-            }
-          />
+          <section className="panel-card">
+            <h3>Instance Paths</h3>
+            <p className="small-dark">Root: {instance?.instanceRoot ?? "--"}</p>
+            <p className="small-dark">Game dir: {instance?.minecraftDir ?? "--"}</p>
+            <p className="small-dark">MC root: {versionReadiness?.minecraftRoot ?? "--"}</p>
+            <p className="small-dark">
+              Global mode is enforced. Sync files are written to your launcher directory.
+            </p>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCatalogPane = () => {
+    return (
+      <div className="workspace-pane">
+        <div className="pane-head">
+          <h2>Catalog</h2>
+          <p className="pane-subtitle">
+            Managed content inventory and lockfile version alignment.
+          </p>
+        </div>
+        <div className="pane-grid">
+          <section className="panel-card">
+            <h3>Content Totals</h3>
+            <ul className="summary-grid">
+              <li>
+                <strong>{catalog?.mods.length ?? 0}</strong>
+                <span>Mods</span>
+              </li>
+              <li>
+                <strong>{catalog?.resourcepacks.length ?? 0}</strong>
+                <span>Resourcepacks</span>
+              </li>
+              <li>
+                <strong>{catalog?.shaderpacks.length ?? 0}</strong>
+                <span>Shaders</span>
+              </li>
+              <li>
+                <strong>{catalog?.configs.length ?? 0}</strong>
+                <span>Configs</span>
+              </li>
+            </ul>
+          </section>
+
+          <section className="panel-card">
+            <h3>Lock Versions</h3>
+            <p className="small-dark">
+              Installed lock version: {instance?.installedVersion ?? "none"}
+            </p>
+            <p className="small-dark">
+              Remote lock version: {catalog?.profileVersion ?? "--"}
+            </p>
+            <p className="small-dark">
+              Local lock version: {catalog?.localVersion ?? "--"}
+            </p>
+          </section>
+
+          <section className="panel-card">
+            <h3>Runtime Targets</h3>
+            <p className="small-dark">
+              {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
+              {catalog?.minecraftVersion ?? "--"}
+            </p>
+            <p className="small-dark">
+              Allowed MC versions:{" "}
+              {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
+            </p>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
+  const renderActivityPane = () => {
+    return (
+      <div className="workspace-pane">
+        <div className="pane-head">
+          <h2>Activity</h2>
+          <p className="pane-subtitle">Sync schedule, telemetry, and operator messages.</p>
+        </div>
+
+        <div className="pane-grid">
+          <section className="panel-card">
+            <h3>Schedule</h3>
+            <p className="small-dark">
+              Auto-apply every 30 minutes while the app is open.
+            </p>
+            <p className="small-dark">Last check: {formatTime(lastCheckAt)}</p>
+            <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
+            <button className="btn ghost" onClick={() => void runSyncCycle(true)}>
+              Run Check + Auto Apply
+            </button>
+          </section>
+
+          <section className="panel-card">
+            <h3>Current Transfer</h3>
+            <p className="small-dark">{sync.currentFile ?? sync.phase}</p>
+            <div
+              className="meter"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercent}
+            >
+              <div className="meter-fill" style={{ width: `${progressPercent}%` }} />
+            </div>
+            <div className="metrics-row">
+              <span>
+                {bytesToHuman(sync.completedBytes)} / {bytesToHuman(sync.totalBytes)}
+              </span>
+              <span>{bytesToHuman(sync.speedBps)}/s</span>
+              <span>ETA {formatEta(sync.etaSec)}</span>
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <h3>Messages</h3>
+            <p className="small-dark">{hint ?? "No recent hints."}</p>
+            <p className="small-dark">{error ?? "No active errors."}</p>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
+  const renderWorkspace = () => {
+    if (activeView === "onboarding") {
+      if (!wizardActive) {
+        return renderPrimary();
+      }
+      return renderWizard();
+    }
+
+    if (activeView === "sourcePaths") {
+      return renderSourcePaths();
+    }
+
+    if (activeView === "catalog") {
+      return renderCatalogPane();
+    }
+
+    if (activeView === "activity") {
+      return renderActivityPane();
+    }
+
+    return renderPrimary();
+  };
+
+  const sourceLabel =
+    settings?.apiBaseUrl ??
+    settings?.profileLockUrl ??
+    "API source not configured";
+
+  return (
+    <main className="desktop-shell">
+      <aside className="desktop-nav">
+        <div className="nav-brand">
+          <p className="eyebrow">Desktop Sync Console</p>
+          <h1>{APP_NAME}</h1>
+          <p className="small-dark">Source: {sourceLabel}</p>
+        </div>
+
+        <nav className="nav-groups" aria-label="Workspace sections">
           <button
-            className="btn ghost"
-            onClick={() => void pickMinecraftRootFromSettings()}
+            className={activeView === "overview" ? "nav-item active" : "nav-item"}
+            onClick={() => setActiveView("overview")}
           >
-            Pick Minecraft Dir
+            Overview
           </button>
-          <p className="small">
-            Readiness:{" "}
-            {versionReadiness?.foundInMinecraftRootDir
-              ? "runtime found"
-              : "runtime missing"}
-          </p>
-          <p className="small">
-            Allowlisted: {versionReadiness?.allowlisted ? "yes" : "no"}
-          </p>
-        </section>
+          <button
+            className={activeView === "onboarding" ? "nav-item active" : "nav-item"}
+            onClick={() => setActiveView("onboarding")}
+          >
+            Setup
+          </button>
+          <button
+            className={activeView === "sourcePaths" ? "nav-item active" : "nav-item"}
+            onClick={() => setActiveView("sourcePaths")}
+          >
+            Source & Paths
+          </button>
+          <button
+            className={activeView === "catalog" ? "nav-item active" : "nav-item"}
+            onClick={() => setActiveView("catalog")}
+          >
+            Catalog
+          </button>
+          <button
+            className={activeView === "activity" ? "nav-item active" : "nav-item"}
+            onClick={() => setActiveView("activity")}
+          >
+            Activity
+          </button>
+        </nav>
 
-        <section className="setting-group">
-          <h3>Instance Paths</h3>
-          <p className="small">Root: {instance?.instanceRoot ?? "--"}</p>
-          <p className="small">Game dir: {instance?.minecraftDir ?? "--"}</p>
-          <p className="small">
-            MC root: {versionReadiness?.minecraftRoot ?? "--"}
+        <section className="nav-status">
+          <p className="small-dark">Last check: {formatTime(lastCheckAt)}</p>
+          <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
+          <p className="small-dark">
+            Runtime:{" "}
+            {versionReadiness?.foundInMinecraftRootDir ? "configured" : "pending"}
+          </p>
+          <p className="small-dark">
+            Lock drift: {catalog?.hasUpdates ? "detected" : "none"}
           </p>
         </section>
       </aside>
 
-      <section className="main-panel">
-        <div className="top-strip">
+      <section className="desktop-workspace">
+        <header className="workspace-header">
           <div>
             <span className="eyebrow">Minecraft Java Server Client Center</span>
-            <h1>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h1>
-            <p className="small-dark">
-              {catalog?.serverAddress ?? "Server address unavailable"}
-            </p>
+            <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
           </div>
           <div className="version-pill">
             {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
             {catalog?.minecraftVersion ?? "--"}
           </div>
-        </div>
+        </header>
 
-        {wizardActive ? renderWizard() : renderPrimary()}
+        {renderWorkspace()}
 
         {error ? (
           <div className="alert error" role="alert">
