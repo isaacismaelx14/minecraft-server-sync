@@ -3,7 +3,21 @@ name: api-build
 on:
   push:
     branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/api-build.yml'
   pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/api-build.yml'
 
 jobs:
   build-api:
@@ -34,3 +48,34 @@ jobs:
 
       - name: Build API
         run: pnpm --filter @mvl/api build
+
+  deploy-api:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-api
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy API to Railway
+        run: |
+          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
+          railway up \
+            --service api \
+            --environment production \
+            --project "$PROJECT_ID" \
+            --detach

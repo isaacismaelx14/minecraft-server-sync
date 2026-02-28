@@ -13,7 +13,17 @@ async function main() {
 
   const serverId = process.env.SERVER_ID ?? 'mvl';
   const profileId = lock.profileId;
-  const lockUrl = process.env.LOCK_URL ?? `http://localhost:3000/v1/locks/${profileId}/${lock.version}`;
+  const configuredBaseUrl = process.env.API_BASE_URL?.trim();
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  const defaultBaseUrl = railwayDomain
+    ? `https://${railwayDomain}`
+    : 'http://localhost:3000';
+  const baseUrl = (configuredBaseUrl && configuredBaseUrl.length > 0
+    ? configuredBaseUrl
+    : defaultBaseUrl
+  ).replace(/\/+$/, '');
+  const derivedLockUrl = `${baseUrl}/v1/locks/${profileId}/${lock.version}`;
+  const lockUrl = process.env.LOCK_URL?.trim() || derivedLockUrl;
 
   await prisma.server.upsert({
     where: { id: serverId },

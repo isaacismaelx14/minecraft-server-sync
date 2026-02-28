@@ -12,4 +12,4 @@ COPY . .
 RUN pnpm --filter @mvl/shared build
 RUN pnpm --filter @mvl/api build
 
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["sh", "-c", "pnpm --filter @mvl/api prisma:generate && pnpm --filter @mvl/api prisma:deploy && pnpm --filter @mvl/api prisma:seed && node apps/api/dist/src/main.js"]
