@@ -1,10 +1,13 @@
 use crate::{
   error::{LauncherError, LauncherResult},
+  providers::validate_service_url,
   state::AppState,
   types::{ProfileLock, ProfileMetadataResponse},
 };
 
 async fn fetch_lockfile(state: &AppState, lock_url: &str) -> LauncherResult<ProfileLock> {
+  validate_service_url(lock_url)?;
+
   let response = state.http.get(lock_url).send().await?;
 
   if !response.status().is_success() {
@@ -37,6 +40,7 @@ pub async fn fetch_profile_metadata(state: &AppState, server_id: &str) -> Launch
       "Profile source is not configured. Set API Base URL or Profile Lock URL in Settings.".to_string(),
     )
   })?;
+  validate_service_url(&api_base)?;
 
   let direct_profile_url = format!("{api_base}/v1/profile");
   let legacy_server_url = format!("{api_base}/v1/servers/{server_id}/profile");

@@ -22,8 +22,7 @@ impl LauncherConfig {
 
     let server_id = env::var("SERVER_ID")
       .ok()
-      .map(|value| value.trim().to_string())
-      .filter(|value| !value.is_empty())
+      .and_then(|value| normalize_server_id(&value))
       .unwrap_or_else(|| "mvl".to_string());
 
     let base = dirs::data_local_dir()
@@ -47,4 +46,20 @@ impl LauncherConfig {
   pub fn settings_path(&self) -> PathBuf {
     self.data_root.join("settings.json")
   }
+}
+
+fn normalize_server_id(value: &str) -> Option<String> {
+  let trimmed = value.trim();
+  if trimmed.is_empty() || trimmed.len() > 64 {
+    return None;
+  }
+
+  if trimmed
+    .chars()
+    .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+  {
+    return Some(trimmed.to_string());
+  }
+
+  None
 }

@@ -2,6 +2,7 @@ use std::sync::{
   atomic::AtomicBool,
   Arc,
 };
+use std::time::Duration;
 
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
@@ -36,6 +37,9 @@ impl AppState {
       config,
       http: reqwest::Client::builder()
         .user_agent("minecraft-server-syncer/0.1.0")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("http client should initialize"),
       cancel_sync: Arc::new(AtomicBool::new(false)),

@@ -195,19 +195,41 @@ function onboardingRequired(settings: AppSettings): boolean {
 }
 
 function normalizeApiBaseUrl(input: string): string {
+  return normalizeSecureUrl(input, true);
+}
+
+function normalizeProfileLockUrl(input: string): string {
+  return normalizeSecureUrl(input, false);
+}
+
+function normalizeSecureUrl(input: string, trimTrailingSlash: boolean): string {
   const trimmed = input.trim();
   if (!trimmed) {
     return "";
   }
 
-  const withoutTrailingSlash = trimmed.replace(/\/+$/u, "");
+  const candidate = trimTrailingSlash
+    ? trimmed.replace(/\/+$/u, "")
+    : trimmed;
 
   try {
-    const parsed = new URL(withoutTrailingSlash);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    const parsed = new URL(candidate);
+    const localhost =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "::1";
+    const secure = parsed.protocol === "https:";
+    const localHttp = parsed.protocol === "http:" && localhost;
+
+    if (!secure && !localHttp) {
       return "";
     }
-    return withoutTrailingSlash;
+
+    if (parsed.username || parsed.password || parsed.hash) {
+      return "";
+    }
+
+    return candidate;
   } catch {
     return "";
   }
@@ -561,14 +583,24 @@ export default function App() {
 
     const apiBaseUrl = normalizeApiBaseUrl(profileSourceDraft.apiBaseUrl);
     if (!apiBaseUrl) {
-      setError("API base URL must be a valid http(s) URL.");
+      setError(
+        "API base URL must be a valid https URL (or localhost http for development).",
+      );
+      return;
+    }
+    const profileLockInput = profileSourceDraft.profileLockUrl.trim();
+    const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
+    if (profileLockInput && !profileLockUrl) {
+      setError(
+        "Profile lock URL must be a valid https URL (or localhost http for development).",
+      );
       return;
     }
 
     const next: AppSettings = {
       ...settings,
       apiBaseUrl,
-      profileLockUrl: profileSourceDraft.profileLockUrl.trim() || null,
+      profileLockUrl: profileLockUrl || null,
     };
 
     await saveSettings(next);
@@ -822,14 +854,24 @@ export default function App() {
 
     const apiBaseUrl = normalizeApiBaseUrl(profileSourceDraft.apiBaseUrl);
     if (!apiBaseUrl) {
-      setError("API base URL must be a valid http(s) URL.");
+      setError(
+        "API base URL must be a valid https URL (or localhost http for development).",
+      );
+      return;
+    }
+    const profileLockInput = profileSourceDraft.profileLockUrl.trim();
+    const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
+    if (profileLockInput && !profileLockUrl) {
+      setError(
+        "Profile lock URL must be a valid https URL (or localhost http for development).",
+      );
       return;
     }
 
     const next: AppSettings = {
       ...settings,
       apiBaseUrl,
-      profileLockUrl: profileSourceDraft.profileLockUrl.trim() || null,
+      profileLockUrl: profileLockUrl || null,
     };
 
     await saveSettings(next);

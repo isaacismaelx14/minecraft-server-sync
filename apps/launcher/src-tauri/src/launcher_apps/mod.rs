@@ -349,17 +349,23 @@ pub fn resolve_selected_path(settings: &AppSettings, detected: &[LauncherCandida
 }
 
 fn spawn_launcher(path: &str) -> LauncherResult<()> {
+  let launcher_path = validate_launcher_path(path)?;
+
   #[cfg(target_os = "macos")]
   {
-    if path.ends_with(".app") {
+    if launcher_path
+      .extension()
+      .and_then(|ext| ext.to_str())
+      .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+    {
       Command::new("open")
-        .arg(path)
+        .arg(&launcher_path)
         .spawn()
         .map_err(|error| LauncherError::Fs(format!("failed to open launcher app: {error}")))?;
       return Ok(());
     }
 
-    Command::new(path)
+    Command::new(&launcher_path)
       .spawn()
       .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
 
@@ -368,7 +374,7 @@ fn spawn_launcher(path: &str) -> LauncherResult<()> {
 
   #[cfg(target_os = "windows")]
   {
-    Command::new(path)
+    Command::new(&launcher_path)
       .spawn()
       .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
 
@@ -377,12 +383,34 @@ fn spawn_launcher(path: &str) -> LauncherResult<()> {
 
   #[cfg(not(any(target_os = "windows", target_os = "macos")))]
   {
-    Command::new(path)
+    Command::new(&launcher_path)
       .spawn()
       .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
 
     Ok(())
   }
+}
+
+fn validate_launcher_path(path: &str) -> LauncherResult<PathBuf> {
+  let trimmed = path.trim();
+  if trimmed.is_empty() {
+    return Err(LauncherError::Config("launcher path is empty".to_string()));
+  }
+
+  let candidate = PathBuf::from(trimmed);
+  if !candidate.is_absolute() {
+    return Err(LauncherError::Config(
+      "launcher path must be an absolute path".to_string(),
+    ));
+  }
+
+  if !candidate.exists() {
+    return Err(LauncherError::Config(
+      "launcher path does not exist".to_string(),
+    ));
+  }
+
+  Ok(candidate)
 }
 
 fn prism_root_dir() -> LauncherResult<PathBuf> {

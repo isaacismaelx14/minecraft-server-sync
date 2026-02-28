@@ -27,7 +27,7 @@ use crate::{
     ensure_default_server, ensure_layout, load_local_lock, resolve_target_path, write_manifest_lock, InstancePaths,
   },
   profile::fetch_remote_lock,
-  providers::validate_mod_url,
+  providers::validate_download_url,
   state::AppState,
   types::{
     ConfigTemplate, FancyMenuSettings, LockItem, ProfileLock, ResourcePack, ShaderPack, SyncApplyResponse,
@@ -44,6 +44,7 @@ struct DesiredFile {
   path: String,
   kind: String,
   name: String,
+  provider: String,
   url: String,
   sha256: String,
 }
@@ -585,7 +586,7 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
   let mut map = HashMap::new();
 
   for item in &lock.items {
-    validate_mod_url(&item.provider, &item.url)?;
+    validate_download_url(&item.provider, &item.url)?;
 
     let filename = extract_filename(&item.url)?;
     let path = format!("mods/{filename}");
@@ -596,6 +597,7 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
         path,
         kind: "mod".to_string(),
         name: item.name.clone(),
+        provider: item.provider.clone(),
         url: item.url.clone(),
         sha256: item.sha256.clone(),
       },
@@ -616,6 +618,7 @@ fn extend_resources(
   target_dir: &str,
 ) -> LauncherResult<()> {
   for entry in resources {
+    validate_download_url("direct", &entry.url)?;
     let filename = extract_filename(&entry.url)?;
     let path = format!("{target_dir}/{filename}");
 
@@ -625,6 +628,7 @@ fn extend_resources(
         path,
         kind: kind.to_string(),
         name: entry.name.clone(),
+        provider: "direct".to_string(),
         url: entry.url.clone(),
         sha256: entry.sha256.clone(),
       },
@@ -636,6 +640,7 @@ fn extend_resources(
 
 fn extend_shaders(map: &mut HashMap<String, DesiredFile>, shaders: &[ShaderPack]) -> LauncherResult<()> {
   for entry in shaders {
+    validate_download_url("direct", &entry.url)?;
     let filename = extract_filename(&entry.url)?;
     let path = format!("shaderpacks/{filename}");
 
@@ -645,6 +650,7 @@ fn extend_shaders(map: &mut HashMap<String, DesiredFile>, shaders: &[ShaderPack]
         path,
         kind: "shaderpack".to_string(),
         name: entry.name.clone(),
+        provider: "direct".to_string(),
         url: entry.url.clone(),
         sha256: entry.sha256.clone(),
       },
@@ -656,6 +662,7 @@ fn extend_shaders(map: &mut HashMap<String, DesiredFile>, shaders: &[ShaderPack]
 
 fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTemplate]) -> LauncherResult<()> {
   for entry in configs {
+    validate_download_url("direct", &entry.url)?;
     let filename = extract_filename(&entry.url)?;
     let path = format!("config/{filename}");
 
@@ -665,6 +672,7 @@ fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTempl
         path,
         kind: "config".to_string(),
         name: entry.name.clone(),
+        provider: "direct".to_string(),
         url: entry.url.clone(),
         sha256: entry.sha256.clone(),
       },
@@ -730,14 +738,35 @@ fn flatten_local(lock: &ProfileLock) -> LauncherResult<HashMap<String, LocalFile
 
 fn extract_filename(url: &str) -> LauncherResult<String> {
   let parsed = Url::parse(url).map_err(|error| LauncherError::InvalidData(error.to_string()))?;
-  let path = parsed.path();
-  let last = path.rsplit('/').next().unwrap_or_default();
+  let last = parsed
+    .path_segments()
+    .and_then(|mut segments| segments.next_back())
+    .unwrap_or_default()
+    .trim();
 
   if last.is_empty() {
     return Err(LauncherError::InvalidData(format!("url does not contain filename: {url}")));
   }
 
+  if !is_safe_filename_segment(last) {
+    return Err(LauncherError::InvalidData(format!(
+      "unsafe filename segment in URL: {url}"
+    )));
+  }
+
   Ok(last.to_string())
+}
+
+fn is_safe_filename_segment(value: &str) -> bool {
+  if value == "." || value == ".." {
+    return false;
+  }
+
+  if value.contains('/') || value.contains('\\') {
+    return false;
+  }
+
+  !value.chars().any(|ch| ch.is_control())
 }
 
 async fn estimate_total_bytes(state: &AppState, files: &[DesiredFile]) -> u64 {
@@ -745,6 +774,9 @@ async fn estimate_total_bytes(state: &AppState, files: &[DesiredFile]) -> u64 {
 
   for file in files {
     if let Ok(response) = state.http.head(&file.url).send().await {
+      if validate_download_url(&file.provider, response.url().as_str()).is_err() {
+        continue;
+      }
       if let Some(length) = response.content_length() {
         total += length;
       }
@@ -785,7 +817,7 @@ async fn download_with_concurrency(
         fs::create_dir_all(parent).await?;
       }
 
-      download_with_retry(&client, &file.url, &stage, &cancel, |delta| {
+      download_with_retry(&client, &file.provider, &file.url, &stage, &cancel, |delta| {
         let new_total = completed.fetch_add(delta, Ordering::SeqCst) + delta;
         let speed = compute_speed(start, new_total);
         let eta = if total_bytes > 0 && speed > 0 {
@@ -825,6 +857,7 @@ async fn download_with_concurrency(
 
 async fn download_with_retry<F>(
   client: &reqwest::Client,
+  provider: &str,
   url: &str,
   destination: &Path,
   cancel: &AtomicBool,
@@ -854,6 +887,8 @@ where
 
     match response {
       Ok(response) if response.status().is_success() || response.status() == reqwest::StatusCode::PARTIAL_CONTENT => {
+        validate_download_url(provider, response.url().as_str())?;
+
         let append = response.status() == reqwest::StatusCode::PARTIAL_CONTENT && resume_from > 0;
         let mut file = if append {
           fs::OpenOptions::new().append(true).open(&part_file).await?

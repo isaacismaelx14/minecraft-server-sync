@@ -8,6 +8,7 @@ use crate::{
   },
   launcher_apps,
   profile,
+  providers::validate_service_url,
   runtime,
   session,
   settings,
@@ -28,9 +29,10 @@ pub fn settings_get(state: State<'_, Arc<AppState>>) -> AppSettings {
 
 #[tauri::command]
 pub fn settings_set(state: State<'_, Arc<AppState>>, settings_payload: AppSettings) -> Result<AppSettings, String> {
-  settings::save(&state.config.settings_path(), &settings_payload).map_err(|error| error.to_string())?;
-  *state.settings.lock() = settings_payload.clone();
-  Ok(settings_payload)
+  let sanitized = sanitize_settings_payload(settings_payload)?;
+  settings::save(&state.config.settings_path(), &sanitized).map_err(|error| error.to_string())?;
+  *state.settings.lock() = sanitized.clone();
+  Ok(sanitized)
 }
 
 #[tauri::command]
@@ -547,12 +549,9 @@ fn allowed_versions(metadata: Option<&ProfileMetadataResponse>, fallback: &str) 
 }
 
 fn effective_server_id(state: &AppState, requested: &str) -> String {
-  let trimmed = requested.trim();
-  if trimmed.is_empty() {
-    state.config.server_id.clone()
-  } else {
-    trimmed.to_string()
-  }
+  sanitize_server_id(requested)
+    .or_else(|| sanitize_server_id(&state.config.server_id))
+    .unwrap_or_else(|| "mvl".to_string())
 }
 
 fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
@@ -573,4 +572,56 @@ fn managed_version_exists(minecraft_root: &Path, version_id: &str) -> bool {
     .join(version_id)
     .join(format!("{version_id}.json"))
     .exists()
+}
+
+fn sanitize_settings_payload(mut payload: AppSettings) -> Result<AppSettings, String> {
+  payload.api_base_url = normalize_optional_service_url(payload.api_base_url, true)?;
+  payload.profile_lock_url = normalize_optional_service_url(payload.profile_lock_url, false)?;
+  payload.custom_launcher_path = normalize_optional_string(payload.custom_launcher_path);
+  payload.minecraft_root_override = normalize_optional_string(payload.minecraft_root_override);
+
+  Ok(payload)
+}
+
+fn normalize_optional_service_url(value: Option<String>, trim_trailing_slash: bool) -> Result<Option<String>, String> {
+  let Some(raw) = value else {
+    return Ok(None);
+  };
+
+  let trimmed = raw.trim();
+  if trimmed.is_empty() {
+    return Ok(None);
+  }
+
+  validate_service_url(trimmed).map_err(|error| error.to_string())?;
+
+  let normalized = if trim_trailing_slash {
+    trimmed.trim_end_matches('/').to_string()
+  } else {
+    trimmed.to_string()
+  };
+
+  Ok(Some(normalized))
+}
+
+fn normalize_optional_string(value: Option<String>) -> Option<String> {
+  value
+    .map(|raw| raw.trim().to_string())
+    .filter(|raw| !raw.is_empty())
+}
+
+fn sanitize_server_id(raw: &str) -> Option<String> {
+  let trimmed = raw.trim();
+  if trimmed.is_empty() || trimmed.len() > 64 {
+    return None;
+  }
+
+  if trimmed
+    .chars()
+    .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+  {
+    return Some(trimmed.to_string());
+  }
+
+  None
 }

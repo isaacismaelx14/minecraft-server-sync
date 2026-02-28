@@ -663,12 +663,35 @@ fn collect_session_paths(paths: &InstancePaths, lock: &ProfileLock) -> LauncherR
 
 fn filename_from_url(url: &str) -> LauncherResult<Option<String>> {
   let parsed = Url::parse(url).map_err(|error| LauncherError::InvalidData(error.to_string()))?;
-  let last = parsed.path().rsplit('/').next().unwrap_or_default().trim();
+  let last = parsed
+    .path_segments()
+    .and_then(|mut segments| segments.next_back())
+    .unwrap_or_default()
+    .trim();
+
   if last.is_empty() {
     return Ok(None);
   }
 
+  if !is_safe_filename_segment(last) {
+    return Err(LauncherError::InvalidData(format!(
+      "unsafe filename segment in URL: {url}"
+    )));
+  }
+
   Ok(Some(last.to_string()))
+}
+
+fn is_safe_filename_segment(value: &str) -> bool {
+  if value == "." || value == ".." {
+    return false;
+  }
+
+  if value.contains('/') || value.contains('\\') {
+    return false;
+  }
+
+  !value.chars().any(|ch| ch.is_control())
 }
 
 fn backup_path_for_live(live: &Path, session_id: &str) -> LauncherResult<PathBuf> {
