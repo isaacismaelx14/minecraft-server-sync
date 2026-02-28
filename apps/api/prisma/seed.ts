@@ -84,6 +84,19 @@ async function main() {
       lockJson: lock,
     },
   });
+
+  await prisma.appSetting.upsert({
+    where: { id: 'global' },
+    create: {
+      id: 'global',
+      supportedMinecraftVersions: [lock.minecraftVersion],
+      supportedPlatforms: ['fabric'],
+    },
+    update: {
+      supportedMinecraftVersions: [lock.minecraftVersion],
+      supportedPlatforms: ['fabric'],
+    },
+  });
 }
 
 main()

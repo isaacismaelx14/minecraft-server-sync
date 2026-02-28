@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsInt,
@@ -37,6 +38,62 @@ export class ResolvedModDto {
   @IsString()
   @Matches(/^[A-Fa-f0-9]{64}$/)
   sha256!: string;
+}
+
+export class FancyMenuDto {
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
+
+  @IsString()
+  @IsOptional()
+  playButtonLabel?: string;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  hideSingleplayer?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  hideMultiplayer?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  hideRealms?: boolean;
+
+  @IsString()
+  @IsOptional()
+  titleText?: string;
+
+  @IsString()
+  @IsOptional()
+  subtitleText?: string;
+
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  configUrl?: string;
+
+  @IsString()
+  @Matches(/^[A-Fa-f0-9]{64}$/)
+  @IsOptional()
+  configSha256?: string;
+
+  @IsString()
+  @IsOptional()
+  assetsUrl?: string;
+
+  @IsString()
+  @Matches(/^[A-Fa-f0-9]{64}$/)
+  @IsOptional()
+  assetsSha256?: string;
 }
 
 export class GenerateLockfileDto {
@@ -120,4 +177,61 @@ export class GenerateLockfileDto {
   @Matches(/^[A-Fa-f0-9]{64}$/)
   @IsOptional()
   fancyMenuAssetsSha256?: string;
+}
+
+export class AdminLoginDto {
+  @IsString()
+  password!: string;
+}
+
+export class UpdateSettingsDto {
+  @IsArray()
+  @IsString({ each: true })
+  supportedMinecraftVersions!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  supportedPlatforms!: string[];
+}
+
+export class InstallModDto {
+  @IsString()
+  projectId!: string;
+
+  @IsString()
+  minecraftVersion!: string;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  includeDependencies?: boolean;
+}
+
+export class PublishProfileDto {
+  @IsString()
+  @IsOptional()
+  profileId?: string;
+
+  @IsString()
+  serverName!: string;
+
+  @IsString()
+  serverAddress!: string;
+
+  @IsString()
+  minecraftVersion!: string;
+
+  @IsString()
+  loaderVersion!: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedModDto)
+  mods!: ResolvedModDto[];
+
+  @ValidateNested()
+  @Type(() => FancyMenuDto)
+  @IsOptional()
+  fancyMenu?: FancyMenuDto;
 }

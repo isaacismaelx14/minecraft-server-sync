@@ -12,7 +12,7 @@ async function bootstrap() {
   app.use(helmet());
   app.enableCors({
     origin: config.get<string>('CORS_ORIGIN') ?? '*',
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH'],
   });
 
   app.useGlobalPipes(
