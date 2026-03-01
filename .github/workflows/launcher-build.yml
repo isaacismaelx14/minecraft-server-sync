@@ -85,8 +85,13 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
         run: |
+          TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
+          export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Beta updater releases require signing." >&2
             exit 1
@@ -95,6 +100,16 @@ jobs:
             echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
             exit 1
           fi
+
+          PRECHECK_FILE="$(mktemp)"
+          printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
+          if ! pnpm --filter @mvl/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+            echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
+            echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
+            rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
+            exit 1
+          fi
+          rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
 
       - name: Build Tauri bundle
         working-directory: apps/launcher
@@ -109,6 +124,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
+          export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+
           if [ "${{ runner.os }}" = "Windows" ]; then
             pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
           else

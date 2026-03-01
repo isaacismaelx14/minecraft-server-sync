@@ -68,8 +68,13 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
         run: |
+          TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
+          export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Updater releases require signing." >&2
             exit 1
@@ -79,12 +84,29 @@ jobs:
             exit 1
           fi
 
+          PRECHECK_FILE="$(mktemp)"
+          printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
+          if ! pnpm --filter @mvl/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+            echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
+            echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
+            rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
+            exit 1
+          fi
+          rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
+
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY<<EOF"
+            printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY"
+            echo "EOF"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Build and publish launcher release
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
