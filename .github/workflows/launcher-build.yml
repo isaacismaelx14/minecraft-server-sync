@@ -80,9 +80,28 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @mvl/shared build
 
+      - name: Validate updater signing key for beta release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Beta updater releases require signing." >&2
+            exit 1
+          fi
+          if [ -z "$LAUNCHER_UPDATE_PUBKEY" ]; then
+            echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
+            exit 1
+          fi
+
       - name: Build Tauri bundle
         working-directory: apps/launcher
         env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -91,7 +110,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            pnpm tauri build --bundles nsis,msi
+            pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
           else
             APPLE_VARS=(
               APPLE_CERTIFICATE
@@ -114,13 +133,13 @@ jobs:
               # Force unsigned build when secrets are absent/partial.
               echo "::warning::Building unsigned macOS DMG (Apple signing/notarization secrets missing)."
               unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
-              pnpm tauri build --bundles dmg
+              pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg
             else
               # Try signed build first, then fallback to unsigned to avoid release failures.
-              if ! pnpm tauri build --bundles dmg; then
+              if ! pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg; then
                 echo "::warning::Signed macOS build failed; retrying unsigned DMG."
                 unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
-                pnpm tauri build --bundles dmg
+                pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg
               fi
             fi
           fi
@@ -172,6 +191,24 @@ jobs:
           name: launcher-macos-dmg
           path: apps/launcher/src-tauri/target/release/bundle/dmg/*.dmg
 
+      - name: Upload updater artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-updater-${{ runner.os }}
+          if-no-files-found: warn
+          path: |
+            apps/launcher/src-tauri/target/release/bundle/**/*.sig
+            apps/launcher/src-tauri/target/release/bundle/**/*.zip
+            apps/launcher/src-tauri/target/release/bundle/**/*.tar.gz
+
+      - name: Upload updater latest.json
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-updater-latest-json
+          if-no-files-found: warn
+          path: apps/launcher/src-tauri/target/release/bundle/**/latest.json
+
   release-launcher:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build-launcher
@@ -218,3 +255,7 @@ jobs:
             release-artifacts/launcher-windows-nsis/*.exe
             release-artifacts/launcher-windows-msi/*.msi
             release-artifacts/launcher-macos-dmg/*.dmg
+            release-artifacts/launcher-updater-latest-json/**/latest.json
+            release-artifacts/launcher-updater-*/**/*.sig
+            release-artifacts/launcher-updater-*/**/*.zip
+            release-artifacts/launcher-updater-*/**/*.tar.gz

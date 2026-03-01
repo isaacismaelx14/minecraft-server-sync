@@ -6,6 +6,7 @@ use std::{
   },
 };
 
+use serde::Deserialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
@@ -30,6 +31,24 @@ use crate::{
     SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
+
+const DEFAULT_UPDATER_ENDPOINT: &str =
+  "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json";
+const GITHUB_RELEASES_API: &str =
+  "https://api.github.com/repos/isaacismaelx14/mc-client-center/releases?per_page=20";
+
+#[derive(Debug, Deserialize)]
+struct GithubReleaseAsset {
+  name: String,
+  browser_download_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubRelease {
+  draft: bool,
+  prerelease: bool,
+  assets: Vec<GithubReleaseAsset>,
+}
 
 #[tauri::command]
 pub fn settings_get(state: State<'_, Arc<AppState>>) -> AppSettings {
@@ -165,14 +184,15 @@ pub async fn launcher_update_check(
   state: State<'_, Arc<AppState>>,
 ) -> Result<LauncherUpdateStatus, String> {
   let current_version = app.package_info().version.to_string();
+  let updater_endpoint = resolve_updater_endpoint(state.inner(), &current_version)
+    .await?;
   let mut updater_builder = app.updater_builder();
   if let Some(pubkey) = state.config.updater_pubkey.clone() {
     updater_builder = updater_builder.pubkey(pubkey);
   }
   let updater = updater_builder
     .endpoints(vec![
-      Url::parse(&state.config.updater_endpoint)
-        .map_err(|error| format!("Invalid updater endpoint URL: {error}"))?,
+      updater_endpoint,
     ])
     .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
     .build()
@@ -192,6 +212,16 @@ pub async fn launcher_update_check(
     });
   };
 
+  if should_ignore_prerelease_update(&current_version, &update.version) {
+    return Ok(LauncherUpdateStatus {
+      current_version,
+      latest_version: None,
+      available: false,
+      body: None,
+      pub_date: None,
+    });
+  }
+
   Ok(LauncherUpdateStatus {
     current_version,
     latest_version: Some(update.version.clone()),
@@ -206,14 +236,16 @@ pub async fn launcher_update_install(
   app: AppHandle,
   state: State<'_, Arc<AppState>>,
 ) -> Result<LauncherUpdateInstallResponse, String> {
+  let current_version = app.package_info().version.to_string();
+  let updater_endpoint = resolve_updater_endpoint(state.inner(), &current_version)
+    .await?;
   let mut updater_builder = app.updater_builder();
   if let Some(pubkey) = state.config.updater_pubkey.clone() {
     updater_builder = updater_builder.pubkey(pubkey);
   }
   let updater = updater_builder
     .endpoints(vec![
-      Url::parse(&state.config.updater_endpoint)
-        .map_err(|error| format!("Invalid updater endpoint URL: {error}"))?,
+      updater_endpoint,
     ])
     .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
     .build()
@@ -230,6 +262,16 @@ pub async fn launcher_update_install(
       message: "Launcher is already up to date.".to_string(),
     });
   };
+
+  if should_ignore_prerelease_update(&current_version, &update.version) {
+    return Ok(LauncherUpdateInstallResponse {
+      updated: false,
+      version: None,
+      message:
+        "Prerelease update ignored because this launcher is on a stable version."
+          .to_string(),
+    });
+  }
 
   let target_version = update.version.clone();
   update
@@ -704,6 +746,53 @@ fn effective_server_id(state: &AppState, requested: &str) -> String {
   sanitize_server_id(requested)
     .or_else(|| sanitize_server_id(&state.config.server_id))
     .unwrap_or_else(|| "mvl".to_string())
+}
+
+async fn resolve_updater_endpoint(
+  state: &AppState,
+  current_version: &str,
+) -> Result<Url, String> {
+  let configured = state.config.updater_endpoint.trim();
+  if configured.is_empty() {
+    return Err("Updater endpoint is not configured.".to_string());
+  }
+
+  let maybe_beta_endpoint =
+    if configured == DEFAULT_UPDATER_ENDPOINT && is_prerelease_version(current_version) {
+      fetch_latest_beta_updater_endpoint(state).await
+    } else {
+      None
+    };
+
+  let chosen = maybe_beta_endpoint.as_deref().unwrap_or(configured);
+  Url::parse(chosen).map_err(|error| format!("Invalid updater endpoint URL: {error}"))
+}
+
+fn is_prerelease_version(version: &str) -> bool {
+  version.contains('-')
+}
+
+fn should_ignore_prerelease_update(current_version: &str, candidate_version: &str) -> bool {
+  !is_prerelease_version(current_version) && is_prerelease_version(candidate_version)
+}
+
+async fn fetch_latest_beta_updater_endpoint(state: &AppState) -> Option<String> {
+  let response = state.http.get(GITHUB_RELEASES_API).send().await.ok()?;
+  if !response.status().is_success() {
+    return None;
+  }
+
+  let releases = response.json::<Vec<GithubRelease>>().await.ok()?;
+  releases
+    .into_iter()
+    .find(|release| release.prerelease && !release.draft)
+    .and_then(|release| {
+      release
+        .assets
+        .into_iter()
+        .find(|asset| asset.name == "latest.json")
+    })
+    .map(|asset| asset.browser_download_url)
 }
 
 fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
