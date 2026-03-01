@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../db/prisma.service';
-import { FancyMenuSettingsSchema, ProfileMetadataResponse, ProfileMetadataResponseSchema } from '@mvl/shared';
+import {
+  FancyMenuSettingsSchema,
+  ProfileMetadataResponse,
+  ProfileMetadataResponseSchema,
+} from '@mvl/shared';
 
 @Injectable()
 export class ProfileService {
@@ -27,20 +31,23 @@ export class ProfileService {
     ]);
 
     if (!server || !latest) {
-      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+      throw new NotFoundException(
+        `No profile version found for server '${serverId}'`,
+      );
     }
 
     const allowedMinecraftVersions = Array.from(
-      new Set([
-        ...server.allowedMinecraftVersions,
-        latest.minecraftVersion,
-      ]),
+      new Set([...server.allowedMinecraftVersions, latest.minecraftVersion]),
     );
     const lockFancyMenu = this.extractFancyMenu(latest.lockJson);
     const serverFancyMenu = this.extractFancyMenu(server.fancyMenuSettings);
     const profileFancyMenu = this.extractFancyMenu(latest.fancyMenuSettings);
-    const fancyMenu = profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu ?? undefined;
-    const fancyMenuEnabled = latest.fancyMenuEnabled || server.fancyMenuEnabled || fancyMenu?.enabled === true;
+    const fancyMenu =
+      profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu ?? undefined;
+    const fancyMenuEnabled =
+      latest.fancyMenuEnabled ||
+      server.fancyMenuEnabled ||
+      fancyMenu?.enabled === true;
 
     return ProfileMetadataResponseSchema.parse({
       profileId: latest.profileId,
@@ -48,7 +55,7 @@ export class ProfileService {
       minecraftVersion: latest.minecraftVersion,
       loader: latest.loader,
       loaderVersion: latest.loaderVersion,
-      lockUrl: latest.lockUrl,
+      lockUrl: this.normalizeLockUrl(latest.lockUrl),
       serverName: server.name,
       serverAddress: server.address,
       allowedMinecraftVersions,
@@ -61,5 +68,23 @@ export class ProfileService {
   private extractFancyMenu(value: unknown) {
     const parsed = FancyMenuSettingsSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
+  }
+
+  private normalizeLockUrl(lockUrl: string): string {
+    try {
+      const parsed = new URL(lockUrl);
+      if (parsed.protocol === 'http:' && !this.isLoopback(parsed.hostname)) {
+        parsed.protocol = 'https:';
+      }
+      return parsed.toString();
+    } catch {
+      return lockUrl;
+    }
+  }
+
+  private isLoopback(hostname: string): boolean {
+    return (
+      hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+    );
   }
 }

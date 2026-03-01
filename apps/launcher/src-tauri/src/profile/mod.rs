@@ -4,6 +4,7 @@ use crate::{
   state::AppState,
   types::{ProfileLock, ProfileMetadataResponse},
 };
+use url::Url;
 
 async fn fetch_lockfile(state: &AppState, lock_url: &str) -> LauncherResult<ProfileLock> {
   validate_service_url(lock_url)?;
@@ -87,7 +88,10 @@ pub async fn fetch_remote_lock(state: &AppState, server_id: &str) -> LauncherRes
     fetch_lockfile(state, &lock_url).await
   } else {
     match fetch_profile_metadata(state, server_id).await {
-      Ok(profile) => fetch_lockfile(state, &profile.lock_url).await,
+      Ok(profile) => {
+        let normalized_lock_url = normalize_remote_lock_url(&profile.lock_url);
+        fetch_lockfile(state, &normalized_lock_url).await
+      }
       Err(error) => Err(error),
     }
   };
@@ -134,4 +138,22 @@ fn normalize(value: Option<String>) -> Option<String> {
 
 fn normalize_api_base(value: Option<String>) -> Option<String> {
   normalize(value).map(|raw| raw.trim_end_matches('/').to_string())
+}
+
+fn normalize_remote_lock_url(lock_url: &str) -> String {
+  let Ok(mut parsed) = Url::parse(lock_url) else {
+    return lock_url.to_string();
+  };
+
+  let host = parsed.host_str().unwrap_or_default();
+  if parsed.scheme() == "http" && !is_loopback(host) {
+    let _ = parsed.set_scheme("https");
+    return parsed.to_string();
+  }
+
+  lock_url.to_string()
+}
+
+fn is_loopback(host: &str) -> bool {
+  host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
 }

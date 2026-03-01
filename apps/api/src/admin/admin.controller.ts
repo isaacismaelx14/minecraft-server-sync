@@ -34,7 +34,8 @@ export class AdminController {
   @Get('/admin/login')
   @AdminPublic()
   async getLoginPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated = await this.adminService.authenticateRequest(request);
+    const isAuthenticated =
+      await this.adminService.authenticateRequest(request);
     if (isAuthenticated) {
       response.redirect('/admin');
       return;
@@ -61,20 +62,27 @@ export class AdminController {
 
   @Post('/v1/admin/auth/refresh')
   @AdminPublic()
-  refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+  refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     return this.adminService.refresh(request, response);
   }
 
   @Post('/v1/admin/auth/logout')
   @AdminPublic()
-  logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+  logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
     return this.adminService.logout(request, response);
   }
 
   @Get('/admin')
   @AdminPublic()
   async getAdminPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated = await this.adminService.authenticateRequest(request);
+    const isAuthenticated =
+      await this.adminService.authenticateRequest(request);
     if (!isAuthenticated) {
       response.redirect('/admin/login');
       return;
@@ -92,7 +100,8 @@ export class AdminController {
   @Get('/admin/legacy')
   @AdminPublic()
   async getLegacyAdminPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated = await this.adminService.authenticateRequest(request);
+    const isAuthenticated =
+      await this.adminService.authenticateRequest(request);
     if (!isAuthenticated) {
       response.redirect('/admin/login');
       return;
@@ -121,9 +130,7 @@ export class AdminController {
 
   @Get('/v1/admin/fabric/versions')
   @UseGuards(AdminSessionGuard)
-  getFabricVersions(
-    @Query('minecraftVersion') minecraftVersion = '',
-  ): Promise<{
+  getFabricVersions(@Query('minecraftVersion') minecraftVersion = ''): Promise<{
     minecraftVersion: string;
     loaders: Array<{ version: string; stable: boolean }>;
     latestStable: string | null;
@@ -155,7 +162,10 @@ export class AdminController {
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
   ) {
-    return this.adminService.analyzeModDependencies(projectId, minecraftVersion);
+    return this.adminService.analyzeModDependencies(
+      projectId,
+      minecraftVersion,
+    );
   }
 
   @Post('/v1/admin/mods/install')
@@ -172,11 +182,18 @@ export class AdminController {
 
   @Post('/v1/admin/profile/publish')
   @UseGuards(AdminSessionGuard)
-  publishProfile(
-    @Body() payload: PublishProfileDto,
-    @Req() request: Request,
-  ) {
-    const origin = `${request.protocol}://${request.get('host') ?? 'localhost:3000'}`;
+  publishProfile(@Body() payload: PublishProfileDto, @Req() request: Request) {
+    const host = request.get('host') ?? 'localhost:3000';
+    const forwardedProto = request
+      .get('x-forwarded-proto')
+      ?.split(',')[0]
+      ?.trim()
+      ?.toLowerCase();
+    const protocol =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : request.protocol;
+    const origin = `${protocol}://${host}`;
     return this.adminService.publishProfile(payload, origin);
   }
 }
