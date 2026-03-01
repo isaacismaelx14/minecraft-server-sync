@@ -361,6 +361,25 @@ ul {
   transition: width 180ms ease;
 }
 
+.meter-fill.indeterminate {
+  animation: meter-indeterminate 1.15s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes meter-indeterminate {
+  0% {
+    transform: translateX(-130%);
+  }
+
+  55% {
+    transform: translateX(95%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
+}
+
 .metrics-row {
   display: flex;
   justify-content: space-between;

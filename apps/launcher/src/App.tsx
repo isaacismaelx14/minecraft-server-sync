@@ -127,6 +127,14 @@ interface SyncApplyResponse {
   serverName: string;
 }
 
+interface SyncApplyOptions {
+  showSyncScreen?: boolean;
+}
+
+interface SyncCycleOptions {
+  suppressSyncScreen?: boolean;
+}
+
 interface AppCloseResponse {
   closed: boolean;
   reason: string | null;
@@ -350,6 +358,14 @@ export default function App() {
       Math.round((sync.completedBytes / sync.totalBytes) * 100),
     );
   }, [sync.completedBytes, sync.totalBytes]);
+  const hasSyncTotal = sync.totalBytes > 0;
+  const syncHasUnknownTotal =
+    !hasSyncTotal && sync.phase === "downloading" && sync.completedBytes > 0;
+  const syncBytesLabel = hasSyncTotal
+    ? `${bytesToHuman(sync.completedBytes)} / ${bytesToHuman(sync.totalBytes)}`
+    : sync.completedBytes > 0
+      ? `${bytesToHuman(sync.completedBytes)} / --`
+      : "0 B / --";
 
   const hasFancyMenuMod = catalog?.fancyMenuPresent ?? false;
   const fancyMenuRequiresAssets = catalog?.fancyMenuRequiresAssets ?? false;
@@ -447,12 +463,15 @@ export default function App() {
     return snapshot;
   }, []);
 
-  const executeSyncApply = useCallback(async () => {
+  const executeSyncApply = useCallback(async (options?: SyncApplyOptions) => {
     if (sessionActive) {
       throw new Error("Cannot sync during active play session.");
     }
 
-    setScreen("syncing");
+    const showSyncScreen = options?.showSyncScreen ?? true;
+    if (showSyncScreen) {
+      setScreen("syncing");
+    }
     setSync({
       phase: "planning",
       completedBytes: 0,
@@ -592,7 +611,7 @@ export default function App() {
   );
 
   const runSyncCycle = useCallback(
-    async (autoApply: boolean) => {
+    async (autoApply: boolean, options?: SyncCycleOptions) => {
       if (cycleInFlight.current) {
         return;
       }
@@ -609,7 +628,11 @@ export default function App() {
           !sessionActive &&
           (snapshot.hasUpdates || snapshot.fancyMenuEnabled)
         ) {
-          await executeSyncApply();
+          const isInitialSync = snapshot.localVersion === null;
+          const showSyncScreen =
+            !(options?.suppressSyncScreen ?? false) &&
+            !(autoApply && isInitialSync);
+          await executeSyncApply({ showSyncScreen });
           await refreshDashboardState();
         }
 
@@ -1001,7 +1024,7 @@ export default function App() {
       return;
     }
 
-    await runSyncCycle(true);
+    await runSyncCycle(true, { suppressSyncScreen: true });
 
     const next: AppSettings = {
       ...settings,
@@ -1513,18 +1536,18 @@ export default function App() {
             className="meter"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={progressPercent}
+            aria-valuenow={hasSyncTotal ? progressPercent : undefined}
+            aria-valuetext={
+              syncHasUnknownTotal ? "Download progress total unknown" : undefined
+            }
           >
             <div
-              className="meter-fill"
-              style={{ width: `${progressPercent}%` }}
+              className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
+              style={{ width: syncHasUnknownTotal ? "30%" : `${progressPercent}%` }}
             />
           </div>
           <div className="metrics-row">
-            <span>
-              {bytesToHuman(sync.completedBytes)} /{" "}
-              {bytesToHuman(sync.totalBytes)}
-            </span>
+            <span>{syncBytesLabel}</span>
             <span>{bytesToHuman(sync.speedBps)}/s</span>
             <span>ETA {formatEta(sync.etaSec)}</span>
           </div>
@@ -1914,14 +1937,18 @@ export default function App() {
               className="meter"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={progressPercent}
+              aria-valuenow={hasSyncTotal ? progressPercent : undefined}
+              aria-valuetext={
+                syncHasUnknownTotal ? "Download progress total unknown" : undefined
+              }
             >
-              <div className="meter-fill" style={{ width: `${progressPercent}%` }} />
+              <div
+                className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
+                style={{ width: syncHasUnknownTotal ? "30%" : `${progressPercent}%` }}
+              />
             </div>
             <div className="metrics-row">
-              <span>
-                {bytesToHuman(sync.completedBytes)} / {bytesToHuman(sync.totalBytes)}
-              </span>
+              <span>{syncBytesLabel}</span>
               <span>{bytesToHuman(sync.speedBps)}/s</span>
               <span>ETA {formatEta(sync.etaSec)}</span>
             </div>
