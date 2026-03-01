@@ -46,12 +46,19 @@ const FANCYMENU_CUSTOM_BUNDLE_CONFIG_NAME: &str = "FancyMenu Custom Bundle";
 const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
 const FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH: &str = "config/fancymenu/customization.txt";
 const FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH: &str = "config/fancymenu/customization/main.txt";
+const FANCYMENU_SERVER_URL_TOKEN: &str = "{{server_url}}";
+const FANCYMENU_JOINSERVER_MARKER: &str = "[action_type:joinserver]";
+const FANCYMENU_CUSTOMIZATION_DIR_PREFIX: &str = "config/fancymenu/customization/";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct FancyMenuBundleManifest {
   bundle_sha256: String,
   files: Vec<String>,
+  #[serde(default)]
+  has_server_url_template: bool,
+  #[serde(default)]
+  last_injected_server_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -295,11 +302,7 @@ async fn ensure_fancymenu_state(paths: &InstancePaths, lock: &ProfileLock) -> La
 
   if mode == "simple" {
     cleanup_custom_bundle_files(paths, &manifest_path).await?;
-    let server_address = if lock.default_server.address.trim().is_empty() {
-      "localhost:25565".to_string()
-    } else {
-      lock.default_server.address.trim().to_string()
-    };
+    let server_address = resolve_fancymenu_server_address(lock);
     let layout = build_managed_title_screen_layout(&lock.fancy_menu, &server_address);
     fs::write(&managed_layout_path, layout).await?;
     return Ok(());
@@ -316,6 +319,7 @@ async fn ensure_fancymenu_state(paths: &InstancePaths, lock: &ProfileLock) -> La
     .map(|value| value.trim().to_lowercase())
     .filter(|value| !value.is_empty())
     .ok_or_else(|| LauncherError::InvalidData("FancyMenu custom mode missing customLayoutSha256".to_string()))?;
+  let server_address = resolve_fancymenu_server_address(lock);
 
   let existing_manifest = load_custom_bundle_manifest(&manifest_path).await?;
   if existing_manifest
@@ -323,7 +327,15 @@ async fn ensure_fancymenu_state(paths: &InstancePaths, lock: &ProfileLock) -> La
     .is_some_and(|manifest| manifest.bundle_sha256.eq_ignore_ascii_case(&bundle_sha))
   {
     normalize_customization_entrypoint(paths, &manifest_path).await?;
-    return Ok(());
+    let existing_manifest = load_custom_bundle_manifest(&manifest_path).await?;
+    if let Some(existing_manifest) = existing_manifest {
+      let needs_metadata_bootstrap = existing_manifest.last_injected_server_url.is_none();
+      let needs_server_reinject = existing_manifest.has_server_url_template
+        && existing_manifest.last_injected_server_url.as_deref() != Some(server_address.as_str());
+      if !needs_metadata_bootstrap && !needs_server_reinject {
+        return Ok(());
+      }
+    }
   }
 
   cleanup_custom_bundle_files(paths, &manifest_path).await?;
@@ -333,9 +345,21 @@ async fn ensure_fancymenu_state(paths: &InstancePaths, lock: &ProfileLock) -> La
   let manifest = FancyMenuBundleManifest {
     bundle_sha256: bundle_sha,
     files: extracted_files,
+    has_server_url_template: false,
+    last_injected_server_url: None,
   };
   save_custom_bundle_manifest(&manifest_path, &manifest).await?;
   normalize_customization_entrypoint(paths, &manifest_path).await?;
+  let Some(mut normalized_manifest) = load_custom_bundle_manifest(&manifest_path).await? else {
+    return Err(LauncherError::InvalidData(
+      "FancyMenu custom bundle manifest missing after extraction".to_string(),
+    ));
+  };
+  let has_server_template =
+    inject_server_url_templates(paths, &normalized_manifest.files, &server_address).await?;
+  normalized_manifest.has_server_url_template = has_server_template;
+  normalized_manifest.last_injected_server_url = Some(server_address);
+  save_custom_bundle_manifest(&manifest_path, &normalized_manifest).await?;
   // Custom bundles may include options.txt; enforce lock values after extraction.
   ensure_fancymenu_options_lockdown(&options_path).await?;
   Ok(())
@@ -499,6 +523,69 @@ fn escape_fancymenu_value(value: &str) -> String {
     .replace('\\', "\\\\")
     .replace('\n', " ")
     .replace('\r', " ")
+}
+
+fn resolve_fancymenu_server_address(lock: &ProfileLock) -> String {
+  if lock.default_server.address.trim().is_empty() {
+    "localhost:25565".to_string()
+  } else {
+    lock.default_server.address.trim().to_string()
+  }
+}
+
+async fn inject_server_url_templates(
+  paths: &InstancePaths,
+  relative_files: &[String],
+  server_address: &str,
+) -> LauncherResult<bool> {
+  let mut has_server_template = false;
+  let injected_server = escape_fancymenu_value(server_address);
+
+  for relative in relative_files {
+    if !relative.starts_with(FANCYMENU_CUSTOMIZATION_DIR_PREFIX) {
+      continue;
+    }
+    if !relative.to_lowercase().ends_with(".txt") {
+      continue;
+    }
+
+    let file_path = resolve_target_path(paths, relative);
+    if !file_path.exists() {
+      continue;
+    }
+
+    let content = fs::read_to_string(&file_path).await?;
+    let (next, file_has_template, changed) = replace_server_url_template(&content, &injected_server);
+    if file_has_template {
+      has_server_template = true;
+    }
+    if changed {
+      fs::write(&file_path, next).await?;
+    }
+  }
+
+  Ok(has_server_template)
+}
+
+fn replace_server_url_template(content: &str, injected_server: &str) -> (String, bool, bool) {
+  let mut found_template = false;
+  let mut changed = false;
+  let mut output = String::with_capacity(content.len());
+
+  for line in content.split_inclusive('\n') {
+    if line.contains(FANCYMENU_JOINSERVER_MARKER) && line.contains(FANCYMENU_SERVER_URL_TOKEN) {
+      found_template = true;
+      let replaced = line.replace(FANCYMENU_SERVER_URL_TOKEN, injected_server);
+      if replaced != line {
+        changed = true;
+      }
+      output.push_str(&replaced);
+    } else {
+      output.push_str(line);
+    }
+  }
+
+  (output, found_template, changed)
 }
 
 async fn load_custom_bundle_manifest(path: &Path) -> LauncherResult<Option<FancyMenuBundleManifest>> {

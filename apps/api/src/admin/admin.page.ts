@@ -590,6 +590,7 @@ export function renderAdminPage(): string {
         <article class="panel publish" id="publish">
           <h2>Publish Profile</h2>
           <p class="hint">Publishes next release with semantic versioning, simple FancyMenu controls, and optional full custom layout bundle.</p>
+          <p class="hint">Dynamic token supported in custom layout files: <code>{{server_url}}</code>. Replacement runs only on <code>[action_type:joinserver]</code> value lines during client sync.</p>
           <div class="fields">
             <label>FancyMenu Enabled
               <select id="fancyMenuEnabled">

@@ -36,6 +36,10 @@ const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.js
 struct FancyMenuBundleManifest {
   bundle_sha256: String,
   files: Vec<String>,
+  #[serde(default)]
+  has_server_url_template: bool,
+  #[serde(default)]
+  last_injected_server_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
