@@ -4,7 +4,7 @@ export function renderAdminLoginPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MVL Admin Login</title>
+  <title>MSS+ Client Admin Login</title>
   <style>
     :root {
       --obsidian: #111417;
@@ -104,7 +104,7 @@ export function renderAdminLoginPage(): string {
 </head>
 <body>
   <main class="login-shell">
-    <h1>MVL Control Console</h1>
+    <h1>MSS+ Client Control Console</h1>
     <p>Enter your admin password to unlock server publishing controls.</p>
 
     <label>Password
@@ -126,7 +126,7 @@ export function renderAdminPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MVL Admin Console</title>
+  <title>MSS+ Client Admin Console</title>
   <style>
     :root {
       --obsidian-0: #111417;
@@ -475,7 +475,7 @@ export function renderAdminPage(): string {
   <main class="shell">
     <aside class="nav">
       <div class="brand">
-        <h1>MVL Launch Console</h1>
+        <h1>MSS+ Client Admin</h1>
         <span class="tag">Single server control</span>
       </div>
       <nav class="nav-list">
@@ -484,7 +484,6 @@ export function renderAdminPage(): string {
         <a class="nav-item" href="#mods">Mod Workbench</a>
         <a class="nav-item" href="#publish">Publish</a>
       </nav>
-      <a class="nav-item" href="/admin/legacy">Legacy Builder</a>
     </aside>
 
     <section class="main">
@@ -500,14 +499,14 @@ export function renderAdminPage(): string {
           <span>-></span>
           <span class="rail-node" id="railFabric">Fabric: -</span>
           <span>-></span>
-          <span class="rail-node" id="railVersion">Next profile: -</span>
+          <span class="rail-node" id="railVersion">Next release: -</span>
         </div>
       </section>
 
       <section class="grid">
         <article class="panel" id="server">
           <h2>Server Identity</h2>
-          <p class="hint">Single-server metadata and profile identity.</p>
+          <p class="hint">Save identity + branding drafts. Publish to push gameplay changes live.</p>
           <div class="fields">
             <label>Server Name
               <input id="serverName" />
@@ -521,7 +520,29 @@ export function renderAdminPage(): string {
             <label>Current Version
               <input id="currentVersion" disabled />
             </label>
+            <label>Current Release (SemVer)
+              <input id="currentReleaseVersion" disabled />
+            </label>
+            <label>Brand Logo URL
+              <input id="brandingLogoUrl" placeholder="https://.../logo.png" />
+            </label>
+            <label>Brand Background URL
+              <input id="brandingBackgroundUrl" placeholder="https://.../background.jpg" />
+            </label>
+            <label>Brand News URL
+              <input id="brandingNewsUrl" placeholder="https://.../news" />
+            </label>
           </div>
+          <div class="row">
+            <button id="uploadBrandLogoBtn" class="btn btn-ghost">Upload Logo Image</button>
+            <button id="uploadBrandBackgroundBtn" class="btn btn-ghost">Upload Background Image</button>
+            <input id="brandLogoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <input id="brandBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+          </div>
+          <div class="row">
+            <button id="saveDraftBtn" class="btn btn-amber">Save Identity + Fancy Draft</button>
+          </div>
+          <div id="draftStatus" class="status">Ready.</div>
           <div id="bootstrapStatus" class="status">Loading data...</div>
         </article>
 
@@ -568,7 +589,8 @@ export function renderAdminPage(): string {
 
         <article class="panel publish" id="publish">
           <h2>Publish Profile</h2>
-          <p class="hint">Creates next &#96;ProfileVersion&#96; and updates server metadata in one transaction.</p>
+          <p class="hint">Publishes next release with semantic versioning, simple FancyMenu controls, and optional full custom layout bundle.</p>
+          <p class="hint">Dynamic token supported in custom layout files: <code>{{server_url}}</code>. Replacement runs only on <code>[action_type:joinserver]</code> value lines during client sync.</p>
           <div class="fields">
             <label>FancyMenu Enabled
               <select id="fancyMenuEnabled">
@@ -576,9 +598,43 @@ export function renderAdminPage(): string {
                 <option value="false">false</option>
               </select>
             </label>
+            <label>FancyMenu Mode
+              <select id="fancyMenuMode">
+                <option value="simple">simple</option>
+                <option value="custom">custom</option>
+              </select>
+            </label>
             <label>Play Button Label
               <input id="playButtonLabel" value="Play" />
             </label>
+            <label>Hide Singleplayer
+              <select id="hideSingleplayer">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>Hide Multiplayer
+              <select id="hideMultiplayer">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>Hide Realms
+              <select id="hideRealms">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>Custom Layout Bundle URL
+              <input id="fancyMenuCustomLayoutUrl" placeholder="https://.../fancymenu-bundle.zip" readonly />
+            </label>
+            <label>Custom Layout Bundle SHA-256
+              <input id="fancyMenuCustomLayoutSha256" placeholder="64-hex sha256" readonly />
+            </label>
+          </div>
+          <div class="row">
+            <button id="uploadFancyBundleBtn" class="btn btn-ghost">Upload FancyMenu Bundle (.zip)</button>
+            <input id="fancyBundleFile" type="file" accept=".zip,application/zip" hidden />
           </div>
           <div class="row">
             <button id="publishBtn" class="btn btn-amber">Publish Next Version</button>

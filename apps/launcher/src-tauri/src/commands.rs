@@ -24,11 +24,11 @@ use crate::{
   state::AppState,
   sync,
   types::{
-    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameSessionPhase,
-    GameSessionStatus, InstanceState, LauncherBootstrapResult, LauncherCandidate,
-    LauncherDetectionResult, LauncherUpdateInstallResponse, LauncherUpdateStatus,
-    MinecraftRootStatus, OpenLauncherResponse, ProfileMetadataResponse, SyncApplyResponse,
-    SyncPlan, UpdatesResponse, VersionReadiness,
+    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
+    GameSessionPhase, GameSessionStatus, InstanceState, LauncherBootstrapResult,
+    LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
+    LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
+    ProfileMetadataResponse, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -163,8 +163,19 @@ pub async fn app_request_close(
 
 #[tauri::command]
 pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
-  let Some(window) = app.get_webview_window("main") else {
-    return Err("Main window is not available.".to_string());
+  let selected = app
+    .get_webview_window("main")
+    .filter(|window| window.is_visible().unwrap_or(false))
+    .or_else(|| {
+      app
+        .get_webview_window("setup")
+        .filter(|window| window.is_visible().unwrap_or(false))
+    })
+    .or_else(|| app.get_webview_window("main"))
+    .or_else(|| app.get_webview_window("setup"));
+
+  let Some(window) = selected else {
+    return Err("No app window is available.".to_string());
   };
 
   if window.hide().is_ok() {
@@ -176,6 +187,52 @@ pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
     .map_err(|error| format!("Failed to keep app in background: {error}"))?;
 
   Ok(())
+}
+
+#[tauri::command]
+pub fn app_open_setup_window(app: AppHandle) -> Result<(), String> {
+  switch_to_window(&app, "setup", "main")
+}
+
+#[tauri::command]
+pub fn app_return_to_main_window(app: AppHandle) -> Result<(), String> {
+  switch_to_window(&app, "main", "setup")
+}
+
+#[tauri::command]
+pub fn game_running_probe(state: State<'_, Arc<AppState>>) -> Result<GameRunningProbe, String> {
+  let status = session::get_status(state.inner());
+  if status.phase != GameSessionPhase::Idle {
+    return Ok(GameRunningProbe {
+      running: true,
+      source: "session".to_string(),
+      launcher_id: status.launcher_id.clone(),
+      live_minecraft_dir: status.live_minecraft_dir.clone(),
+    });
+  }
+
+  let settings = state.settings.lock().clone();
+  let detected = launcher_apps::detect_installed_launchers();
+  let selected = selected_launcher_id(&settings, &detected);
+  let probe_launcher = selected.clone().unwrap_or_else(|| "official".to_string());
+
+  let Ok((minecraft_root, _)) = resolve_launcher_minecraft_root(&settings) else {
+    return Ok(GameRunningProbe {
+      running: false,
+      source: "process".to_string(),
+      launcher_id: selected,
+      live_minecraft_dir: None,
+    });
+  };
+
+  let running = session::probe_game_running(&minecraft_root, &probe_launcher);
+
+  Ok(GameRunningProbe {
+    running,
+    source: "process".to_string(),
+    launcher_id: Some(probe_launcher),
+    live_minecraft_dir: Some(minecraft_root.to_string_lossy().to_string()),
+  })
 }
 
 #[tauri::command]
@@ -448,30 +505,33 @@ pub async fn profile_catalog_snapshot(
   let lock_server_name = remote.branding.server_name.trim().to_string();
   let lock_server_address = remote.default_server.address.trim().to_string();
 
-  let server_name = if !lock_server_name.is_empty() {
-    lock_server_name
-  } else {
-    metadata_server_name.unwrap_or_else(|| "Managed Server".to_string())
-  };
-  let server_address = if !lock_server_address.is_empty() {
-    lock_server_address
-  } else {
-    metadata_server_address.unwrap_or_else(|| "--".to_string())
-  };
+  let server_name = metadata_server_name
+    .or_else(|| (!lock_server_name.is_empty()).then_some(lock_server_name))
+    .unwrap_or_else(|| "Managed Server".to_string());
+  let server_address = metadata_server_address
+    .or_else(|| (!lock_server_address.is_empty()).then_some(lock_server_address))
+    .unwrap_or_else(|| "--".to_string());
   let fancy_menu_enabled = metadata
     .as_ref()
     .map(|value| value.fancy_menu_enabled)
     .unwrap_or(remote.fancy_menu.enabled);
+  let fancy_menu_mode = if remote.fancy_menu.mode.trim().eq_ignore_ascii_case("custom") {
+    "custom".to_string()
+  } else {
+    "simple".to_string()
+  };
   let fancy_menu_present = remote
     .items
     .iter()
     .any(|entry| entry.name.to_lowercase().contains("fancymenu"));
-  let fancy_menu_requires_assets =
-    remote.fancy_menu.config_url.is_some() || remote.fancy_menu.assets_url.is_some();
-  let fancy_menu_configured = remote
-    .configs
-    .iter()
-    .any(|entry| entry.name.to_lowercase().contains("fancymenu"));
+  let fancy_menu_custom_bundle_present = remote.configs.iter().any(|entry| {
+    entry.name == "FancyMenu Custom Bundle"
+      || remote
+        .fancy_menu
+        .custom_layout_url
+        .as_ref()
+        .is_some_and(|url| url == &entry.url)
+  });
 
   Ok(CatalogSnapshot {
     server_id: effective_server,
@@ -488,9 +548,9 @@ pub async fn profile_catalog_snapshot(
     has_updates: updates.has_updates,
     summary: updates.summary,
     fancy_menu_enabled,
+    fancy_menu_mode,
     fancy_menu_present,
-    fancy_menu_requires_assets,
-    fancy_menu_configured,
+    fancy_menu_custom_bundle_present,
     mods: remote.items.into_iter().map(|entry| entry.name).collect(),
     resourcepacks: remote.resources.into_iter().map(|entry| entry.name).collect(),
     shaderpacks: remote.shaders.into_iter().map(|entry| entry.name).collect(),
@@ -849,6 +909,26 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
   value
     .map(|raw| raw.trim().to_string())
     .filter(|raw| !raw.is_empty())
+}
+
+fn switch_to_window(app: &AppHandle, target: &str, hide: &str) -> Result<(), String> {
+  let Some(target_window) = app.get_webview_window(target) else {
+    return Err(format!("Window `{target}` is not available."));
+  };
+
+  if let Some(hide_window) = app.get_webview_window(hide) {
+    let _ = hide_window.hide();
+  }
+
+  let _ = target_window.unminimize();
+  target_window
+    .show()
+    .map_err(|error| format!("Failed to show `{target}` window: {error}"))?;
+  target_window
+    .set_focus()
+    .map_err(|error| format!("Failed to focus `{target}` window: {error}"))?;
+
+  Ok(())
 }
 
 fn sanitize_server_id(raw: &str) -> Option<String> {

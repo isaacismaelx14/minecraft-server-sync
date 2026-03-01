@@ -1,5 +1,7 @@
 use std::{
-  collections::{BTreeMap, HashMap},
+  collections::{BTreeMap, HashMap, HashSet},
+  fs::File,
+  io::Write,
   path::{Path, PathBuf},
   sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -9,6 +11,7 @@ use std::{
 };
 
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use tokio::{
@@ -19,6 +22,7 @@ use tokio::{
 };
 use url::Url;
 use uuid::Uuid;
+use zip::ZipArchive;
 
 use crate::{
   error::{LauncherError, LauncherResult},
@@ -38,6 +42,24 @@ use crate::{
 
 const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
 const FANCYMENU_TITLE_SCREEN_IDENTIFIER: &str = "net.minecraft.class_442";
+const FANCYMENU_CUSTOM_BUNDLE_CONFIG_NAME: &str = "FancyMenu Custom Bundle";
+const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
+const FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH: &str = "config/fancymenu/customization.txt";
+const FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH: &str = "config/fancymenu/customization/main.txt";
+const FANCYMENU_SERVER_URL_TOKEN: &str = "{{server_url}}";
+const FANCYMENU_JOINSERVER_MARKER: &str = "[action_type:joinserver]";
+const FANCYMENU_CUSTOMIZATION_DIR_PREFIX: &str = "config/fancymenu/customization/";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct FancyMenuBundleManifest {
+  bundle_sha256: String,
+  files: Vec<String>,
+  #[serde(default)]
+  has_server_url_template: bool,
+  #[serde(default)]
+  last_injected_server_url: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 struct DesiredFile {
@@ -110,7 +132,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
   if !context.plan.summary.has_work() {
     write_manifest_lock(&paths, &context.remote_lock)?;
     ensure_default_server(&paths, &context.remote_lock.default_server)?;
-    ensure_managed_fancymenu_layout(&paths, &context.remote_lock).await?;
+    ensure_fancymenu_state(&paths, &context.remote_lock).await?;
 
     emit_sync_progress(
       app,
@@ -192,7 +214,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     write_manifest_lock(&paths, &context.remote_lock)?;
     ensure_default_server(&paths, &context.remote_lock.default_server)?;
-    ensure_managed_fancymenu_layout(&paths, &context.remote_lock).await?;
+    ensure_fancymenu_state(&paths, &context.remote_lock).await?;
 
     emit_sync_progress(
       app,
@@ -251,31 +273,95 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
   })
 }
 
-async fn ensure_managed_fancymenu_layout(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
+async fn ensure_fancymenu_state(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
   let fancymenu_dir = paths.minecraft_dir.join("config").join("fancymenu");
   let customization_dir = fancymenu_dir.join("customization");
   let customizablemenus_path = fancymenu_dir.join("customizablemenus.txt");
   let managed_layout_path = customization_dir.join(FANCYMENU_MANAGED_LAYOUT_FILENAME);
   let options_path = fancymenu_dir.join("options.txt");
+  let manifest_path = fancymenu_dir.join(FANCYMENU_CUSTOM_MANIFEST_FILENAME);
+
+  fs::create_dir_all(&customization_dir).await?;
 
   if !lock.fancy_menu.enabled {
+    cleanup_custom_bundle_files(paths, &manifest_path).await?;
     if managed_layout_path.exists() {
-      let _ = fs::remove_file(managed_layout_path).await;
+      let _ = fs::remove_file(&managed_layout_path).await;
     }
     return Ok(());
   }
 
-  fs::create_dir_all(&customization_dir).await?;
   ensure_fancymenu_options_lockdown(&options_path).await?;
   ensure_title_screen_enabled_for_customization(&customizablemenus_path).await?;
 
-  let server_address = if lock.default_server.address.trim().is_empty() {
-    "localhost:25565".to_string()
+  let mode = if lock.fancy_menu.mode.trim().eq_ignore_ascii_case("custom") {
+    "custom"
   } else {
-    lock.default_server.address.trim().to_string()
+    "simple"
   };
-  let layout = build_managed_title_screen_layout(&lock.fancy_menu, &server_address);
-  fs::write(&managed_layout_path, layout).await?;
+
+  if mode == "simple" {
+    cleanup_custom_bundle_files(paths, &manifest_path).await?;
+    let server_address = resolve_fancymenu_server_address(lock);
+    let layout = build_managed_title_screen_layout(&lock.fancy_menu, &server_address);
+    fs::write(&managed_layout_path, layout).await?;
+    return Ok(());
+  }
+
+  if managed_layout_path.exists() {
+    let _ = fs::remove_file(&managed_layout_path).await;
+  }
+
+  let bundle_sha = lock
+    .fancy_menu
+    .custom_layout_sha256
+    .as_ref()
+    .map(|value| value.trim().to_lowercase())
+    .filter(|value| !value.is_empty())
+    .ok_or_else(|| LauncherError::InvalidData("FancyMenu custom mode missing customLayoutSha256".to_string()))?;
+  let server_address = resolve_fancymenu_server_address(lock);
+
+  let existing_manifest = load_custom_bundle_manifest(&manifest_path).await?;
+  if existing_manifest
+    .as_ref()
+    .is_some_and(|manifest| manifest.bundle_sha256.eq_ignore_ascii_case(&bundle_sha))
+  {
+    normalize_customization_entrypoint(paths, &manifest_path).await?;
+    let existing_manifest = load_custom_bundle_manifest(&manifest_path).await?;
+    if let Some(existing_manifest) = existing_manifest {
+      let needs_metadata_bootstrap = existing_manifest.last_injected_server_url.is_none();
+      let needs_server_reinject = existing_manifest.has_server_url_template
+        && existing_manifest.last_injected_server_url.as_deref() != Some(server_address.as_str());
+      if !needs_metadata_bootstrap && !needs_server_reinject {
+        return Ok(());
+      }
+    }
+  }
+
+  cleanup_custom_bundle_files(paths, &manifest_path).await?;
+
+  let bundle_zip_path = resolve_custom_bundle_zip_path(paths, lock)?;
+  let extracted_files = extract_custom_bundle_entries(paths, &bundle_zip_path).await?;
+  let manifest = FancyMenuBundleManifest {
+    bundle_sha256: bundle_sha,
+    files: extracted_files,
+    has_server_url_template: false,
+    last_injected_server_url: None,
+  };
+  save_custom_bundle_manifest(&manifest_path, &manifest).await?;
+  normalize_customization_entrypoint(paths, &manifest_path).await?;
+  let Some(mut normalized_manifest) = load_custom_bundle_manifest(&manifest_path).await? else {
+    return Err(LauncherError::InvalidData(
+      "FancyMenu custom bundle manifest missing after extraction".to_string(),
+    ));
+  };
+  let has_server_template =
+    inject_server_url_templates(paths, &normalized_manifest.files, &server_address).await?;
+  normalized_manifest.has_server_url_template = has_server_template;
+  normalized_manifest.last_injected_server_url = Some(server_address);
+  save_custom_bundle_manifest(&manifest_path, &normalized_manifest).await?;
+  // Custom bundles may include options.txt; enforce lock values after extraction.
+  ensure_fancymenu_options_lockdown(&options_path).await?;
   Ok(())
 }
 
@@ -310,32 +396,6 @@ fn build_managed_title_screen_layout(fancy_menu: &FancyMenuSettings, server_addr
     "layout-meta {\n  identifier = net.minecraft.class_442\n  is_enabled = true\n  layout_index = 0\n}\n"
       .to_string(),
   ];
-
-  if let Some(title_text) = fancy_menu.title_text.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
-    sections.push(format!(
-      "element {{\n  element_type = text_v2\n  instance_identifier = mvl_title_text\n  source_mode = direct\n  source = {}\n  width = 520\n  height = 54\n  x = 0\n  y = 28\n  anchor_point = top-centered\n  sticky_anchor = true\n  stay_on_screen = false\n  interactable = false\n  scale = 1.7\n  line_spacing = 1\n  base_color = #FFFFFF\n  shadow = true\n}}\n",
-      escape_fancymenu_value(title_text)
-    ));
-  }
-
-  if let Some(subtitle_text) = fancy_menu
-    .subtitle_text
-    .as_ref()
-    .map(|value| value.trim())
-    .filter(|value| !value.is_empty())
-  {
-    sections.push(format!(
-      "element {{\n  element_type = text_v2\n  instance_identifier = mvl_subtitle_text\n  source_mode = direct\n  source = {}\n  width = 560\n  height = 26\n  x = 0\n  y = 58\n  anchor_point = top-centered\n  sticky_anchor = true\n  stay_on_screen = false\n  interactable = false\n  scale = 1.0\n  line_spacing = 1\n  base_color = #D8E5E8\n  shadow = false\n}}\n",
-      escape_fancymenu_value(subtitle_text)
-    ));
-  }
-
-  if let Some(logo_url) = fancy_menu.logo_url.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
-    sections.push(format!(
-      "element {{\n  element_type = image\n  instance_identifier = mvl_logo_image\n  source = [source:web]{}\n  width = 72\n  height = 72\n  x = -220\n  y = 20\n  anchor_point = top-centered\n  sticky_anchor = true\n  stay_on_screen = false\n  repeat_texture = false\n  nine_slice_texture = false\n}}\n",
-      escape_fancymenu_value(logo_url)
-    ));
-  }
 
   sections.push(format!(
     "element {{\n  element_type = custom_button\n  instance_identifier = mvl_play_button\n  label = {}\n  width = 220\n  height = 20\n  x = 0\n  y = 88\n  anchor_point = top-centered\n  sticky_anchor = true\n  stay_on_screen = false\n  navigatable = true\n  [executable_action_instance:mvl_play_button_join][action_type:joinserver] = {}\n  [executable_block:mvl_play_button_exec][type:generic] = [executables:mvl_play_button_join]\n  button_element_executable_block_identifier = mvl_play_button_exec\n}}\n",
@@ -376,6 +436,7 @@ async fn ensure_fancymenu_options_lockdown(path: &Path) -> LauncherResult<()> {
     false,
   );
   content = upsert_bool_option(&content, "tutorial", "show_welcome_screen", false);
+  content = upsert_bool_option(&content, "layout_editor", "enable_buddy", false);
 
   fs::write(path, content).await?;
   Ok(())
@@ -462,6 +523,351 @@ fn escape_fancymenu_value(value: &str) -> String {
     .replace('\\', "\\\\")
     .replace('\n', " ")
     .replace('\r', " ")
+}
+
+fn resolve_fancymenu_server_address(lock: &ProfileLock) -> String {
+  if lock.default_server.address.trim().is_empty() {
+    "localhost:25565".to_string()
+  } else {
+    lock.default_server.address.trim().to_string()
+  }
+}
+
+async fn inject_server_url_templates(
+  paths: &InstancePaths,
+  relative_files: &[String],
+  server_address: &str,
+) -> LauncherResult<bool> {
+  let mut has_server_template = false;
+  let injected_server = escape_fancymenu_value(server_address);
+
+  for relative in relative_files {
+    if !relative.starts_with(FANCYMENU_CUSTOMIZATION_DIR_PREFIX) {
+      continue;
+    }
+    if !relative.to_lowercase().ends_with(".txt") {
+      continue;
+    }
+
+    let file_path = resolve_target_path(paths, relative);
+    if !file_path.exists() {
+      continue;
+    }
+
+    let content = fs::read_to_string(&file_path).await?;
+    let (next, file_has_template, changed) = replace_server_url_template(&content, &injected_server);
+    if file_has_template {
+      has_server_template = true;
+    }
+    if changed {
+      fs::write(&file_path, next).await?;
+    }
+  }
+
+  Ok(has_server_template)
+}
+
+fn replace_server_url_template(content: &str, injected_server: &str) -> (String, bool, bool) {
+  let mut found_template = false;
+  let mut changed = false;
+  let mut output = String::with_capacity(content.len());
+
+  for line in content.split_inclusive('\n') {
+    if line.contains(FANCYMENU_JOINSERVER_MARKER) && line.contains(FANCYMENU_SERVER_URL_TOKEN) {
+      found_template = true;
+      let replaced = line.replace(FANCYMENU_SERVER_URL_TOKEN, injected_server);
+      if replaced != line {
+        changed = true;
+      }
+      output.push_str(&replaced);
+    } else {
+      output.push_str(line);
+    }
+  }
+
+  (output, found_template, changed)
+}
+
+async fn load_custom_bundle_manifest(path: &Path) -> LauncherResult<Option<FancyMenuBundleManifest>> {
+  let content = match fs::read_to_string(path).await {
+    Ok(content) => content,
+    Err(_) => return Ok(None),
+  };
+
+  let parsed = serde_json::from_str::<FancyMenuBundleManifest>(&content)
+    .map_err(|error| LauncherError::InvalidData(format!("invalid FancyMenu custom manifest: {error}")))?;
+  Ok(Some(parsed))
+}
+
+async fn save_custom_bundle_manifest(path: &Path, manifest: &FancyMenuBundleManifest) -> LauncherResult<()> {
+  let content = serde_json::to_string_pretty(manifest)
+    .map_err(|error| LauncherError::InvalidData(format!("failed to serialize FancyMenu custom manifest: {error}")))?;
+  fs::write(path, content).await?;
+  Ok(())
+}
+
+async fn normalize_customization_entrypoint(paths: &InstancePaths, manifest_path: &Path) -> LauncherResult<()> {
+  let root_layout_path = paths
+    .minecraft_dir
+    .join(Path::new(FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH));
+  let main_layout_path = paths
+    .minecraft_dir
+    .join(Path::new(FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH));
+
+  if root_layout_path.exists() {
+    if main_layout_path.exists() {
+      return Err(LauncherError::InvalidData(
+        "FancyMenu custom bundle contains both customization.txt and customization/main.txt".to_string(),
+      ));
+    }
+
+    if let Some(parent) = main_layout_path.parent() {
+      fs::create_dir_all(parent).await?;
+    }
+    fs::rename(&root_layout_path, &main_layout_path).await?;
+  }
+
+  let Some(mut manifest) = load_custom_bundle_manifest(manifest_path).await? else {
+    return Ok(());
+  };
+
+  let mut changed = false;
+  let mut deduped = Vec::<String>::new();
+  let mut seen = HashSet::<String>::new();
+  for relative in manifest.files {
+    let normalized = if relative == FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH {
+      changed = true;
+      FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH.to_string()
+    } else {
+      relative
+    };
+
+    if seen.insert(normalized.clone()) {
+      deduped.push(normalized);
+    } else {
+      changed = true;
+    }
+  }
+
+  if changed {
+    manifest.files = deduped;
+    save_custom_bundle_manifest(manifest_path, &manifest).await?;
+  }
+
+  Ok(())
+}
+
+async fn cleanup_custom_bundle_files(paths: &InstancePaths, manifest_path: &Path) -> LauncherResult<()> {
+  let Some(manifest) = load_custom_bundle_manifest(manifest_path).await? else {
+    if manifest_path.exists() {
+      let _ = fs::remove_file(manifest_path).await;
+    }
+    return Ok(());
+  };
+
+  for relative in manifest.files {
+    let target = resolve_target_path(paths, &relative);
+    if target.exists() {
+      let _ = fs::remove_file(target).await;
+    }
+  }
+
+  if manifest_path.exists() {
+    let _ = fs::remove_file(manifest_path).await;
+  }
+
+  Ok(())
+}
+
+fn resolve_custom_bundle_zip_path(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<PathBuf> {
+  let bundle_url = lock
+    .fancy_menu
+    .custom_layout_url
+    .as_ref()
+    .ok_or_else(|| LauncherError::InvalidData("FancyMenu custom mode missing customLayoutUrl".to_string()))?;
+  let bundle_sha = lock
+    .fancy_menu
+    .custom_layout_sha256
+    .as_ref()
+    .ok_or_else(|| LauncherError::InvalidData("FancyMenu custom mode missing customLayoutSha256".to_string()))?;
+
+  let bundle_filename = extract_filename(bundle_url)?;
+
+  let matching = lock.configs.iter().find(|entry| {
+    entry.name == FANCYMENU_CUSTOM_BUNDLE_CONFIG_NAME
+      || (entry.url == *bundle_url && entry.sha256.eq_ignore_ascii_case(bundle_sha))
+  });
+
+  if matching.is_none() {
+    return Err(LauncherError::InvalidData(
+      "FancyMenu custom mode is enabled but lock configs has no FancyMenu custom bundle entry".to_string(),
+    ));
+  }
+
+  let bundle_path = paths.minecraft_dir.join("config").join(bundle_filename);
+  if !bundle_path.exists() {
+    return Err(LauncherError::Fs(format!(
+      "FancyMenu custom bundle ZIP is missing at {}",
+      bundle_path.to_string_lossy()
+    )));
+  }
+
+  Ok(bundle_path)
+}
+
+async fn extract_custom_bundle_entries(paths: &InstancePaths, bundle_path: &Path) -> LauncherResult<Vec<String>> {
+  let minecraft_dir = paths.minecraft_dir.clone();
+  let bundle = bundle_path.to_path_buf();
+  tokio::task::spawn_blocking(move || -> LauncherResult<Vec<String>> {
+    let file = File::open(&bundle)?;
+    let mut archive = ZipArchive::new(file)
+      .map_err(|error| LauncherError::InvalidData(format!("invalid FancyMenu custom bundle ZIP: {error}")))?;
+    let mut extracted = Vec::<String>::new();
+    let mut seen = HashSet::<String>::new();
+
+    let mut has_root_customization_layout = false;
+    let mut has_main_customization_layout = false;
+    for index in 0..archive.len() {
+      let entry = archive
+        .by_index(index)
+        .map_err(|error| LauncherError::InvalidData(format!("failed to read FancyMenu bundle entry: {error}")))?;
+      let raw_name = entry.name().replace('\\', "/");
+      if raw_name.trim().is_empty() {
+        continue;
+      }
+
+      let normalized = normalize_bundle_entry_path(&raw_name)?;
+      if !normalized.starts_with("config/fancymenu/") {
+        return Err(LauncherError::InvalidData(format!(
+          "FancyMenu custom bundle entry is outside config/fancymenu: {raw_name}"
+        )));
+      }
+
+      if entry.is_dir() {
+        continue;
+      }
+
+      if normalized == FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH {
+        has_root_customization_layout = true;
+      } else if normalized.eq_ignore_ascii_case(FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH) {
+        has_main_customization_layout = true;
+      }
+    }
+
+    if has_root_customization_layout && has_main_customization_layout {
+      return Err(LauncherError::InvalidData(
+        "FancyMenu custom bundle must not include both config/fancymenu/customization.txt and config/fancymenu/customization/main.txt"
+          .to_string(),
+      ));
+    }
+
+    let remap_root_customization_layout = has_root_customization_layout && !has_main_customization_layout;
+
+    for index in 0..archive.len() {
+      let mut entry = archive
+        .by_index(index)
+        .map_err(|error| LauncherError::InvalidData(format!("failed to read FancyMenu bundle entry: {error}")))?;
+      let raw_name = entry.name().replace('\\', "/");
+      if raw_name.trim().is_empty() {
+        continue;
+      }
+
+      let mut normalized = normalize_bundle_entry_path(&raw_name)?;
+      if !normalized.starts_with("config/fancymenu/") {
+        return Err(LauncherError::InvalidData(format!(
+          "FancyMenu custom bundle entry is outside config/fancymenu: {raw_name}"
+        )));
+      }
+
+      if entry.is_dir() {
+        let dir_target = minecraft_dir.join(Path::new(&normalized));
+        std::fs::create_dir_all(&dir_target)?;
+        continue;
+      }
+
+      if remap_root_customization_layout && normalized == FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH {
+        normalized = FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH.to_string();
+      }
+
+      let target = minecraft_dir.join(Path::new(&normalized));
+      if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+      }
+
+      let mut output = File::create(&target)?;
+      std::io::copy(&mut entry, &mut output)?;
+      output.flush()?;
+
+      if seen.insert(normalized.clone()) {
+        extracted.push(normalized);
+      }
+    }
+
+    Ok(extracted)
+  })
+  .await
+  .map_err(|error| LauncherError::Fs(format!("failed to extract FancyMenu custom bundle: {error}")))?
+}
+
+fn normalize_bundle_entry_path(raw: &str) -> LauncherResult<String> {
+  let cleaned = raw.trim().trim_start_matches('/').replace('\\', "/");
+  if cleaned.is_empty() || cleaned.contains('\0') {
+    return Err(LauncherError::InvalidData(format!(
+      "unsafe FancyMenu bundle path: {raw}"
+    )));
+  }
+
+  let path = Path::new(&cleaned);
+  let mut parts = Vec::<String>::new();
+  for component in path.components() {
+    match component {
+      std::path::Component::Normal(value) => {
+        let segment = value.to_string_lossy();
+        if segment.chars().any(|ch| ch.is_control()) {
+          return Err(LauncherError::InvalidData(format!(
+            "unsafe FancyMenu bundle path: {raw}"
+          )));
+        }
+        parts.push(segment.to_string());
+      }
+      std::path::Component::CurDir => {}
+      std::path::Component::ParentDir
+      | std::path::Component::RootDir
+      | std::path::Component::Prefix(_) => {
+        return Err(LauncherError::InvalidData(format!(
+          "unsafe FancyMenu bundle path: {raw}"
+        )));
+      }
+    }
+  }
+
+  if parts.is_empty() {
+    return Err(LauncherError::InvalidData(format!(
+      "unsafe FancyMenu bundle path: {raw}"
+    )));
+  }
+
+  let normalized = parts.join("/");
+  if normalized.starts_with("config/fancymenu/") {
+    return Ok(normalized);
+  }
+
+  if normalized == "config/fancymenu" {
+    return Ok("config/fancymenu".to_string());
+  }
+
+  if normalized.starts_with("fancymenu/") {
+    return Ok(format!(
+      "config/fancymenu/{}",
+      &normalized["fancymenu/".len()..]
+    ));
+  }
+
+  if normalized == "fancymenu" {
+    return Ok("config/fancymenu".to_string());
+  }
+
+  Ok(format!("config/fancymenu/{normalized}"))
 }
 
 async fn plan_context(state: &AppState, server_id: &str) -> LauncherResult<PlanContext> {
