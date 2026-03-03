@@ -112,37 +112,46 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <div className="pane-grid">
           <section className="panel-card">
             <h3>Server Profile</h3>
-            <p className="small-dark">Name: {catalog?.serverName ?? "--"}</p>
-            <p className="small-dark">Server URL: {catalog?.serverAddress ?? "--"}</p>
-            <p className="small-dark">Source URL: {sourceLabel}</p>
-            <p className="small-dark">
-              Runtime target: {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC {catalog?.minecraftVersion ?? "--"}
-            </p>
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Endpoint</span>
+                <div className="data-value">{catalog?.serverAddress ?? "--"}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Source</span>
+                <div className="data-value">{sourceLabel}</div>
+              </div>
+            </div>
           </section>
 
           <section className="panel-card">
             <h3>Environment</h3>
-            <p className="small-dark">Launcher: {settings?.selectedLauncherId ?? "--"}</p>
-            <p className="small-dark">
-              Target: {catalog?.minecraftVersion ?? "--"} / {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
-            </p>
-            
-            <details className="advanced-options" style={{ marginTop: '8px' }}>
-              <summary className="advanced-summary" style={{ padding: '8px 12px' }}>Technical Paths</summary>
-              <div className="advanced-content" style={{ padding: '12px' }}>
-                <p className="small-dark" style={{ wordBreak: 'break-all' }}>
-                  Live Minecraft: {versionReadiness?.liveMinecraftRoot ?? "--"}
-                </p>
-                <p className="small-dark" style={{ wordBreak: 'break-all', marginTop: '4px' }}>
-                  Managed Sync: {instance?.minecraftDir ?? "--"}
-                </p>
-                {settings?.customLauncherPath && (
-                  <p className="small-dark" style={{ wordBreak: 'break-all', marginTop: '4px' }}>
-                    Custom Launcher: {settings.customLauncherPath}
-                  </p>
-                )}
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Active Launcher</span>
+                <div className="data-value">{settings?.selectedLauncherId ?? "--"}</div>
               </div>
-            </details>
+
+              <details className="advanced-options">
+                <summary className="advanced-summary">Technical Paths</summary>
+                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <div className="data-item">
+                    <span className="data-label">Live Minecraft</span>
+                    <div className="data-value">{versionReadiness?.liveMinecraftRoot ?? "--"}</div>
+                  </div>
+                  <div className="data-item">
+                    <span className="data-label">Managed Sync</span>
+                    <div className="data-value">{instance?.minecraftDir ?? "--"}</div>
+                  </div>
+                  {settings?.customLauncherPath && (
+                    <div className="data-item">
+                      <span className="data-label">Custom Bin Path</span>
+                      <div className="data-value">{settings.customLauncherPath}</div>
+                    </div>
+                  )}
+                </div>
+              </details>
+            </div>
           </section>
 
           <section className="panel-card">
@@ -198,125 +207,159 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <div className="pane-grid">
           <section className="panel-card">
             <h3>Profile Source</h3>
-            <input
-              className="input"
-              type="text"
-              value={profileSourceDraft.apiBaseUrl}
-              placeholder="https://api.example.com"
-              onChange={(event) =>
-                setProfileSourceDraft((current) => ({
-                  ...current,
-                  apiBaseUrl: event.target.value,
-                }))
-              }
-            />
-            <details className="advanced-options" open={!!profileSourceDraft.profileLockUrl || undefined}>
-              <summary className="advanced-summary">Advanced: Direct Lock URL</summary>
-              <p className="pane-subtitle" style={{ marginTop: '8px', marginBottom: '8px', fontSize: '0.75rem' }}>
-                Optional. Override the API and fetch the modpack directly from a URL.
-                Useful for static hosting or testing unreleased versions.
-              </p>
-              <input
-                className="input"
-                type="text"
-                value={profileSourceDraft.profileLockUrl}
-                placeholder="https://example.com/lock.json"
-                onChange={(event) =>
-                  setProfileSourceDraft((current) => ({
-                    ...current,
-                    profileLockUrl: event.target.value,
-                  }))
-                }
-              />
-            </details>
-            <button className="btn primary" onClick={() => void saveProfileSource()}>
-              Save Source
-            </button>
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">API Endpoint</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={profileSourceDraft.apiBaseUrl}
+                  placeholder="https://api.example.com"
+                  onChange={(event) =>
+                    setProfileSourceDraft((current) => ({
+                      ...current,
+                      apiBaseUrl: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <details className="advanced-options" open={!!profileSourceDraft.profileLockUrl || undefined}>
+                <summary className="advanced-summary">Advanced: Direct Lock URL</summary>
+                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <p className="pane-subtitle" style={{ margin: 0, fontSize: '0.75rem' }}>
+                    Optional. Override the API and fetch the modpack directly from a URL.
+                    Useful for static hosting or testing unreleased versions.
+                  </p>
+                  <input
+                    className="input"
+                    type="text"
+                    value={profileSourceDraft.profileLockUrl}
+                    placeholder="https://example.com/lock.json"
+                    onChange={(event) =>
+                      setProfileSourceDraft((current) => ({
+                        ...current,
+                        profileLockUrl: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </details>
+
+              <button className="btn primary" onClick={() => void saveProfileSource()}>
+                Save Source
+              </button>
+            </div>
           </section>
 
           <section className="panel-card">
             <h3>Launcher</h3>
-            <select
-              className="select"
-              value={settings?.selectedLauncherId ?? ""}
-              onChange={(event) => void updateLauncherSelection(event.target.value)}
-            >
-              <option value="">No launcher selected</option>
-              {launchers
-                .filter((candidate) => candidate.id !== "custom")
-                .map((candidate) => (
-                  <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-              <option value="custom">Custom path</option>
-            </select>
-            {settings?.selectedLauncherId === "custom" ? (
-              <>
-                <input
-                  className="input"
-                  type="text"
-                  value={settings.customLauncherPath ?? ""}
-                  placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
-                  onChange={(event) => void updateCustomPath(event.target.value)}
-                />
-                <button
-                  className="btn ghost"
-                  onClick={() => void pickManualLauncherFromSettings()}
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Application</span>
+                <select
+                  className="select"
+                  value={settings?.selectedLauncherId ?? ""}
+                  onChange={(event) => void updateLauncherSelection(event.target.value)}
                 >
-                  Pick Launcher Path
-                </button>
-              </>
-            ) : null}
+                  <option value="">No launcher selected</option>
+                  {launchers
+                    .filter((candidate) => candidate.id !== "custom")
+                    .map((candidate) => (
+                      <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
+                        {candidate.name}
+                      </option>
+                    ))}
+                  <option value="custom">Custom path</option>
+                </select>
+              </div>
+
+              {settings?.selectedLauncherId === "custom" ? (
+                <div className="data-item">
+                  <span className="data-label">Custom Bin Path</span>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <input
+                      className="input"
+                      type="text"
+                      value={settings.customLauncherPath ?? ""}
+                      placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
+                      onChange={(event) => void updateCustomPath(event.target.value)}
+                    />
+                    <button
+                      className="btn ghost"
+                      onClick={() => void pickManualLauncherFromSettings()}
+                    >
+                      Pick Launcher Path
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="panel-info-box">
+                  <p className="small-dark" style={{ margin: 0, fontSize: '0.8rem' }}>
+                    Choosing a managed launcher (like Prism) allows the app to automatically
+                    discover your instance directories and handle icon sync.
+                  </p>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="panel-card">
             <h3>Paths</h3>
-            <p className="small-dark">Root: {instance?.instanceRoot ?? "--"}</p>
-            <p className="small-dark">Managed game dir: {instance?.minecraftDir ?? "--"}</p>
-            <p className="small-dark">
-              Live game dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
-            </p>
-            
-            <details className="advanced-options">
-              <summary className="advanced-summary">Advanced: Override Live Directory</summary>
-              <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                <p className="pane-subtitle" style={{ fontSize: '0.75rem', marginBottom: '8px', marginTop: 0 }}>
-                  By default, the sync tool targets the standard data folder of your chosen launcher. 
-                  Specify an absolute path below to force a different live directory.
-                </p>
-                <input
-                  className="input"
-                  type="text"
-                  value={settings?.minecraftRootOverride ?? ""}
-                  placeholder="Leave empty for default launcher dir"
-                  onChange={(event) =>
-                    settings
-                      ? void saveSettings({
-                          ...settings,
-                          minecraftRootOverride: event.target.value.trim() || null,
-                        })
-                      : undefined
-                  }
-                />
-                <div className="actions-row">
-                  <button
-                    className="btn ghost"
-                    onClick={() => void pickMinecraftRootFromSettings()}
-                  >
-                    Pick Dir
-                  </button>
-                  <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
-                    Refresh
-                  </button>
-                </div>
-                <p className="small-dark">
-                  Readiness:{" "}
-                  {versionReadiness?.foundInMinecraftRootDir ? "runtime found" : "runtime missing"}
-                  {" | Allowlisted: "}{versionReadiness?.allowlisted ? "yes" : "no"}
-                </p>
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Sync Base Root</span>
+                <div className="data-value">{instance?.instanceRoot ?? "--"}</div>
               </div>
-            </details>
+
+              <div className="data-item">
+                <span className="data-label">Managed Game Dir</span>
+                <div className="data-value">{instance?.minecraftDir ?? "--"}</div>
+              </div>
+
+              <div className="data-item">
+                <span className="data-label">Live Game Dir</span>
+                <div className="data-value">{versionReadiness?.liveMinecraftRoot ?? "--"}</div>
+              </div>
+              
+              <details className="advanced-options">
+                <summary className="advanced-summary">Advanced: Override Live Directory</summary>
+                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                  <p className="pane-subtitle" style={{ fontSize: '0.75rem', marginBottom: '8px', marginTop: 0 }}>
+                    By default, the sync tool targets the standard data folder of your chosen launcher. 
+                    Specify an absolute path below to force a different live directory.
+                  </p>
+                  <input
+                    className="input"
+                    type="text"
+                    value={settings?.minecraftRootOverride ?? ""}
+                    placeholder="Leave empty for default launcher dir"
+                    onChange={(event) =>
+                      settings
+                        ? void saveSettings({
+                            ...settings,
+                            minecraftRootOverride: event.target.value.trim() || null,
+                          })
+                        : undefined
+                    }
+                  />
+                  <div className="actions-row">
+                    <button
+                      className="btn ghost"
+                      onClick={() => void pickMinecraftRootFromSettings()}
+                    >
+                      Pick Dir
+                    </button>
+                    <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
+                      Refresh
+                    </button>
+                  </div>
+                  <p className="small-dark" style={{ fontSize: '0.7rem', marginTop: '4px' }}>
+                    Ready: {versionReadiness?.foundInMinecraftRootDir ? "YES" : "NO"} | Allowlisted: {versionReadiness?.allowlisted ? "YES" : "NO"}
+                  </p>
+                </div>
+              </details>
+            </div>
           </section>
         </div>
       </div>
@@ -357,27 +400,42 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
 
           <section className="panel-card">
             <h3>Lock Versions</h3>
-            <p className="small-dark">
-              Installed lock version: {instance?.installedVersion ?? "none"}
-            </p>
-            <p className="small-dark">
-              Remote lock version: {catalog?.profileVersion ?? "--"}
-            </p>
-            <p className="small-dark">
-              Local lock version: {catalog?.localVersion ?? "--"}
-            </p>
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Installed Version</span>
+                <div className="data-value">{instance?.installedVersion ?? "none"}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Remote Lock</span>
+                <div className="data-value">{catalog?.profileVersion ?? "--"}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Local Snapshot</span>
+                <div className="data-value">{catalog?.localVersion ?? "--"}</div>
+              </div>
+            </div>
           </section>
 
           <section className="panel-card">
             <h3>Runtime Targets</h3>
-            <p className="small-dark">
-              {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
-              {catalog?.minecraftVersion ?? "--"}
-            </p>
-            <p className="small-dark">
-              Allowed MC versions:{" "}
-              {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
-            </p>
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Loader</span>
+                <div className="data-value">
+                  {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
+                </div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Minecraft</span>
+                <div className="data-value">{catalog?.minecraftVersion ?? "--"}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Allowlisted Versions</span>
+                <div className="data-value">
+                  {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
+                </div>
+              </div>
+            </div>
           </section>
         </div>
       </div>
@@ -395,69 +453,80 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <div className="pane-grid">
           <section className="panel-card">
             <h3>Schedule</h3>
-            <p className="small-dark">
-              Auto-apply every 30 minutes while the app is open.
-            </p>
-            <p className="small-dark">Last check: {formatTime(lastCheckAt)}</p>
-            <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
-            <button
-              className="btn ghost"
-              onClick={() => void runSyncCycle(true)}
-              disabled={sessionActive}
-            >
-              Run Check + Auto Apply
-            </button>
+            <div className="data-list">
+              <div className="panel-info-box">
+                <p className="small-dark" style={{ margin: 0, fontSize: '0.8rem' }}>
+                  Auto-apply every 30 minutes while the app is open.
+                </p>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Last Check</span>
+                <div className="data-value">{formatTime(lastCheckAt)}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Next Check</span>
+                <div className="data-value">{formatTime(nextCheckAt)}</div>
+              </div>
+              <button
+                className="btn ghost"
+                onClick={() => void runSyncCycle(true)}
+                disabled={sessionActive}
+              >
+                Run Check + Auto Apply
+              </button>
+            </div>
           </section>
 
           <section className="panel-card">
             <h3>Launcher Updates</h3>
-            <p className="small-dark">
-              Current version: {launcherUpdate?.currentVersion ?? "--"}
-            </p>
-            <p className="small-dark">
-              Latest release: {launcherUpdate?.latestVersion ?? "--"}
-            </p>
-            <p className="small-dark">
-              Published: {formatDateTime(launcherUpdate?.pubDate ?? null)}
-            </p>
-            <p className="small-dark">
-              Status:{" "}
-              {launcherUpdate?.available
-                ? "update available"
-                : launcherUpdate
-                  ? "up to date"
-                  : "not checked"}
-            </p>
-            <p className="small-dark">
-              {launcherUpdateNotice ??
-                "Updater checks run at startup and every 30 minutes."}
-            </p>
-            {launcherUpdate?.body ? (
-              <p className="small-dark">{launcherUpdate.body}</p>
-            ) : null}
-            <div className="actions-row">
-              <button
-                className="btn ghost"
-                onClick={() => void checkLauncherUpdate(false)}
-                disabled={isCheckingLauncherUpdate || isInstallingLauncherUpdate}
-              >
-                {isCheckingLauncherUpdate ? "Checking..." : "Check Updates"}
-              </button>
-              {launcherUpdate?.available ? (
+            <div className="data-list">
+              <div className="data-item">
+                <span className="data-label">Current Version</span>
+                <div className="data-value">{launcherUpdate?.currentVersion ?? "--"}</div>
+              </div>
+              <div className="data-item">
+                <span className="data-label">Status</span>
+                <div className="data-value">
+                  {launcherUpdate?.available
+                    ? "Update available"
+                    : launcherUpdate
+                      ? "Up to date"
+                      : "Not checked"}
+                </div>
+              </div>
+              {launcherUpdate?.available && (
+                <div className="data-item">
+                  <span className="data-label">Latest Release</span>
+                  <div className="data-value">{launcherUpdate.latestVersion}</div>
+                </div>
+              )}
+              <p className="small-dark" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                {launcherUpdateNotice ?? "Updater checks run at startup and every 30 minutes."}
+              </p>
+              <div className="actions-row">
                 <button
                   className="btn ghost"
-                  onClick={() =>
-                    void installLauncherUpdate(
-                      launcherUpdate.latestVersion ?? undefined,
-                    )
-                  }
-                  disabled={isInstallingLauncherUpdate || isPlaying}
+                  onClick={() => void checkLauncherUpdate(false)}
+                  disabled={isCheckingLauncherUpdate || isInstallingLauncherUpdate}
                 >
-                  {isInstallingLauncherUpdate
-                    ? "Installing..."
-                    : "Download & Install"}
+                  {isCheckingLauncherUpdate ? "Checking..." : "Check Updates"}
                 </button>
-              ) : null}
+                {launcherUpdate?.available ? (
+                  <button
+                    className="btn ghost"
+                    onClick={() =>
+                      void installLauncherUpdate(
+                        launcherUpdate.latestVersion ?? undefined,
+                      )
+                    }
+                    disabled={isInstallingLauncherUpdate || isPlaying}
+                  >
+                    {isInstallingLauncherUpdate
+                      ? "Installing..."
+                      : "Download & Install"}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </section>
 
@@ -524,27 +593,31 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <nav className="nav-groups" aria-label="Workspace sections">
           <button
             className={activeView === "overview" ? "nav-item active" : "nav-item"}
+            data-initial="O"
             onClick={() => setActiveView("overview")}
           >
-            Overview
+            <span>Overview</span>
           </button>
           <button
             className={activeView === "sourcePaths" ? "nav-item active" : "nav-item"}
+            data-initial="S"
             onClick={() => setActiveView("sourcePaths")}
           >
-            Source & Paths
+            <span>Source & Paths</span>
           </button>
           <button
             className={activeView === "catalog" ? "nav-item active" : "nav-item"}
+            data-initial="C"
             onClick={() => setActiveView("catalog")}
           >
-            Catalog
+            <span>Catalog</span>
           </button>
           <button
             className={activeView === "activity" ? "nav-item active" : "nav-item"}
+            data-initial="A"
             onClick={() => setActiveView("activity")}
           >
-            Activity
+            <span>Activity</span>
           </button>
         </nav>
 

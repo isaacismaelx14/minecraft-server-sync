@@ -44,6 +44,12 @@
   
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Responsive variables */
+  --sidebar-w: 280px;
+  --workspace-padding: var(--space-5);
+  --header-gap: var(--space-4);
+  --card-min-w: 280px;
 }
 
 * {
@@ -68,7 +74,7 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
   color: var(--text-primary);
   font-family: 'Outfit', system-ui, sans-serif;
   background-color: var(--bg-base);
@@ -77,8 +83,7 @@ body {
     radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1), transparent 45%),
     radial-gradient(circle at 50% 100%, rgba(14, 165, 233, 0.08), transparent 50%);
   background-attachment: fixed;
-  overflow-x: hidden;
-  overflow-y: scroll;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -111,12 +116,13 @@ h1, h2, h3, h4, h5, p, ul {
 
 /* Base Shell */
 .desktop-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   gap: var(--space-4);
   padding: var(--space-4);
   animation: fadeIn var(--transition-smooth);
+  overflow: hidden;
 }
 
 /* Nav */
@@ -239,10 +245,36 @@ h1, h2, h3, h4, h5, p, ul {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: var(--space-4);
-  padding: var(--space-5);
-  min-height: calc(100vh - 48px);
+  padding: var(--workspace-padding);
+  height: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-radius: var(--radius-xl);
+  
+  /* Firefox scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.desktop-workspace::-webkit-scrollbar {
+  width: 12px; /* Slightly wider to accommodate the floating thumb padding */
+}
+
+.desktop-workspace::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 16px 0; /* Keeps the thumb away from the rounded corners */
+}
+
+.desktop-workspace::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent; /* This creates the "float" effect away from the edge */
+  border-radius: 10px;
+}
+
+.desktop-workspace::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
 }
 .desktop-workspace::before {
   content: '';
@@ -258,7 +290,7 @@ h1, h2, h3, h4, h5, p, ul {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: var(--header-gap);
   border-bottom: 1px solid var(--border-subtle);
   padding-bottom: var(--space-4);
   animation: slideIn var(--transition-smooth);
@@ -375,7 +407,7 @@ h1, h2, h3, h4, h5, p, ul {
 
 .pane-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min-w), 1fr));
   gap: var(--space-4);
 }
 
@@ -411,11 +443,55 @@ h1, h2, h3, h4, h5, p, ul {
   color: #fff;
   letter-spacing: 0.01em;
 }
+
+.panel-info-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  border-left: 3px solid var(--brand-primary);
+}
+
 .status-block h2 {
   font-size: 1.4rem;
 }
 
 /* Grids & Lists */
+.data-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.data-item {
+  display: grid;
+  gap: 4px;
+}
+
+.data-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.data-value {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  word-break: break-all;
+  line-height: 1.4;
+  transition: all var(--transition-fast);
+}
+
+.data-value:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border-strong);
+}
+
 .summary-grid {
   list-style: none;
   padding: 0;
@@ -470,13 +546,9 @@ h1, h2, h3, h4, h5, p, ul {
 .overview-list {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  padding-right: 4px;
 }
-.overview-list::-webkit-scrollbar { width: 4px; }
-.overview-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
 .overview-chip {
   border: 1px solid var(--border-subtle);
@@ -1160,12 +1232,129 @@ h1, h2, h3, h4, h5, p, ul {
   margin: 0;
 }
 
-@media (max-width: 1080px) {
-  .desktop-shell {
-    grid-template-columns: 1fr;
-  }
-  
-  .desktop-workspace {
-    min-height: auto;
+/* Responsive Breakpoints */
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-w: 240px;
+    --workspace-padding: var(--space-4);
+    --card-min-w: 260px;
   }
 }
+
+@media (max-width: 1080px) {
+  :root {
+    --sidebar-w: 80px; /* Side rail mode */
+    --workspace-padding: var(--space-3);
+    --header-gap: var(--space-3);
+    --card-min-w: 240px;
+  }
+
+  .desktop-shell {
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  /* Hide text in sidebar for compact mode */
+  .desktop-nav {
+    padding: var(--space-3) var(--space-2);
+    align-items: center;
+  }
+
+  .nav-brand h1, .nav-brand .eyebrow, .nav-brand .small-dark,
+  .nav-item span, .nav-status {
+    display: none;
+  }
+
+  .nav-brand {
+    padding: 0;
+    border: none;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-brand::after {
+    content: 'M';
+    font-size: 1.6rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 12px;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* If we had icons, they would show here. Since it's text, we show initials */
+  .nav-item::after {
+    content: attr(data-initial);
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  /* Header adjustments */
+  .workspace-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-header h2 {
+    font-size: 1.4rem;
+  }
+
+  .workspace-header .server-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .workspace-header-actions {
+    margin-top: var(--space-2);
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 920px) {
+  :root {
+    --workspace-padding: var(--space-2);
+    --card-min-w: 200px;
+  }
+  
+  .pane-grid {
+    gap: var(--space-2);
+  }
+
+  .panel-card {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .panel-card h3 {
+    font-size: 1rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 grid for stats on tiny space */
+    gap: var(--space-2);
+  }
+
+  .summary-grid li {
+    padding: 10px 6px;
+  }
+  
+  .overview-chip {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+
+  .small-dark {
+    font-size: 0.8rem;
+  }
+}
+
