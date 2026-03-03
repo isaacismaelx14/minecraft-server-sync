@@ -423,21 +423,33 @@ pub fn sync_cancel(state: State<'_, Arc<AppState>>) {
 }
 
 #[tauri::command]
-pub fn instance_get_state(state: State<'_, Arc<AppState>>, server_id: String) -> Result<InstanceState, String> {
+pub async fn instance_get_state(state: State<'_, Arc<AppState>>, server_id: String) -> Result<InstanceState, String> {
   let effective_server = effective_server_id(state.inner(), &server_id);
   let settings = state.settings.lock().clone();
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     &effective_server,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )
   .map_err(|e| format!("{e}"))?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = selected_launcher_id(&settings, &detected);
+  
+  if selected.as_deref() == Some("prism") {
+    // Fallback to cached or remote lock to find the correct instance name for Prism
+    let lock_for_prism = load_local_lock(&paths).unwrap_or(None)
+        .or(crate::profile::fetch_remote_lock(state.inner(), &effective_server).await.ok());
+    if let Some(ref lock) = lock_for_prism {
+      let _ = paths.apply_prism(lock);
+    }
+  }
+
   ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
-  let installed_version = load_local_lock(&paths)
-    .map_err(|e| format!("{e}"))?
-    .map(|lock| lock.version);
+  let installed_lock = load_local_lock(&paths).map_err(|e| format!("{e}"))?;
+  let installed_version = installed_lock.map(|lock| lock.version);
 
   Ok(InstanceState {
     installed_version,

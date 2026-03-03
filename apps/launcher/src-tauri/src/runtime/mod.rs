@@ -106,21 +106,27 @@ pub async fn ensure_fabric_and_bootstrap(state: &crate::state::AppState, server_
   .await
   .map_err(|e| format!("{e}"))?;
 
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     &effective_server,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )
   .map_err(|e| format!("{e}"))?;
-  ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
   let detected = crate::launcher_apps::detect_installed_launchers();
   let selected_id = selected_launcher_id(&settings, &detected);
+
+  if selected_id.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote);
+  }
+
+  ensure_layout(&paths).map_err(|e| format!("{e}"))?;
+
   let managed_version_id = crate::launcher_apps::server_release_version_id(&remote);
 
   let bootstrap = if selected_id.as_deref() == Some("prism") {
-    crate::launcher_apps::bootstrap_prism_instance(&remote, &minecraft_root)
+    crate::launcher_apps::bootstrap_prism_instance(&remote)
       .map_err(|e| format!("{e}"))?
   } else {
     crate::launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &minecraft_root)

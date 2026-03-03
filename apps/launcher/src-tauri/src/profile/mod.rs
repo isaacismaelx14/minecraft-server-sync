@@ -429,13 +429,20 @@ pub async fn catalog_snapshot(state: &crate::state::AppState, server_id: &str) -
     .map_err(|e| format!("{e}"))?;
   let metadata = crate::profile::fetch_profile_metadata(state, &effective_server).await.ok();
 
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     &effective_server,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )
   .map_err(|e| format!("{e}"))?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote);
+  }
+
   ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
   let local_version = load_local_lock(&paths)

@@ -49,6 +49,34 @@ impl InstancePaths {
       minecraft_dir,
     })
   }
+
+  pub fn apply_prism(&mut self, lock: &ProfileLock) -> LauncherResult<()> {
+    let prism_root = crate::launcher_apps::prism_root_dir()?;
+    let instance_key = crate::launcher_apps::slugify(&lock.branding.server_name);
+    let instance_dir = prism_root.join("instances").join(&instance_key);
+
+    #[cfg(target_os = "macos")]
+    let minecraft_folder = "minecraft";
+    #[cfg(not(target_os = "macos"))]
+    let minecraft_folder = ".minecraft";
+
+    let minecraft_dir = instance_dir.join(minecraft_folder);
+    let mvl_root = instance_dir.join(".mvl");
+
+    self.root = mvl_root.clone();
+    self.manifest_lock = mvl_root.join("manifest.lock.json");
+    self.sync_dir = mvl_root.join(".sync");
+    self.logs = mvl_root.join("logs");
+
+    self.mods = minecraft_dir.join("mods");
+    self.resourcepacks = minecraft_dir.join("resourcepacks");
+    self.shaderpacks = minecraft_dir.join("shaderpacks");
+    self.config = minecraft_dir.join("config");
+    self.servers_dat = minecraft_dir.join("servers.dat");
+    self.minecraft_dir = minecraft_dir;
+
+    Ok(())
+  }
 }
 
 pub fn resolve_launcher_minecraft_root(settings: &AppSettings) -> LauncherResult<(PathBuf, bool)> {
@@ -142,13 +170,20 @@ pub async fn check_version_readiness(state: &crate::state::AppState, server_id: 
     .iter()
     .any(|value| value == &remote.minecraft_version);
 
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     &effective_server,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )
   .map_err(|e| format!("{e}"))?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote);
+  }
+
   ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
   let (minecraft_root, using_override_root) =

@@ -17,22 +17,22 @@ import { SecurityModule } from './security/security.module';
       {
         name: 'default',
         ttl: 60000,
-        limit: 80,
+        limit: 8000,
       },
       {
         name: 'public_read',
         ttl: 60000,
-        limit: 120,
+        limit: 12000,
       },
       {
         name: 'admin_auth',
         ttl: 300000,
-        limit: 10,
+        limit: 1000,
       },
       {
         name: 'admin_api',
         ttl: 60000,
-        limit: 60,
+        limit: 6000,
       },
     ]),
     PrismaModule,

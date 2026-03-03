@@ -212,15 +212,15 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
   })
 }
 
-pub fn bootstrap_prism_instance(lock: &ProfileLock, minecraft_dir: &Path) -> LauncherResult<LauncherBootstrapResult> {
+pub fn bootstrap_prism_instance(lock: &ProfileLock) -> LauncherResult<LauncherBootstrapResult> {
   let prism_root = prism_root_dir()?;
   let instances_root = prism_root.join("instances");
   fs::create_dir_all(&instances_root)?;
 
-  let instance_name = server_release_name(lock);
-  let instance_key = server_release_key(lock);
+  let instance_name = lock.branding.server_name.clone();
+  let instance_key = slugify(&lock.branding.server_name);
 
-  let instance_dir = instances_root.join(instance_key);
+  let instance_dir = instances_root.join(&instance_key);
   fs::create_dir_all(&instance_dir)?;
 
   let loader_component = build_loader_component(lock)?;
@@ -243,11 +243,8 @@ pub fn bootstrap_prism_instance(lock: &ProfileLock, minecraft_dir: &Path) -> Lau
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize mmc-pack.json: {error}")))?,
   )?;
 
-  let game_dir = minecraft_dir.to_string_lossy().to_string();
   let cfg = format!(
-    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}
-OverrideGameDir=true\nGameDir={game_dir}
-"
+    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
   );
   fs::write(instance_dir.join("instance.cfg"), cfg)?;
 
@@ -255,7 +252,7 @@ OverrideGameDir=true\nGameDir={game_dir}
     launcher_id: "prism".to_string(),
     instance_name,
     instance_path: Some(instance_dir.to_string_lossy().to_string()),
-    message: "Prism instance created/updated and linked to your live Minecraft game directory.".to_string(),
+    message: "Prism instance created/updated.".to_string(),
   })
 }
 
@@ -426,7 +423,7 @@ fn validate_launcher_path(path: &str) -> LauncherResult<PathBuf> {
   Ok(candidate)
 }
 
-fn prism_root_dir() -> LauncherResult<PathBuf> {
+pub fn prism_root_dir() -> LauncherResult<PathBuf> {
   let config_dir = dirs::config_dir()
     .ok_or_else(|| LauncherError::Fs("failed to resolve user config directory for Prism".to_string()))?;
 
@@ -545,7 +542,7 @@ fn upsert_official_launcher_profile(
   Ok(())
 }
 
-fn slugify(input: &str) -> String {
+pub fn slugify(input: &str) -> String {
   let mut out = String::with_capacity(input.len());
 
   for ch in input.chars() {
@@ -575,18 +572,25 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
   let mut pending_bootstrap: Option<LauncherBootstrapResult> = None;
 
   if selected_id.as_deref() == Some("prism") || selected_id.as_deref() == Some("official") {
-    let paths = InstancePaths::new(
+    let mut paths = InstancePaths::new(
       &state.config,
       &effective_server,
       &settings.install_mode,
       settings.minecraft_root_override.as_deref(),
     )
     .map_err(|e| format!("{e}"))?;
-    ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
     let lock = load_local_lock(&paths)
       .map_err(|e| format!("{e}"))?
       .or(crate::profile::fetch_remote_lock(state.as_ref(), &effective_server).await.ok());
+
+    if selected_id.as_deref() == Some("prism") {
+      if let Some(ref l) = lock {
+        let _ = paths.apply_prism(l);
+      }
+    }
+
+    ensure_layout(&paths).map_err(|e| format!("{e}"))?;
 
     if let Some(remote) = lock.as_ref() {
       if remote.loader == "fabric" {
@@ -603,7 +607,7 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
 
     pending_bootstrap = Some(match (selected_id.as_deref(), lock) {
       (Some("prism"), Some(lock)) => {
-        crate::launcher_apps::bootstrap_prism_instance(&lock, &minecraft_root).map_err(|e| format!("{e}"))?
+        crate::launcher_apps::bootstrap_prism_instance(&lock).map_err(|e| format!("{e}"))?
       }
       (Some("official"), Some(lock)) => crate::launcher_apps::bootstrap_official_version(
         &lock,
@@ -626,12 +630,34 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
     });
   }
 
+  let paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|e| format!("{e}"))?;
+  
+  let live_mc_dir = if selected_id.as_deref() == Some("prism") {
+    let mut modified_paths = paths.clone();
+    let lock = load_local_lock(&paths)
+      .map_err(|e| format!("{e}"))?
+      .or(crate::profile::fetch_remote_lock(state.as_ref(), &effective_server).await.ok());
+    
+    if let Some(ref l) = lock {
+      let _ = modified_paths.apply_prism(l);
+    }
+    modified_paths.minecraft_dir
+  } else {
+    minecraft_root.clone()
+  };
+
   let session = crate::session::start_or_get_session(
     app,
     Arc::clone(&state),
     &effective_server,
     &selected_launcher,
-    &minecraft_root,
+    &live_mc_dir,
   )
   .await
   .map_err(|e| format!("{e}"))?;
