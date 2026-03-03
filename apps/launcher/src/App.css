@@ -193,8 +193,28 @@ h1, h2, h3, h4, h5, p, ul {
   transition: all var(--transition-fast);
   display: flex;
   align-items: center;
+  gap: 12px;
   position: relative;
   overflow: hidden;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.nav-item:hover .nav-icon {
+  opacity: 1;
+  transform: scale(1.1);
+  color: var(--brand-accent);
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
+  color: var(--brand-accent);
 }
 
 .nav-item::before {
@@ -1291,11 +1311,14 @@ h1, h2, h3, h4, h5, p, ul {
     height: 48px;
   }
 
-  /* If we had icons, they would show here. Since it's text, we show initials */
+  .nav-item .nav-icon {
+    width: 22px;
+    height: 22px;
+    opacity: 0.9;
+  }
+
   .nav-item::after {
-    content: attr(data-initial);
-    font-weight: 700;
-    font-size: 1.1rem;
+    display: none;
   }
 
   /* Header adjustments */

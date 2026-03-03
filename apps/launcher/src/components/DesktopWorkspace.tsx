@@ -593,30 +593,45 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <nav className="nav-groups" aria-label="Workspace sections">
           <button
             className={activeView === "overview" ? "nav-item active" : "nav-item"}
-            data-initial="O"
             onClick={() => setActiveView("overview")}
           >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
             <span>Overview</span>
           </button>
           <button
             className={activeView === "sourcePaths" ? "nav-item active" : "nav-item"}
-            data-initial="S"
             onClick={() => setActiveView("sourcePaths")}
           >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <line x1="12" y1="11" x2="12" y2="17"></line>
+              <line x1="9" y1="14" x2="15" y2="14"></line>
+            </svg>
             <span>Source & Paths</span>
           </button>
           <button
             className={activeView === "catalog" ? "nav-item active" : "nav-item"}
-            data-initial="C"
             onClick={() => setActiveView("catalog")}
           >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 8V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>
+              <rect x="1" y="3" width="22" height="5"></rect>
+              <line x1="10" y1="12" x2="14" y2="12"></line>
+            </svg>
             <span>Catalog</span>
           </button>
           <button
             className={activeView === "activity" ? "nav-item active" : "nav-item"}
-            data-initial="A"
             onClick={() => setActiveView("activity")}
           >
+            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
             <span>Activity</span>
           </button>
         </nav>
