@@ -9,9 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { basename, extname, resolve } from 'node:path';
+import { extname } from 'node:path';
 import {
   BrandingSchema,
   FancyMenuSettingsSchema,
@@ -39,6 +37,7 @@ import {
   FancyPreviewAssemblerService,
   FancyPreviewModel,
 } from './fancy-preview-assembler.service';
+import { ArtifactsStorageService } from '../artifacts/artifacts-storage.service';
 
 import { AdminAuthService } from './auth/admin-auth.service';
 import {
@@ -51,7 +50,7 @@ const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
-const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 interface ModrinthSearchResponse {
   hits: Array<{
@@ -134,6 +133,7 @@ export class AdminService implements OnModuleInit {
     private readonly sandboxClient: BundleSandboxClient,
     private readonly coreModPolicy: CoreModPolicyService,
     private readonly previewAssembler: FancyPreviewAssemblerService,
+    private readonly artifactsStorage: ArtifactsStorageService,
   ) {}
 
   async onModuleInit() {
@@ -851,23 +851,24 @@ export class AdminService implements OnModuleInit {
           ? '.webp'
           : '.jpg';
 
-    if (file.size > 5 * 1024 * 1024) {
-      throw new BadGatewayException('Image must be 5MB or smaller');
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadGatewayException('Image must be 10MB or smaller');
     }
-
-    const root = this.getArtifactsRoot();
-    await mkdir(root, { recursive: true });
 
     const stamp = Date.now().toString(36);
     const token = randomBytes(6).toString('hex');
     const fileName = `admin-image-${stamp}-${token}${ext}`;
-    const target = resolve(root, basename(fileName));
-    await writeFile(target, file.buffer);
-    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
+    const key = this.buildServerAssetKey('media', fileName);
+    await this.artifactsStorage.putArtifact({
+      key,
+      body: file.buffer,
+      contentType: file.mimetype,
+    });
 
     return {
       fileName,
-      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      key,
+      url: this.artifactsStorage.artifactUrlForKey(key, requestOrigin),
       size: file.size,
       contentType: file.mimetype,
     };
@@ -887,7 +888,7 @@ export class AdminService implements OnModuleInit {
     }
 
     if (file.size > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
-      throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
+      throw new BadGatewayException('FancyMenu bundle must be 10MB or smaller');
     }
 
     const fileExt = extname(file.originalname || '').toLowerCase();
@@ -898,19 +899,20 @@ export class AdminService implements OnModuleInit {
     const validation = await this.sandboxClient.validateBundle(file.buffer);
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
 
-    const root = this.getArtifactsRoot();
-    await mkdir(root, { recursive: true });
-
     const stamp = Date.now().toString(36);
     const token = randomBytes(6).toString('hex');
     const fileName = `fancymenu-bundle-${stamp}-${token}.zip`;
-    const target = resolve(root, basename(fileName));
-    await writeFile(target, file.buffer);
-    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
+    const key = this.buildServerAssetKey('bundles', fileName);
+    await this.artifactsStorage.putArtifact({
+      key,
+      body: file.buffer,
+      contentType: 'application/zip',
+    });
 
     return {
       fileName,
-      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      key,
+      url: this.artifactsStorage.artifactUrlForKey(key, requestOrigin),
       sha256,
       size: file.size,
       entryCount: validation.entryCount,
@@ -943,10 +945,9 @@ export class AdminService implements OnModuleInit {
       return { model: baseline };
     }
 
-    const bundlePath = this.resolveArtifactPathFromUrl(
+    const payload = await this.loadFancyMenuBundlePayload(
       fancyMenu.customLayoutUrl,
     );
-    const payload = await readFile(bundlePath).catch(() => null);
     if (!payload || payload.length === 0) {
       throw new BadGatewayException(
         'FancyMenu preview bundle is missing or unreadable',
@@ -1536,8 +1537,7 @@ export class AdminService implements OnModuleInit {
     bundleUrl: string,
     expectedSha256: string,
   ): Promise<FancyMenuBundleValidation> {
-    const filePath = this.resolveArtifactPathFromUrl(bundleUrl);
-    const payload = await readFile(filePath).catch(() => null);
+    const payload = await this.loadFancyMenuBundlePayload(bundleUrl);
     if (!payload || payload.length === 0) {
       throw new BadGatewayException(
         'FancyMenu bundle artifact is missing or unreadable',
@@ -1548,7 +1548,7 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
     }
 
-    if (extname(filePath).toLowerCase() !== '.zip') {
+    if (extname(bundleUrl).toLowerCase() !== '.zip') {
       throw new BadGatewayException(
         'FancyMenu bundle artifact must be a .zip file',
       );
@@ -1564,30 +1564,49 @@ export class AdminService implements OnModuleInit {
     return this.sandboxClient.validateBundle(payload);
   }
 
-  private resolveArtifactPathFromUrl(url: string): string {
-    let parsed: URL;
+  private tryResolveArtifactKeyFromUrl(url: string): string | null {
     try {
-      parsed = new URL(url);
+      return this.artifactsStorage.keyFromArtifactUrl(url);
     } catch {
-      throw new BadGatewayException('Invalid FancyMenu customLayoutUrl');
+      return null;
+    }
+  }
+
+  private async loadFancyMenuBundlePayload(bundleUrl: string): Promise<Buffer> {
+    const fileKey = this.tryResolveArtifactKeyFromUrl(bundleUrl);
+    if (fileKey) {
+      const artifact = await this.artifactsStorage
+        .getArtifact(fileKey)
+        .catch(() => null);
+      if (artifact?.body && artifact.body.length > 0) {
+        return artifact.body;
+      }
     }
 
-    const marker = '/v1/artifacts/';
-    const idx = parsed.pathname.indexOf(marker);
-    if (idx < 0) {
+    const response = await fetch(bundleUrl, {
+      headers: {
+        'User-Agent': 'mvl-admin-mvp/0.2.0',
+      },
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
       throw new BadGatewayException(
-        'FancyMenu customLayoutUrl must reference /v1/artifacts/',
+        'FancyMenu bundle artifact is missing or unreadable',
       );
     }
 
-    const rawFileName = parsed.pathname.slice(idx + marker.length);
-    const decodedFileName = decodeURIComponent(rawFileName);
-    const safeFileName = basename(decodedFileName);
-    if (!safeFileName || safeFileName !== decodedFileName) {
-      throw new BadGatewayException('Invalid FancyMenu bundle artifact path');
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.length === 0) {
+      throw new BadGatewayException(
+        'FancyMenu bundle artifact is missing or unreadable',
+      );
     }
 
-    return resolve(this.getArtifactsRoot(), safeFileName);
+    if (body.length > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
+      throw new BadGatewayException('FancyMenu bundle must be 10MB or smaller');
+    }
+
+    return body;
   }
 
   private extractFancyMenu(value: unknown) {
@@ -1704,13 +1723,41 @@ export class AdminService implements OnModuleInit {
     return `${parts.major}.${parts.minor}.${parts.patch}`;
   }
 
-  private getArtifactsRoot() {
-    const configured = this.config.get<string>('ARTIFACTS_DIR')?.trim();
-    if (configured) {
-      return resolve(configured);
+  private buildServerAssetKey(
+    kind: 'media' | 'bundles',
+    fileName: string,
+  ): string {
+    const rootPrefix = this.getAssetsRootPrefix();
+    const serverFolder = this.getServerId().replace(/[^a-zA-Z0-9._-]+/g, '-');
+    const safeServerFolder = serverFolder || 'mvl';
+    const safeFileName = fileName.replace(/[\\/]+/g, '-');
+    return `${rootPrefix}/${safeServerFolder}/${kind}/${safeFileName}`;
+  }
+
+  private getAssetsRootPrefix(): string {
+    const configured = this.config.get<string>('ASSETS_KEY_PREFIX')?.trim();
+    const defaultPrefix =
+      (this.config.get<string>('NODE_ENV')?.trim().toLowerCase() ||
+        'development') === 'production'
+        ? 'assets'
+        : 'dev/assets';
+
+    const rawPrefix = configured || defaultPrefix;
+    const normalizedPrefix = rawPrefix
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '');
+
+    if (!normalizedPrefix) {
+      return defaultPrefix;
     }
 
-    return resolve(homedir(), '.mss-client', 'artifacts');
+    const segments = normalizedPrefix.split('/');
+    if (segments.some((segment) => segment === '.' || segment === '..')) {
+      return defaultPrefix;
+    }
+
+    return normalizedPrefix;
   }
 
   private resolvePublicBaseUrl(fallbackOrigin: string): string {

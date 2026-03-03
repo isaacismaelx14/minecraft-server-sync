@@ -8,8 +8,10 @@ import { AdminCsrfGuard } from './auth/admin-csrf.guard';
 import { BundleSandboxClient } from './bundle-sandbox.client';
 import { CoreModPolicyService } from './core-mod-policy.service';
 import { FancyPreviewAssemblerService } from './fancy-preview-assembler.service';
+import { ArtifactsModule } from '../artifacts/artifacts.module';
 
 @Module({
+  imports: [ArtifactsModule],
   controllers: [AdminController],
   providers: [
     AdminService,

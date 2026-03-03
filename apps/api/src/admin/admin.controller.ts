@@ -228,7 +228,7 @@ export class AdminController {
 
   @Post('/v1/admin/fancymenu/bundle/upload')
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }),
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
   uploadFancyMenuBundle(
     @UploadedFile()
