@@ -755,13 +755,13 @@ const AddModsModal = memo(function AddModsModal({
     if (searchResults.length > 0 || localQuery) return;
     const mcVersion = form.minecraftVersion.trim();
     setIsLoadingPopular(true);
-    
+
     // Use backend endpoint with proper authentication instead of direct API call
     const searchParams = new URLSearchParams({
       query: '', // Empty query to get popular mods
       minecraftVersion: mcVersion,
     });
-    
+
     requestJson<Array<{
       projectId: string;
       slug: string;
