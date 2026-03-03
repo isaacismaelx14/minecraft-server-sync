@@ -21,22 +21,14 @@ import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
 import {
-  BuildFancyMenuPreviewDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
-import {
-  BundleSandboxClient,
-  SandboxPreviewResponse,
-} from './bundle-sandbox.client';
+import { BundleSandboxClient } from './bundle-sandbox.client';
 import { CoreModPolicyService, ManagedMod } from './core-mod-policy.service';
-import {
-  FancyPreviewAssemblerService,
-  FancyPreviewModel,
-} from './fancy-preview-assembler.service';
 import { ArtifactsStorageService } from '../artifacts/artifacts-storage.service';
 
 import { AdminAuthService } from './auth/admin-auth.service';
@@ -132,7 +124,6 @@ export class AdminService implements OnModuleInit {
     private readonly signing: SigningService,
     private readonly sandboxClient: BundleSandboxClient,
     private readonly coreModPolicy: CoreModPolicyService,
-    private readonly previewAssembler: FancyPreviewAssemblerService,
     private readonly artifactsStorage: ArtifactsStorageService,
   ) {}
 
@@ -919,65 +910,6 @@ export class AdminService implements OnModuleInit {
     };
   }
 
-  async buildFancyMenuPreview(input: BuildFancyMenuPreviewDto): Promise<{
-    model: FancyPreviewModel;
-    expiresAt?: string;
-  }> {
-    const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
-    const isCustom = fancyMenu.enabled && fancyMenu.mode === 'custom';
-    const baseline = this.previewAssembler.buildSimplePreview({
-      serverName: input.serverName?.trim() || undefined,
-      fancyMenu,
-      branding: isCustom
-        ? {} // In custom mode, start with empty branding so sandbox must provide it
-        : {
-            logoUrl: input.branding?.logoUrl?.trim() || undefined,
-            backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
-          },
-    });
-
-    if (
-      !fancyMenu.enabled ||
-      fancyMenu.mode !== 'custom' ||
-      !fancyMenu.customLayoutUrl ||
-      !fancyMenu.customLayoutSha256
-    ) {
-      return { model: baseline };
-    }
-
-    const payload = await this.loadFancyMenuBundlePayload(
-      fancyMenu.customLayoutUrl,
-    );
-    if (!payload || payload.length === 0) {
-      throw new BadGatewayException(
-        'FancyMenu preview bundle is missing or unreadable',
-      );
-    }
-
-    const actualSha = createHash('sha256').update(payload).digest('hex');
-    if (
-      actualSha.toLowerCase() !== fancyMenu.customLayoutSha256.toLowerCase()
-    ) {
-      throw new BadGatewayException(
-        'FancyMenu preview bundle SHA-256 does not match',
-      );
-    }
-
-    const sandboxPreview: SandboxPreviewResponse =
-      await this.sandboxClient.buildPreview(payload);
-    return {
-      model: this.previewAssembler.mergeCustomPreview(
-        baseline,
-        sandboxPreview,
-        '/v1/admin/fancymenu/preview/assets',
-      ),
-      expiresAt: sandboxPreview.expiresAt,
-    };
-  }
-
-  async getFancyMenuPreviewAsset(token: string, assetId: string) {
-    return this.sandboxClient.fetchPreviewAsset(token, assetId);
-  }
 
   private async ensureAdminCredential(): Promise<void> {
     const existing = await this.prisma.adminCredential.findUnique({

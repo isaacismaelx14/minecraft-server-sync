@@ -19,7 +19,6 @@ import type {
   DependencyAnalysis,
   FabricVersionsPayload,
   FancyMenuPayload,
-  FancyMenuPreviewPayload,
   InstallModsPayload,
   ModVersionsPayload,
   PublishPayload,
@@ -117,14 +116,11 @@ type AdminContextValue = {
   sessionState: 'pending' | 'active';
   hasPendingPublish: boolean;
   rail: RailState;
-  fancyPreview: FancyMenuPreviewPayload['model'] | null;
-  fancyPreviewExpiresAt: string | null;
   isBusy: {
     bootstrap: boolean;
     search: boolean;
     publish: boolean;
     install: boolean;
-    preview: boolean;
   };
   actions: {
     logout: () => Promise<void>;
@@ -136,7 +132,7 @@ type AdminContextValue = {
     requestInstall: (projectId: string) => Promise<void>;
     confirmInstall: () => Promise<void>;
     cancelInstall: () => void;
-    removeMod: (projectId: string) => void;
+    removeMod: (projectId: string, sha256?: string) => void;
     loadModVersions: (projectId: string) => Promise<void>;
     applyModVersion: (projectId: string, versionId: string) => Promise<void>;
     saveSettings: () => Promise<void>;
@@ -147,7 +143,6 @@ type AdminContextValue = {
       file: File | null,
     ) => Promise<void>;
     uploadFancyBundle: (file: File | null) => Promise<void>;
-    rebuildFancyPreview: () => Promise<void>;
     setFancyMenuMode: (mode: 'simple' | 'custom') => void;
     setFancyMenuEnabled: (enabled: boolean) => void;
   };
@@ -210,7 +205,6 @@ const DEFAULT_POLICY: CoreModPolicy = {
 
 const BOOTSTRAP_CACHE_TTL_MS = 15_000;
 const FABRIC_VERSIONS_CACHE_TTL_MS = 60_000;
-const PREVIEW_CACHE_TTL_MS = 15_000;
 let bootstrapCache: { payload: BootstrapPayload; expiresAt: number } | null =
   null;
 let bootstrapInFlight: Promise<BootstrapPayload> | null = null;
@@ -219,11 +213,6 @@ const fabricVersionsCache = new Map<
   { payload: FabricVersionsPayload; expiresAt: number }
 >();
 const fabricVersionsInFlight = new Map<string, Promise<FabricVersionsPayload>>();
-const previewCache = new Map<
-  string,
-  { payload: FancyMenuPreviewPayload; expiresAt: number }
->();
-const previewInFlight = new Map<string, Promise<FancyMenuPreviewPayload>>();
 
 async function readBootstrapPayload(force = false): Promise<BootstrapPayload> {
   const now = Date.now();
@@ -283,46 +272,6 @@ async function readFabricVersionsPayload(
     });
 
   fabricVersionsInFlight.set(minecraftVersion, request);
-  return request;
-}
-
-async function readPreviewPayload(
-  fingerprint: string,
-  body: {
-    serverName?: string;
-    fancyMenu: FancyMenuPayload;
-    branding: BrandingPayload;
-  },
-  force = false,
-): Promise<FancyMenuPreviewPayload> {
-  const now = Date.now();
-  const cached = previewCache.get(fingerprint);
-  if (!force && cached && cached.expiresAt > now) {
-    return cached.payload;
-  }
-
-  const inFlight = previewInFlight.get(fingerprint);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const request = requestJson<FancyMenuPreviewPayload>(
-    '/v1/admin/fancymenu/preview/build',
-    'POST',
-    body,
-  )
-    .then((payload) => {
-      previewCache.set(fingerprint, {
-        payload,
-        expiresAt: Date.now() + PREVIEW_CACHE_TTL_MS,
-      });
-      return payload;
-    })
-    .finally(() => {
-      previewInFlight.delete(fingerprint);
-    });
-
-  previewInFlight.set(fingerprint, request);
   return request;
 }
 
@@ -433,22 +382,6 @@ function mapBootstrapToForm(payload: BootstrapPayload): FormState {
   };
 }
 
-function buildPreviewFingerprint(formState: FormState): string {
-  return [
-    formState.serverName.trim(),
-    formState.fancyMenuEnabled,
-    formState.fancyMenuMode,
-    formState.playButtonLabel.trim(),
-    formState.hideSingleplayer,
-    formState.hideMultiplayer,
-    formState.hideRealms,
-    formState.fancyMenuCustomLayoutUrl.trim(),
-    formState.fancyMenuCustomLayoutSha256.trim(),
-    formState.brandingLogoUrl.trim(),
-    formState.brandingBackgroundUrl.trim(),
-    formState.brandingNewsUrl.trim(),
-  ].join('|');
-}
 
 function normalizeBrandingForCompare(
   payload: BrandingPayload,
@@ -536,28 +469,19 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     'pending',
   );
   const [statuses, setStatuses] = useState<StatusState>(DEFAULT_STATUS);
-  const [fancyPreview, setFancyPreview] = useState<
-    FancyMenuPreviewPayload['model'] | null
-  >(null);
-  const [fancyPreviewExpiresAt, setFancyPreviewExpiresAt] = useState<
-    string | null
-  >(null);
   const [busyBootstrap, setBusyBootstrap] = useState(false);
   const [busySearch, setBusySearch] = useState(false);
   const [busyPublish, setBusyPublish] = useState(false);
   const [busyInstall, setBusyInstall] = useState(false);
-  const [busyPreview, setBusyPreview] = useState(false);
   const hasBootstrappedRef = useRef(false);
   const latestProfileModsRef = useRef<AdminMod[]>([]);
   const latestProfileRuntimeRef = useRef({
     minecraftVersion: '',
     loaderVersion: '',
   });
+  const lastPublishedSnapshotRef = useRef<PublishSnapshot | null>(null);
   const selectedModsRef = useRef<AdminMod[]>([]);
   const lastFancyEnabledRef = useRef<'true' | 'false'>('true');
-  const lastPublishedSnapshotRef = useRef<PublishSnapshot | null>(null);
-  const previewInFlightRef = useRef<string | null>(null);
-  const previewFingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectedModsRef.current = selectedMods;
@@ -728,49 +652,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     ],
   );
 
-  const rebuildFancyPreview = useCallback(
-    async (force = false) => {
-      const currentForm = form;
-      const fingerprint = buildPreviewFingerprint(currentForm);
-      if (previewInFlightRef.current === fingerprint) {
-        return;
-      }
-      if (!force && previewFingerprintRef.current === fingerprint) {
-        return;
-      }
-
-      previewInFlightRef.current = fingerprint;
-      setBusyPreview(true);
-      setStatus('fancy', 'Rendering menu preview...');
-      try {
-        const payload = await readPreviewPayload(
-          fingerprint,
-          {
-            serverName: currentForm.serverName.trim() || undefined,
-            fancyMenu: collectFancyMenuPayload(currentForm),
-            branding: collectBrandingPayload(currentForm),
-          },
-          force,
-        );
-        previewFingerprintRef.current = fingerprint;
-        setFancyPreview(payload.model ?? null);
-        setFancyPreviewExpiresAt(payload.expiresAt ?? null);
-        setStatus('fancy', 'Preview updated.', 'ok');
-      } catch (error) {
-        setStatus(
-          'fancy',
-          (error as Error).message || 'Failed to build menu preview.',
-          'error',
-        );
-      } finally {
-        if (previewInFlightRef.current === fingerprint) {
-          previewInFlightRef.current = null;
-        }
-        setBusyPreview(false);
-      }
-    },
-    [collectBrandingPayload, collectFancyMenuPayload, form, setStatus],
-  );
 
   const loadBootstrap = useCallback(async () => {
     setBusyBootstrap(true);
@@ -803,21 +684,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         collectFancyMenuPayload,
         collectBrandingPayload,
       );
-      try {
-        const previewFingerprint = buildPreviewFingerprint(nextForm);
-        const previewPayload = await readPreviewPayload(previewFingerprint, {
-          serverName: nextForm.serverName.trim() || undefined,
-          fancyMenu: collectFancyMenuPayload(nextForm),
-          branding: collectBrandingPayload(nextForm),
-        });
-        previewFingerprintRef.current = previewFingerprint;
-        setFancyPreview(previewPayload.model ?? null);
-        setFancyPreviewExpiresAt(previewPayload.expiresAt ?? null);
-      } catch {
-        previewFingerprintRef.current = null;
-        setFancyPreview(null);
-        setFancyPreviewExpiresAt(null);
-      }
     } catch (error) {
       setStatus(
         'bootstrap',
@@ -858,13 +724,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         form.minecraftVersion,
       );
       setSelectedMods(synced);
-      await rebuildFancyPreview();
     })();
   }, [
     ensureCoreMods,
     form.fancyMenuEnabled,
     form.minecraftVersion,
-    rebuildFancyPreview,
     sessionState,
   ]);
 
@@ -1087,17 +951,21 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
   ]);
 
   const removeMod = useCallback(
-    (projectId: string) => {
+    (projectId: string, sha256?: string) => {
       const nonRemovable = new Set(coreModPolicy.nonRemovableProjectIds);
       if (form.fancyMenuEnabled === 'true') {
         nonRemovable.add(coreModPolicy.fancyMenuProjectId);
       }
-      if (nonRemovable.has(projectId)) {
+      if (projectId && nonRemovable.has(projectId)) {
         setStatus('mods', 'This core mod cannot be removed.', 'error');
         return;
       }
       setSelectedMods((current) =>
-        current.filter((entry) => entry.projectId !== projectId),
+        current.filter((entry) => {
+          if (projectId && entry.projectId === projectId) return false;
+          if (sha256 && entry.sha256 === sha256) return false;
+          return true;
+        }),
       );
       setStatus('mods', 'Mod removed.', 'ok');
     },
@@ -1284,7 +1152,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
           payload.releaseVersion ?? current.currentReleaseVersion,
       }));
       setStatus('draft', 'Draft saved.', 'ok');
-      await rebuildFancyPreview();
     } catch (error) {
       setStatus(
         'draft',
@@ -1296,7 +1163,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     collectBrandingPayload,
     collectFancyMenuPayload,
     form,
-    rebuildFancyPreview,
     setStatus,
     validateFormFields,
   ]);
@@ -1409,7 +1275,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
             target === 'background' ? url : current.brandingBackgroundUrl,
         }));
         setStatus('draft', 'Image uploaded.', 'ok');
-        await rebuildFancyPreview();
       } catch (error) {
         setStatus(
           'draft',
@@ -1418,7 +1283,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         );
       }
     },
-    [rebuildFancyPreview, setStatus],
+    [setStatus],
   );
 
   const uploadFancyBundle = useCallback(
@@ -1446,7 +1311,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
           `FancyMenu bundle uploaded (${String(payload.entryCount ?? 0)} entries).`,
           'ok',
         );
-        await rebuildFancyPreview();
       } catch (error) {
         setStatus(
           'fancy',
@@ -1455,7 +1319,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         );
       }
     },
-    [rebuildFancyPreview, setStatus],
+    [setStatus],
   );
 
   const logout = useCallback(async () => {
@@ -1594,14 +1458,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       hasPendingPublish,
       rail,
       summaryStats,
-      fancyPreview,
-      fancyPreviewExpiresAt,
       isBusy: {
         bootstrap: busyBootstrap,
         search: busySearch,
         publish: busyPublish,
         install: busyInstall,
-        preview: busyPreview,
       },
       baselineRuntime: latestProfileRuntimeRef.current,
       actions: {
@@ -1622,7 +1483,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         publishProfile,
         uploadBrandingImage,
         uploadFancyBundle,
-        rebuildFancyPreview: () => rebuildFancyPreview(true),
         setFancyMenuMode: (mode: 'simple' | 'custom') =>
           setForm((prev) => ({ ...prev, fancyMenuMode: mode })),
         setFancyMenuEnabled: (enabled: boolean) =>
@@ -1635,15 +1495,12 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     [
       busyBootstrap,
       busyInstall,
-      busyPreview,
       busyPublish,
       busySearch,
       confirmInstall,
       coreModPolicy,
       effectiveCorePolicy,
       dependencyMap,
-      fancyPreview,
-      fancyPreviewExpiresAt,
       form,
       hasPendingPublish,
       loadFabricVersions,
@@ -1665,7 +1522,6 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       statuses,
       uploadBrandingImage,
       uploadFancyBundle,
-      rebuildFancyPreview,
       view,
       summaryStats,
     ],

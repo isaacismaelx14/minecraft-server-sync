@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Patch,
   Post,
   Query,
@@ -18,7 +17,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
-  BuildFancyMenuPreviewDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
@@ -252,25 +250,5 @@ export class AdminController {
         : request.protocol;
     const origin = `${protocol}://${host}`;
     return this.adminService.uploadFancyMenuBundle(file, origin);
-  }
-
-  @Post('/v1/admin/fancymenu/preview/build')
-  buildFancyMenuPreview(@Body() payload: BuildFancyMenuPreviewDto) {
-    return this.adminService.buildFancyMenuPreview(payload);
-  }
-
-  @Get('/v1/admin/fancymenu/preview/assets/:token/:assetId')
-  async getFancyMenuPreviewAsset(
-    @Param('token') token: string,
-    @Param('assetId') assetId: string,
-    @Res() response: Response,
-  ) {
-    const payload = await this.adminService.getFancyMenuPreviewAsset(
-      token,
-      assetId,
-    );
-    response.setHeader('content-type', payload.contentType);
-    response.setHeader('cache-control', payload.cacheControl);
-    response.status(200).send(payload.body);
   }
 }

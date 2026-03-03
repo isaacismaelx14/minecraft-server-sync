@@ -1,6 +1,4 @@
 import {
-  Suspense,
-  lazy,
   memo,
   useEffect,
   useMemo,
@@ -13,11 +11,6 @@ import { createPortal } from 'react-dom';
 
 import { useAdminContext } from './admin-context';
 import { requestJson } from './http';
-
-const FancyPreviewCanvas = lazy(async () => {
-  const mod = await import('./fancy-preview');
-  return { default: mod.FancyPreviewCanvas };
-});
 
 function statusClass(tone: 'idle' | 'ok' | 'error'): string {
   if (tone === 'ok') return 'status ok';
@@ -1118,6 +1111,7 @@ const ModManagerPage = memo(function ModManagerPage() {
   const [showAddMods, setShowAddMods] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{
     projectId: string;
+    sha256: string;
     name: string;
   } | null>(null);
 
@@ -1213,8 +1207,8 @@ const ModManagerPage = memo(function ModManagerPage() {
             type="button"
             className="btn danger"
             style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-            disabled={isLocked || !projectId}
-            onClick={() => setRemoveTarget({ projectId, name: mod.name })}
+            disabled={isLocked}
+            onClick={() => setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })}
           >
             Remove
           </button>
@@ -1327,7 +1321,7 @@ const ModManagerPage = memo(function ModManagerPage() {
               className="btn danger"
               type="button"
               onClick={() => {
-                actions.removeMod(removeTarget.projectId);
+                actions.removeMod(removeTarget.projectId, removeTarget.sha256);
                 setRemoveTarget(null);
               }}
             >
@@ -1347,9 +1341,6 @@ const FancyMenuPage = memo(function FancyMenuPage() {
     form,
     setTextFieldFromEvent,
     actions,
-    fancyPreview,
-    fancyPreviewExpiresAt,
-    isBusy,
     statuses,
   } = useAdminContext();
   const bundleUploadRef = useRef<HTMLInputElement | null>(null);
@@ -1358,11 +1349,6 @@ const FancyMenuPage = memo(function FancyMenuPage() {
   const [activeStep, setActiveStep] = useState(1);
 
   const isEnabled = form.fancyMenuEnabled === 'true';
-
-  const visibleButtons = useMemo(
-    () => fancyPreview?.buttons.filter((button) => button.visible).length ?? 0,
-    [fancyPreview],
-  );
 
   return (
     <>
@@ -1382,14 +1368,6 @@ const FancyMenuPage = memo(function FancyMenuPage() {
             onClick={() => isEnabled && setActiveStep(2)}
           >
             2. Mode & Config
-          </button>
-          <button
-            type="button"
-            className={`step ${activeStep >= 3 ? 'done' : ''} ${activeStep === 3 ? 'active' : ''}`}
-            disabled={!isEnabled}
-            onClick={() => isEnabled && setActiveStep(3)}
-          >
-            3. Preview
           </button>
         </div>
 
@@ -1538,7 +1516,7 @@ const FancyMenuPage = memo(function FancyMenuPage() {
                     style={{ width: '100%' }}
                     onClick={() => bundleUploadRef.current?.click()}
                   >
-                    {isBusy.preview ? 'Processing...' : 'Upload New Bundle .zip'}
+                    Upload New Bundle .zip
                   </button>
                   <input
                     ref={bundleUploadRef}
@@ -1548,10 +1526,7 @@ const FancyMenuPage = memo(function FancyMenuPage() {
                     onChange={(event) => {
                       void actions.uploadFancyBundle(
                         event.currentTarget.files?.[0] ?? null,
-                      ).then(() => {
-                        setActiveStep(3);
-                        void actions.rebuildFancyPreview();
-                      });
+                      );
                       event.currentTarget.value = '';
                     }}
                   />
@@ -1559,76 +1534,12 @@ const FancyMenuPage = memo(function FancyMenuPage() {
               </div>
             )}
 
-            <div className="row" style={{ justifyContent: 'space-between', marginTop: 12 }}>
+            <div className="row" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
               <button type="button" className="btn ghost" onClick={() => setActiveStep(1)}>Back</button>
-              <button type="button" className="btn primary" onClick={() => {
-                setActiveStep(3);
-                void actions.rebuildFancyPreview();
-              }}>
-                Continue to Preview
-              </button>
             </div>
           </div>
         )}
 
-        {activeStep === 3 && (
-          <div className="wizard-panel">
-            <div className="panel-header" style={{ marginBottom: 0 }}>
-              <h3>Real-time Preview</h3>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => void actions.rebuildFancyPreview()}
-              >
-                {isBusy.preview ? 'Refreshing...' : 'Refresh Preview'}
-              </button>
-            </div>
-
-            {!fancyPreview ? (
-              <div className="wizard-box" style={{ textAlign: 'center', padding: '48px' }}>
-                <p className="hint">No preview available. Click "Refresh Preview" to generate one based on current settings.</p>
-              </div>
-            ) : (
-              <div
-                style={{
-                  background: 'rgba(0,0,0,0.4)',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--line-strong)',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}
-              >
-                <div style={{ padding: '12px 20px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--line)', display: 'flex', gap: '20px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <span>Mode: <b>{form.fancyMenuMode}</b></span>
-                  <span>Visible Buttons: <b>{visibleButtons}</b></span>
-                </div>
-                <div className="fancy-preview-container" style={{ padding: '0' }}>
-                   <Suspense fallback={<p className="hint">Loading preview renderer...</p>}>
-                      <FancyPreviewCanvas model={fancyPreview} />
-                   </Suspense>
-                </div>
-                {fancyPreviewExpiresAt && (
-                   <div style={{ padding: '8px 20px', fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'right' }}>
-                      Assets expire at: {new Date(fancyPreviewExpiresAt).toLocaleTimeString()}
-                   </div>
-                )}
-                {fancyPreview?.notices?.length ? (
-                  <div className="preview-notices" style={{ padding: '12px 20px', background: 'rgba(239, 68, 68, 0.05)', borderTop: '1px solid rgba(239, 68, 68, 0.1)' }}>
-                    {fancyPreview.notices.map((notice: string, index: number) => (
-                      <div key={`${notice}-${String(index)}`} style={{ fontSize: '0.8rem', color: 'var(--danger)', marginBottom: '4px' }}>
-                        ⚠️ {notice}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            <div className="row" style={{ justifyContent: 'flex-start' }}>
-              <button type="button" className="btn ghost" onClick={() => setActiveStep(2)}>Back to Configuration</button>
-            </div>
-          </div>
-        )}
 
         <div className={statusClass(statuses.fancy.tone)} style={{ marginTop: 24 }}>
           {statuses.fancy.text}
