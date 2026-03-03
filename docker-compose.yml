@@ -27,8 +27,8 @@ services:
       PORT: 3210
       FANCYMENU_SANDBOX_API_KEY: sandbox-dev-key
       FANCYMENU_PREVIEW_TTL_SECONDS: 1800
-    expose:
-      - "3210"
+    ports:
+      - "3210:3210"
 
 volumes:
   mvl_syncer_pgdata:

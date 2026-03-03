@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -55,14 +56,21 @@ const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
 interface ModrinthSearchResponse {
   hits: Array<{
     project_id: string;
+    slug: string;
+    author: string;
     title: string;
     description: string;
+    categories?: string[];
+    icon_url?: string;
+    latest_version?: string;
   }>;
 }
 
 interface ModrinthProject {
   id: string;
+  slug: string;
   title: string;
+  icon_url?: string;
 }
 
 interface ModrinthDependency {
@@ -250,6 +258,12 @@ export class AdminService implements OnModuleInit {
       : null;
     const draft = this.extractDraft(settings.publishDraft);
 
+    const minecraftVersion = draft?.minecraftVersion || latest.minecraftVersion;
+    const loaderVersion = draft?.loaderVersion || latest.loaderVersion;
+    const mods = draft?.mods || normalizedMods;
+    const fancyMenu = draft?.fancyMenu || activeFancyMenu;
+    const branding = draft?.branding || lockBranding;
+
     return {
       server: {
         id: server.id,
@@ -266,15 +280,15 @@ export class AdminService implements OnModuleInit {
             minor: settings.releaseMinor,
             patch: settings.releasePatch,
           }),
-        minecraftVersion: latest.minecraftVersion,
+        minecraftVersion,
         loader: latest.loader,
-        loaderVersion: latest.loaderVersion,
-        mods: normalizedMods,
-        fancyMenu: activeFancyMenu,
+        loaderVersion,
+        mods,
+        fancyMenu,
         coreModPolicy: this.coreModPolicy.buildMetadata(
-          activeFancyMenu?.enabled === true,
+          fancyMenu?.enabled === true,
         ),
-        branding: lockBranding,
+        branding,
       },
       appSettings: settings,
       draft,
@@ -352,15 +366,25 @@ export class AdminService implements OnModuleInit {
     const serverName = input.serverName.trim();
     const serverAddress = input.serverAddress.trim();
     const profileId = input.profileId?.trim();
-
     const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
+    const minecraftVersion = input.minecraftVersion?.trim() || undefined;
+    const loaderVersion = input.loaderVersion?.trim() || undefined;
+    const mods = input.mods || undefined;
 
-    const branding = BrandingSchema.parse({
+    const rawBranding = {
       serverName,
       logoUrl: input.branding?.logoUrl?.trim() || undefined,
       backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
       newsUrl: input.branding?.newsUrl?.trim() || undefined,
-    });
+    };
+
+    const brandingParse = BrandingSchema.safeParse(rawBranding);
+    if (!brandingParse.success) {
+      throw new BadRequestException(
+        `Validation failed: ${brandingParse.error.message}`,
+      );
+    }
+    const branding = brandingParse.data;
 
     const setting = await this.prisma.appSetting.upsert({
       where: { id: APP_SETTING_ID },
@@ -375,6 +399,9 @@ export class AdminService implements OnModuleInit {
           serverName,
           serverAddress,
           profileId: profileId || null,
+          minecraftVersion,
+          loaderVersion,
+          mods,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -384,6 +411,9 @@ export class AdminService implements OnModuleInit {
           serverName,
           serverAddress,
           profileId: profileId || null,
+          minecraftVersion,
+          loaderVersion,
+          mods,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -468,17 +498,23 @@ export class AdminService implements OnModuleInit {
     const cleanQuery = query.trim();
     const cleanVersion = minecraftVersion.trim();
 
-    if (!cleanQuery) {
-      return [];
+    // For empty queries, use a simple search without version filter to get popular mods
+    const searchQuery = cleanQuery || '';
+    const searchIndex = cleanQuery ? 'relevance' : 'follows';
+
+    // Build facets array - only filter by project type for popular mods
+    const facetsArray = [['project_type:mod']];
+
+    // Only add version filter if we have both a query and version
+    if (cleanVersion && cleanQuery) {
+      facetsArray.push([`versions:${cleanVersion}`]);
     }
 
-    const facets = JSON.stringify([
-      ['project_type:mod'],
-      ['categories:fabric'],
-      [`versions:${cleanVersion}`],
-    ]);
+    const facets = JSON.stringify(facetsArray);
 
-    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(cleanQuery)}&index=relevance&limit=12&facets=${encodeURIComponent(facets)}`;
+    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(searchQuery)}&index=${searchIndex}&limit=12&facets=${encodeURIComponent(facets)}`;
+
+    console.log(`Modrinth API request: ${url}`);
 
     const response = await fetch(url, {
       headers: {
@@ -487,9 +523,18 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!response.ok) {
-      throw new BadGatewayException(
-        `Modrinth search failed (${response.status})`,
-      );
+      let errorDetails = `Modrinth search failed (${response.status})`;
+      try {
+        const errorBody = await response.text();
+        if (errorBody) {
+          errorDetails += `: ${errorBody}`;
+        }
+      } catch {
+        // Ignore error parsing error body
+      }
+      console.error(`Modrinth API Error: ${errorDetails}`);
+      console.error(`Request URL: ${url}`);
+      throw new BadGatewayException(errorDetails);
     }
 
     const payload = (await response.json()) as ModrinthSearchResponse;
@@ -498,6 +543,11 @@ export class AdminService implements OnModuleInit {
       projectId: hit.project_id,
       title: hit.title,
       description: hit.description,
+      iconUrl: hit.icon_url,
+      slug: hit.slug,
+      author: hit.author,
+      categories: hit.categories,
+      latestVersion: hit.latest_version,
     }));
   }
 
@@ -872,13 +922,16 @@ export class AdminService implements OnModuleInit {
     expiresAt?: string;
   }> {
     const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
+    const isCustom = fancyMenu.enabled && fancyMenu.mode === 'custom';
     const baseline = this.previewAssembler.buildSimplePreview({
       serverName: input.serverName?.trim() || undefined,
       fancyMenu,
-      branding: {
-        logoUrl: input.branding?.logoUrl?.trim() || undefined,
-        backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
-      },
+      branding: isCustom
+        ? {} // In custom mode, start with empty branding so sandbox must provide it
+        : {
+            logoUrl: input.branding?.logoUrl?.trim() || undefined,
+            backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
+          },
     });
 
     if (
@@ -1099,6 +1152,8 @@ export class AdminService implements OnModuleInit {
         versionId: selected.id,
         url: file.url,
         sha256,
+        iconUrl: project.icon_url,
+        slug: project.slug,
       },
       requiredDependencies,
     };
@@ -1322,6 +1377,8 @@ export class AdminService implements OnModuleInit {
       versionId?: string;
       url: string;
       sha256: string;
+      iconUrl?: string;
+      slug?: string;
     }>;
     fancyMenu: {
       enabled?: boolean;
@@ -1547,6 +1604,9 @@ export class AdminService implements OnModuleInit {
       profileId?: unknown;
       serverName?: unknown;
       serverAddress?: unknown;
+      minecraftVersion?: unknown;
+      loaderVersion?: unknown;
+      mods?: unknown;
       fancyMenu?: unknown;
       branding?: unknown;
     };
@@ -1570,6 +1630,17 @@ export class AdminService implements OnModuleInit {
         typeof draft.profileId === 'string' && draft.profileId.trim().length > 0
           ? draft.profileId.trim()
           : null,
+      minecraftVersion:
+        typeof draft.minecraftVersion === 'string' &&
+        draft.minecraftVersion.trim().length > 0
+          ? draft.minecraftVersion.trim()
+          : null,
+      loaderVersion:
+        typeof draft.loaderVersion === 'string' &&
+        draft.loaderVersion.trim().length > 0
+          ? draft.loaderVersion.trim()
+          : null,
+      mods: Array.isArray(draft.mods) ? (draft.mods as ManagedMod[]) : null,
       fancyMenu,
       branding,
     };

@@ -7,6 +7,8 @@ export type AdminMod = {
   versionId?: string;
   url: string;
   sha256: string;
+  iconUrl?: string;
+  slug?: string;
 };
 
 export type CoreModPolicy = {
@@ -79,8 +81,13 @@ export type FabricVersionsPayload = {
 
 export type SearchResult = {
   projectId: string;
+  slug: string;
   title: string;
   description: string;
+  author: string;
+  iconUrl?: string;
+  categories?: string[];
+  latestVersion?: string;
 };
 
 export type DependencyAnalysis = {

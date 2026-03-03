@@ -231,4 +231,18 @@ export class SaveDraftDto {
   @Type(() => BrandingDto)
   @IsOptional()
   branding?: BrandingDto;
+
+  @IsString()
+  @IsOptional()
+  minecraftVersion?: string;
+
+  @IsString()
+  @IsOptional()
+  loaderVersion?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedModDto)
+  mods?: ResolvedModDto[];
 }

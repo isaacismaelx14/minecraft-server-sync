@@ -98,8 +98,8 @@ type PublishSnapshot = {
 };
 
 type AdminContextValue = {
-  view: 'overview' | 'mods' | 'fancy';
-  setView: (view: 'overview' | 'mods' | 'fancy') => void;
+  view: 'overview' | 'identity' | 'mods' | 'fancy';
+  setView: (view: 'overview' | 'identity' | 'mods' | 'fancy') => void;
   form: FormState;
   setTextFieldFromEvent: (
     event: ChangeEvent<
@@ -130,6 +130,9 @@ type AdminContextValue = {
     logout: () => Promise<void>;
     refreshLoaders: () => Promise<void>;
     searchMods: () => Promise<void>;
+    setSearchQuery: (query: string) => void;
+    analyzeDeps: (projectId: string) => Promise<DependencyAnalysis | null>;
+    requestAndConfirmInstall: (projectId: string) => Promise<void>;
     requestInstall: (projectId: string) => Promise<void>;
     confirmInstall: () => Promise<void>;
     cancelInstall: () => void;
@@ -145,6 +148,18 @@ type AdminContextValue = {
     ) => Promise<void>;
     uploadFancyBundle: (file: File | null) => Promise<void>;
     rebuildFancyPreview: () => Promise<void>;
+    setFancyMenuMode: (mode: 'simple' | 'custom') => void;
+    setFancyMenuEnabled: (enabled: boolean) => void;
+  };
+  baselineRuntime: {
+    minecraftVersion: string;
+    loaderVersion: string;
+  };
+  summaryStats: {
+    add: number;
+    remove: number;
+    update: number;
+    keep: number;
   };
 };
 
@@ -488,8 +503,20 @@ function samePublishSnapshot(
   return sameMods(left.mods, right.mods);
 }
 
+function isValidUrl(val: string): boolean {
+  if (!val.trim()) return true;
+  try {
+    new URL(val.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function AdminProvider({ children }: PropsWithChildren): ReactElement {
-  const [view, setView] = useState<'overview' | 'mods' | 'fancy'>('overview');
+  const [view, setView] = useState<'overview' | 'identity' | 'mods' | 'fancy'>(
+    'overview',
+  );
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [selectedMods, setSelectedMods] = useState<AdminMod[]>([]);
   const [coreModPolicy, setCoreModPolicy] =
@@ -942,6 +969,70 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     [dependencyMap, form.minecraftVersion, searchResults, setStatus],
   );
 
+  const setSearchQuery = useCallback((query: string) => {
+    setForm((current) => ({ ...current, searchQuery: query }));
+  }, []);
+
+  const analyzeDeps = useCallback(
+    async (projectId: string): Promise<DependencyAnalysis | null> => {
+      const fromCache = dependencyMap[projectId];
+      if (fromCache) return fromCache;
+      if (!form.minecraftVersion.trim()) return null;
+      try {
+        const analysis = await requestJson<DependencyAnalysis>(
+          `/v1/admin/mods/analyze?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(form.minecraftVersion.trim())}`,
+          'GET',
+        );
+        setDependencyMap((current) => ({ ...current, [projectId]: analysis }));
+        return analysis;
+      } catch {
+        return null;
+      }
+    },
+    [dependencyMap, form.minecraftVersion],
+  );
+
+  const requestAndConfirmInstall = useCallback(
+    async (projectId: string) => {
+      const minecraftVersion = form.minecraftVersion.trim();
+      if (!minecraftVersion) {
+        setStatus('mods', 'Set Minecraft version first.', 'error');
+        return;
+      }
+      setBusyInstall(true);
+      try {
+        const payload = await requestJson<InstallModsPayload>(
+          '/v1/admin/mods/install',
+          'POST',
+          { projectId, minecraftVersion, includeDependencies: true },
+        );
+        const incoming = payload.mods ?? [];
+        const merged = mergeMods(selectedModsRef.current, incoming);
+        const synced = await ensureCoreMods(
+          merged,
+          form.fancyMenuEnabled === 'true',
+          minecraftVersion,
+        );
+        setSelectedMods(synced);
+        setStatus(
+          'mods',
+          `Installed ${payload.primary?.name || projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies.`,
+          'ok',
+        );
+      } catch (error) {
+        setStatus('mods', (error as Error).message || 'Install failed.', 'error');
+      } finally {
+        setBusyInstall(false);
+      }
+    },
+    [
+      ensureCoreMods,
+      form.fancyMenuEnabled,
+      form.minecraftVersion,
+      setStatus,
+    ],
+  );
+
   const cancelInstall = useCallback(() => {
     setPendingInstall(null);
   }, []);
@@ -1110,7 +1201,63 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     }
   }, [form.supportedMinecraftVersions, setStatus]);
 
+  const validateFormFields = useCallback(() => {
+    let validationError = '';
+    let targetView: 'overview' | 'identity' | 'mods' | 'fancy' = 'identity';
+    let targetElement = '';
+
+    const branding = collectBrandingPayload(form);
+    const fancy = collectFancyMenuPayload(form);
+
+    if (!form.serverName.trim()) {
+      validationError = 'Server Name is required.';
+      targetElement = 'serverName';
+    } else if (!form.serverAddress.trim()) {
+      validationError = 'Server Address is required.';
+      targetElement = 'serverAddress';
+    } else if (branding.logoUrl && !isValidUrl(branding.logoUrl)) {
+      validationError = 'Invalid Server Logo URL.';
+      targetElement = 'brandingLogoUrl';
+    } else if (branding.backgroundUrl && !isValidUrl(branding.backgroundUrl)) {
+      validationError = 'Invalid Background Wallpaper URL.';
+      targetElement = 'brandingBackgroundUrl';
+    } else if (branding.newsUrl && !isValidUrl(branding.newsUrl)) {
+      validationError = 'Invalid Server News Feed URL.';
+      targetElement = 'brandingNewsUrl';
+    } else if (fancy.customLayoutUrl && !isValidUrl(fancy.customLayoutUrl)) {
+      validationError = 'Invalid Custom Layout URL.';
+      targetView = 'fancy';
+      targetElement = 'fancyMenuCustomLayoutUrl';
+    } else if (
+      fancy.customLayoutSha256 &&
+      !/^[A-Fa-f0-9]{64}$/.test(fancy.customLayoutSha256)
+    ) {
+      validationError = 'Invalid SHA256 Hash for Custom Layout.';
+      targetView = 'fancy';
+      targetElement = 'fancyMenuCustomLayoutSha256';
+    }
+
+    if (validationError) {
+      setStatus('draft', `Validation failed: ${validationError}`, 'error');
+      setStatus('publish', `Validation failed: ${validationError}`, 'error');
+      setView(targetView);
+      setTimeout(() => {
+        const el = document.querySelector<
+          HTMLInputElement | HTMLTextAreaElement
+        >(`[name="${targetElement}"]`);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      return false;
+    }
+
+    return true;
+  }, [collectBrandingPayload, collectFancyMenuPayload, form, setStatus]);
+
   const saveDraft = useCallback(async () => {
+    if (!validateFormFields()) return;
     setStatus('draft', 'Saving draft...');
     try {
       const payload = await requestJson<SaveDraftPayload>(
@@ -1120,6 +1267,9 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
           profileId: form.profileId.trim() || undefined,
           serverName: form.serverName.trim(),
           serverAddress: form.serverAddress.trim(),
+          minecraftVersion: form.minecraftVersion.trim() || undefined,
+          loaderVersion: form.loaderVersion.trim() || undefined,
+          mods: selectedModsRef.current,
           fancyMenu: collectFancyMenuPayload(form),
           branding: collectBrandingPayload(form),
         },
@@ -1148,9 +1298,12 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     form,
     rebuildFancyPreview,
     setStatus,
+    validateFormFields,
   ]);
 
   const publishProfile = useCallback(async () => {
+    if (!validateFormFields()) return;
+
     const minecraftVersion = form.minecraftVersion.trim();
     const loaderVersion = form.loaderVersion.trim();
     if (!minecraftVersion || !loaderVersion) {
@@ -1229,8 +1382,10 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     collectFancyMenuPayload,
     ensureCoreMods,
     form,
-    selectedMods.length,
+    selectedModsRef,
+    setBusyPublish,
     setStatus,
+    validateFormFields,
   ]);
 
   const uploadBrandingImage = useCallback(
@@ -1379,6 +1534,48 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     sessionState,
   ]);
 
+  const summaryStats = useMemo(() => {
+    const baseline = latestProfileModsRef.current;
+    const current = selectedMods;
+
+    const baselineMap = new Map<string, AdminMod>();
+    for (const mod of baseline) {
+      baselineMap.set(mod.projectId || mod.name, mod);
+    }
+
+    const currentMap = new Map<string, AdminMod>();
+    for (const mod of current) {
+      currentMap.set(mod.projectId || mod.name, mod);
+    }
+
+    let add = 0;
+    let remove = 0;
+    let update = 0;
+    let keep = 0;
+
+    for (const [id, mod] of currentMap) {
+      const base = baselineMap.get(id);
+      if (!base) {
+        add++;
+      } else if (
+        base.versionId !== mod.versionId ||
+        base.sha256 !== mod.sha256
+      ) {
+        update++;
+      } else {
+        keep++;
+      }
+    }
+
+    for (const id of baselineMap.keys()) {
+      if (!currentMap.has(id)) {
+        remove++;
+      }
+    }
+
+    return { add, remove, update, keep };
+  }, [selectedMods]);
+
   const value = useMemo<AdminContextValue>(
     () => ({
       view,
@@ -1396,6 +1593,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       sessionState,
       hasPendingPublish,
       rail,
+      summaryStats,
       fancyPreview,
       fancyPreviewExpiresAt,
       isBusy: {
@@ -1405,10 +1603,14 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         install: busyInstall,
         preview: busyPreview,
       },
+      baselineRuntime: latestProfileRuntimeRef.current,
       actions: {
         logout,
         refreshLoaders: () => loadFabricVersions(form.minecraftVersion, true),
         searchMods,
+        setSearchQuery,
+        analyzeDeps,
+        requestAndConfirmInstall,
         requestInstall,
         confirmInstall,
         cancelInstall,
@@ -1421,6 +1623,13 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         uploadBrandingImage,
         uploadFancyBundle,
         rebuildFancyPreview: () => rebuildFancyPreview(true),
+        setFancyMenuMode: (mode: 'simple' | 'custom') =>
+          setForm((prev) => ({ ...prev, fancyMenuMode: mode })),
+        setFancyMenuEnabled: (enabled: boolean) =>
+          setForm((prev) => ({
+            ...prev,
+            fancyMenuEnabled: enabled ? 'true' : 'false',
+          })),
       },
     }),
     [
@@ -1458,6 +1667,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       uploadFancyBundle,
       rebuildFancyPreview,
       view,
+      summaryStats,
     ],
   );
 

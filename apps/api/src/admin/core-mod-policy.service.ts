@@ -12,6 +12,8 @@ export type ManagedMod = {
   versionId?: string;
   url: string;
   sha256: string;
+  iconUrl?: string;
+  slug?: string;
 };
 
 export type CoreModPolicyMetadata = {

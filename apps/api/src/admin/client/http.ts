@@ -11,6 +11,17 @@ export async function readError(
 ): Promise<string> {
   try {
     const text = await response.text();
+    try {
+      const parsed = JSON.parse(text) as { message?: string | string[] };
+      if (parsed && parsed.message) {
+        if (Array.isArray(parsed.message)) {
+          return parsed.message[0] || text || fallback;
+        }
+        return parsed.message;
+      }
+    } catch {
+      // ignore
+    }
     return text || fallback;
   } catch {
     return fallback;
