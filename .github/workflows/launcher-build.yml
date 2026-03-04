@@ -104,26 +104,7 @@ jobs:
           PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
           export PROFILE_SIGNATURE_PUBLIC_KEY
 
-          python - <<'PY'
-            import base64
-            import os
-            import sys
-
-            raw = os.environ.get("PROFILE_SIGNATURE_PUBLIC_KEY", "").strip()
-            if not raw:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming", file=sys.stderr)
-              sys.exit(1)
-
-            try:
-              decoded = base64.b64decode(raw, validate=True)
-            except Exception:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64", file=sys.stderr)
-              sys.exit(1)
-
-            if len(decoded) != 32:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)", file=sys.stderr)
-              sys.exit(1)
-            PY
+          node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
@@ -160,26 +141,7 @@ jobs:
             exit 1
           fi
 
-          python - <<'PY'
-            import base64
-            import os
-            import sys
-
-            raw = os.environ.get("PROFILE_SIGNATURE_PUBLIC_KEY", "").strip()
-            if not raw:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming", file=sys.stderr)
-              sys.exit(1)
-
-            try:
-              decoded = base64.b64decode(raw, validate=True)
-            except Exception:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64", file=sys.stderr)
-              sys.exit(1)
-
-            if len(decoded) != 32:
-              print("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)", file=sys.stderr)
-              sys.exit(1)
-            PY
+          node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
