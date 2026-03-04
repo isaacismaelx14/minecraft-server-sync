@@ -101,6 +101,30 @@ jobs:
             exit 1
           fi
 
+          PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
+          export PROFILE_SIGNATURE_PUBLIC_KEY
+
+          python - <<'PY'
+            import base64
+            import os
+            import sys
+
+            raw = os.environ.get("PROFILE_SIGNATURE_PUBLIC_KEY", "").strip()
+            if not raw:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming", file=sys.stderr)
+              sys.exit(1)
+
+            try:
+              decoded = base64.b64decode(raw, validate=True)
+            except Exception:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64", file=sys.stderr)
+              sys.exit(1)
+
+            if len(decoded) != 32:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)", file=sys.stderr)
+              sys.exit(1)
+            PY
+
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
           if ! pnpm --filter @mvl/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
@@ -127,7 +151,35 @@ jobs:
         run: |
           TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
+          PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
           export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          export PROFILE_SIGNATURE_PUBLIC_KEY
+
+          if [ -z "$PROFILE_SIGNATURE_PUBLIC_KEY" ]; then
+            echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY for launcher build step." >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+            import base64
+            import os
+            import sys
+
+            raw = os.environ.get("PROFILE_SIGNATURE_PUBLIC_KEY", "").strip()
+            if not raw:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming", file=sys.stderr)
+              sys.exit(1)
+
+            try:
+              decoded = base64.b64decode(raw, validate=True)
+            except Exception:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64", file=sys.stderr)
+              sys.exit(1)
+
+            if len(decoded) != 32:
+              print("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)", file=sys.stderr)
+              sys.exit(1)
+            PY
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
