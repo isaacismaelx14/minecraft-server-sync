@@ -1067,7 +1067,6 @@ const TopBar = memo(function TopBar() {
     sessionState,
     selectedMods,
     hasPendingPublish,
-    hasPendingServerModChanges,
     publishBlockReason,
     hasSavedDraft,
     isBusy,
@@ -1076,6 +1075,11 @@ const TopBar = memo(function TopBar() {
   } = useAdminContext();
   const [showExarotonPublishWarning, setShowExarotonPublishWarning] =
     useState(false);
+
+  const publishButtonLabel =
+    isBusy.publish && statuses.publish.text.trim().length > 0
+      ? statuses.publish.text
+      : 'Publish';
 
   const handlePublish = () => {
     if (publishBlockReason) {
@@ -1130,13 +1134,9 @@ const TopBar = memo(function TopBar() {
               type="button"
               disabled={isBusy.publish || Boolean(publishBlockReason)}
               onClick={handlePublish}
-              title={publishBlockReason || undefined}
+              title={publishBlockReason || (isBusy.publish ? statuses.publish.text : undefined)}
             >
-              {isBusy.publish
-                ? hasPendingServerModChanges
-                  ? 'Publishing changes...'
-                  : 'Publishing...'
-                : 'Publish'}
+              {publishButtonLabel}
             </button>
             {publishBlockReason ? (
               <span className="btn-tooltip">{publishBlockReason}</span>

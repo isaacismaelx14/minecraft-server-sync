@@ -72,7 +72,7 @@ describe('CoreModPolicyService', () => {
     });
     const fancy = mods.find((mod) => mod.projectId === FANCY_MENU_PROJECT_ID);
     expect(fancy).toBeDefined();
-    expect(fancy?.side).toBe('client');
+    expect(fancy?.side).toBe('both');
   });
 
   it('keeps Fabric API version override when compatible', async () => {
@@ -82,7 +82,7 @@ describe('CoreModPolicyService', () => {
           kind: 'mod',
           name: 'Fabric API',
           provider: 'modrinth',
-          side: 'client',
+          side: 'both',
           projectId: FABRIC_API_PROJECT_ID,
           versionId: 'custom-fabric-version',
           url: 'https://example.com/fabric-custom.jar',
