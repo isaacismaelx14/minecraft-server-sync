@@ -17,7 +17,6 @@ on:
 
 jobs:
   build-mod:
-    if: ${{ hashFiles('mods/server-lock/**') != '' }}
     runs-on: ubuntu-latest
 
     steps:
