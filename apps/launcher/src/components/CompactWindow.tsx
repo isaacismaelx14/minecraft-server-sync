@@ -1,5 +1,6 @@
 import type { useAppCore } from "../hooks/useAppCore";
 import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
+import { ServerControlBar } from "./ServerControlBar";
 
 export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> }) {
   const {
@@ -31,22 +32,6 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
       isApiSourceMode &&
       launcherServerControls !== null &&
       launcherServerControls.permissions.canViewStatus;
-    const compactServerStatusToneClass = (() => {
-      if (!launcherServerControls?.enabled) {
-        return "is-disabled";
-      }
-
-      const status = launcherServerControls.selectedServer?.status;
-      if (status === 1) return "is-online";
-      if (status === 0) return "is-offline";
-      if (status === 7) return "is-error";
-      if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "is-busy";
-      return "is-unknown";
-    })();
-    const launcherServerStatus = launcherServerControls?.selectedServer?.status;
-    const disableStartByStatus = [1, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
-    const disableStopByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
-    const disableRestartByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
 
     return (
       <main className="compact-shell">
@@ -143,65 +128,11 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
             </div>
             {canRenderLauncherStatus ? (
               <div className="compact-server-dock">
-                <div className="compact-server-shell">
-                  <span className="launcher-server-section-label compact-server-section-label">Live Server Control</span>
-                  <section className="launcher-server-controls compact-server-controls">
-                  <span
-                    className={`launcher-server-badge ${compactServerStatusToneClass}`}
-                  >
-                    {launcherServerControls.selectedServer?.statusLabel ??
-                      (launcherServerControls.enabled ? "Unknown" : "Unavailable")}
-                  </span>
-
-                  {launcherServerControls.permissions.canViewOnlinePlayers &&
-                  launcherServerControls.selectedServer ? (
-                    <span className="compact-server-online">
-                      {launcherServerControls.selectedServer.players.count}/
-                      {launcherServerControls.selectedServer.players.max} online
-                    </span>
-                  ) : null}
-
-                  {(launcherServerControls.permissions.canStartServer ||
-                    launcherServerControls.permissions.canStopServer ||
-                    launcherServerControls.permissions.canRestartServer) && (
-                    <div className="compact-server-icon-actions">
-                      {launcherServerControls.permissions.canStartServer && (
-                        <button
-                          className="compact-server-icon-btn"
-                          onClick={() => void runLauncherServerAction("start")}
-                          disabled={isServerActionBusy || disableStartByStatus}
-                          title="Start server"
-                          aria-label="Start server"
-                        >
-                          ▶
-                        </button>
-                      )}
-                      {launcherServerControls.permissions.canRestartServer && (
-                        <button
-                          className="compact-server-icon-btn"
-                          onClick={() => void runLauncherServerAction("restart")}
-                          disabled={isServerActionBusy || disableRestartByStatus}
-                          title="Restart server"
-                          aria-label="Restart server"
-                        >
-                          ↻
-                        </button>
-                      )}
-                      {launcherServerControls.permissions.canStopServer && (
-                        <button
-                          className="compact-server-icon-btn"
-                          onClick={() => void runLauncherServerAction("stop")}
-                          disabled={isServerActionBusy || disableStopByStatus}
-                          title="Stop server"
-                          aria-label="Stop server"
-                        >
-                          ■
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </section>
-                </div>
+                <ServerControlBar
+                  launcherServerControls={launcherServerControls}
+                  isServerActionBusy={isServerActionBusy}
+                  runLauncherServerAction={runLauncherServerAction}
+                />
               </div>
             ) : null}
           </section>

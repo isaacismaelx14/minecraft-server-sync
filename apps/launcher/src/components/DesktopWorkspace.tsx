@@ -1,5 +1,6 @@
 import type { useAppCore } from "../hooks/useAppCore";
 import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
+import { ServerControlBar } from "./ServerControlBar";
 
 export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore> }) {
   const {
@@ -15,23 +16,6 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
     syncHasUnknownTotal, syncBytesLabel, hint, error,
     isApiSourceMode, launcherServerControls, isServerActionBusy, runLauncherServerAction
   } = core;
-
-  const serverStatusToneClass = (() => {
-    if (!launcherServerControls?.enabled) {
-      return "is-disabled";
-    }
-
-    const status = launcherServerControls.selectedServer?.status;
-    if (status === 1) return "is-online";
-    if (status === 0) return "is-offline";
-    if (status === 7) return "is-error";
-    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "is-busy";
-    return "is-unknown";
-  })();
-  const launcherServerStatus = launcherServerControls?.selectedServer?.status;
-  const disableStartByStatus = [1, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
-  const disableStopByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
-  const disableRestartByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
 
   const renderPrimary = () => {
     if (screen === "booting") {
@@ -76,13 +60,24 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
 
     return (
       <div className="status-block">
-        <h2>
-          {sessionStatus.phase === "playing"
-            ? "Playing"
-            : catalog?.hasUpdates
-              ? "Updates Detected"
-              : "Instance Up to Date"}
-        </h2>
+        <div className="status-title-row">
+          <h2>
+            {sessionStatus.phase === "playing"
+              ? "Playing"
+              : catalog?.hasUpdates
+                ? "Updates Detected"
+                : "Instance Up to Date"}
+          </h2>
+          {isApiSourceMode && launcherServerControls ? (
+            <div className="status-title-control">
+              <ServerControlBar
+                launcherServerControls={launcherServerControls}
+                isServerActionBusy={isServerActionBusy}
+                runLauncherServerAction={runLauncherServerAction}
+              />
+            </div>
+          ) : null}
+        </div>
         <p>
           {sessionActive
             ? `Live session active in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}.`
@@ -106,60 +101,6 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         ) : null}
         {isChecking ? (
           <p className="wizard-meta">Checking server changes...</p>
-        ) : null}
-
-        {isApiSourceMode && launcherServerControls ? (
-          <section className="launcher-server-controls launcher-server-section">
-            <span className="launcher-server-section-label">Live Server Control</span>
-            <div className="launcher-server-head">
-              <h3>Server Status</h3>
-              <span className={`launcher-server-badge ${serverStatusToneClass}`}>
-                {launcherServerControls.selectedServer?.statusLabel ??
-                  (launcherServerControls.enabled ? "Unknown" : "Unavailable")}
-              </span>
-            </div>
-            {launcherServerControls.reason ||
-            (launcherServerControls.permissions.canViewOnlinePlayers &&
-              launcherServerControls.selectedServer) ? (
-              <p className="wizard-meta" style={{ marginTop: 0 }}>
-                {launcherServerControls.reason ??
-                  `${launcherServerControls.selectedServer?.players.count ?? 0}/${launcherServerControls.selectedServer?.players.max ?? 0} players online`}
-              </p>
-            ) : null}
-            {(launcherServerControls.permissions.canStartServer ||
-              launcherServerControls.permissions.canStopServer ||
-              launcherServerControls.permissions.canRestartServer) && (
-              <div className="actions-row" style={{ marginTop: 8 }}>
-                {launcherServerControls.permissions.canStartServer && (
-                  <button
-                    className="btn ghost"
-                    onClick={() => void runLauncherServerAction("start")}
-                    disabled={isServerActionBusy || disableStartByStatus}
-                  >
-                    Start
-                  </button>
-                )}
-                {launcherServerControls.permissions.canStopServer && (
-                  <button
-                    className="btn ghost"
-                    onClick={() => void runLauncherServerAction("stop")}
-                    disabled={isServerActionBusy || disableStopByStatus}
-                  >
-                    Stop
-                  </button>
-                )}
-                {launcherServerControls.permissions.canRestartServer && (
-                  <button
-                    className="btn ghost"
-                    onClick={() => void runLauncherServerAction("restart")}
-                    disabled={isServerActionBusy || disableRestartByStatus}
-                  >
-                    Restart
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
         ) : null}
 
         <ul className="summary-grid">

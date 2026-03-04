@@ -1282,6 +1282,46 @@ h1, h2, h3, h4, h5, p, ul {
   background: var(--bg-base);
 }
 
+.overview-server-controls {
+  margin-top: 8px;
+}
+
+.status-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-title-control {
+  flex-shrink: 0;
+}
+
+.status-title-control .compact-server-shell {
+  border-style: solid;
+  padding: 8px 8px 6px;
+  min-width: 350px;
+}
+
+.status-title-control .compact-server-section-label {
+  background: rgba(18, 18, 26, 0.92);
+}
+
+@media (max-width: 1080px) {
+  .status-title-row {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
+
+  .status-title-control {
+    width: 100%;
+  }
+
+  .status-title-control .compact-server-controls {
+    width: 100%;
+  }
+}
+
 .is-playing .status-dot {
   background: var(--success);
   box-shadow: 0 0 8px var(--success);
