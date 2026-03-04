@@ -16,6 +16,11 @@ type GithubRelease = {
   assets: ReleaseAsset[];
 };
 
+type LatestJsonPlatform = {
+  signature: string;
+  url: string;
+};
+
 const USAGE =
   "Usage: pnpm --filter @mvl/infra-scripts updater:verify --owner <owner> --repo <repo> --tag <tag> [--required windows,macos]";
 
@@ -98,6 +103,33 @@ function hasMacAssets(assets: ReleaseAsset[]): boolean {
   return hasAppArchive && hasSignature;
 }
 
+function decodeSignedFilename(signatureBase64: string): string | null {
+  try {
+    const decoded = Buffer.from(signatureBase64, "base64").toString("utf-8");
+    const match = decoded.match(/\bfile:([^\n\r]+)/u);
+    if (!match?.[1]) {
+      return null;
+    }
+    return match[1].trim();
+  } catch {
+    return null;
+  }
+}
+
+function filenameFromAssetUrl(assetUrl: string): string | null {
+  try {
+    const parsed = new URL(assetUrl);
+    const segments = parsed.pathname.split("/");
+    const raw = segments[segments.length - 1];
+    if (!raw) {
+      return null;
+    }
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const release = await fetchJson<GithubRelease>(
@@ -111,12 +143,29 @@ async function main(): Promise<void> {
   }
 
   const latest = await fetchJson<{
-    platforms?: Record<string, unknown>;
+    platforms?: Record<string, LatestJsonPlatform>;
   }>(latestJsonAsset.browser_download_url, args.token);
 
   const platformKeys = Object.keys(latest.platforms ?? {});
   if (platformKeys.length === 0) {
     throw new Error("latest.json has no platforms entries.");
+  }
+
+  for (const [platform, info] of Object.entries(latest.platforms ?? {})) {
+    if (!info?.signature || !info?.url) {
+      throw new Error(`latest.json platform '${platform}' is missing signature or url.`);
+    }
+
+    const signedFile = decodeSignedFilename(info.signature);
+    const urlFile = filenameFromAssetUrl(info.url);
+    if (!signedFile || !urlFile) {
+      throw new Error(`Could not decode signed/url filename for platform '${platform}'.`);
+    }
+    if (signedFile !== urlFile) {
+      throw new Error(
+        `Signature filename mismatch on '${platform}': signature says '${signedFile}' but url points to '${urlFile}'.`,
+      );
+    }
   }
 
   if (args.required.has("windows")) {

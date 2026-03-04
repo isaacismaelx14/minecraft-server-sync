@@ -195,31 +195,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Rename Windows bundles to public beta version
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          INTERNAL="${{ steps.version.outputs.windows_build_version }}"
-          PUBLIC="${{ steps.version.outputs.version }}"
-          NSIS_DIR="apps/launcher/src-tauri/target/release/bundle/nsis"
-          MSI_DIR="apps/launcher/src-tauri/target/release/bundle/msi"
-
-          for file in "$NSIS_DIR"/*.exe; do
-            [ -f "$file" ] || continue
-            renamed="${file//$INTERNAL/$PUBLIC}"
-            if [ "$renamed" != "$file" ]; then
-              mv "$file" "$renamed"
-            fi
-          done
-
-          for file in "$MSI_DIR"/*.msi; do
-            [ -f "$file" ] || continue
-            renamed="${file//$INTERNAL/$PUBLIC}"
-            if [ "$renamed" != "$file" ]; then
-              mv "$file" "$renamed"
-            fi
-          done
-
       - name: Upload Windows NSIS artifact
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
