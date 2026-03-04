@@ -106,11 +106,6 @@ jobs:
             echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY (set repo variable PROFILE_SIGNATURE_PUBLIC_KEY or secret PROFILE_SIGNATURE_PUBLIC_KEY)." >&2
             exit 1
           fi
-          if [ -z "$API_BASE_URL" ] && [ -z "$PROFILE_LOCK_URL" ]; then
-            echo "Missing launcher profile source defaults. Set LAUNCHER_API_BASE_URL or LAUNCHER_PROFILE_LOCK_URL in repo variables." >&2
-            exit 1
-          fi
-
           node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
           node -e 'const api=(process.env.API_BASE_URL||"").trim(); const lock=(process.env.PROFILE_LOCK_URL||"").trim(); const valid=(value)=>{try{const parsed=new URL(value); return parsed.protocol==="http:"||parsed.protocol==="https:"}catch{return false}}; if(api && !valid(api)){console.error("LAUNCHER_API_BASE_URL must be a valid http/https URL"); process.exit(1)} if(lock && !valid(lock)){console.error("LAUNCHER_PROFILE_LOCK_URL must be a valid http/https URL"); process.exit(1)}'
 
@@ -155,11 +150,6 @@ jobs:
             echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY for launcher build step." >&2
             exit 1
           fi
-          if [ -z "$API_BASE_URL" ] && [ -z "$PROFILE_LOCK_URL" ]; then
-            echo "Missing launcher profile source defaults. Set LAUNCHER_API_BASE_URL or LAUNCHER_PROFILE_LOCK_URL in repo variables." >&2
-            exit 1
-          fi
-
           node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
           node -e 'const api=(process.env.API_BASE_URL||"").trim(); const lock=(process.env.PROFILE_LOCK_URL||"").trim(); const valid=(value)=>{try{const parsed=new URL(value); return parsed.protocol==="http:"||parsed.protocol==="https:"}catch{return false}}; if(api && !valid(api)){console.error("LAUNCHER_API_BASE_URL must be a valid http/https URL"); process.exit(1)} if(lock && !valid(lock)){console.error("LAUNCHER_PROFILE_LOCK_URL must be a valid http/https URL"); process.exit(1)}'
 
