@@ -1,4 +1,6 @@
 use std::{
+  fs,
+  path::PathBuf,
   sync::Arc,
   time::{SystemTime, UNIX_EPOCH},
 };
@@ -42,11 +44,27 @@ struct SessionRequest {
   signature: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EnrollRequest {
+  challenge_id: String,
+  client_public_key: String,
+  signature: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  install_code: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionResponse {
   access_token: String,
   token_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EnrollResponse {
+  trusted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -346,33 +364,54 @@ async fn ensure_auth(state: &AppState, api_base: &str) -> Result<LauncherAuthSta
     }
   }
 
-  let challenge = state
+  let signing_key = load_or_create_device_signing_key(state)?;
+  let verifying_key = VerifyingKey::from(&signing_key);
+  let public_key_b64 = STANDARD.encode(verifying_key.to_bytes());
+
+  let enroll_challenge = request_challenge(state, api_base).await?;
+  let enroll_signature_b64 = sign_challenge_payload(&signing_key, &enroll_challenge);
+  let install_code = state
+    .config
+    .launcher_install_code
+    .as_ref()
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty());
+
+  let enroll_payload = EnrollRequest {
+    challenge_id: enroll_challenge.challenge_id,
+    client_public_key: public_key_b64.clone(),
+    signature: enroll_signature_b64,
+    install_code,
+  };
+
+  let enroll = state
     .http
-    .post(format!("{api_base}/v1/launcher/auth/challenge"))
+    .post(format!("{api_base}/v1/launcher/auth/enroll"))
+    .json(&enroll_payload)
     .send()
     .await
-    .map_err(|error| format!("Launcher challenge request failed: {error}"))?
-    .json::<ChallengeResponse>()
+    .map_err(|error| format!("Launcher enrollment request failed: {error}"))?;
+
+  if !enroll.status().is_success() {
+    let message = enroll
+      .text()
+      .await
+      .unwrap_or_else(|_| "Launcher enrollment failed".to_string());
+    return Err(message);
+  }
+
+  let enroll_data = enroll
+    .json::<EnrollResponse>()
     .await
-    .map_err(|error| format!("Invalid launcher challenge payload: {error}"))?;
+    .map_err(|error| format!("Invalid launcher enrollment payload: {error}"))?;
 
-  let signing_secret: [u8; 32] = rand::random();
-  let signing_key = SigningKey::from_bytes(&signing_secret);
-  let verifying_key = VerifyingKey::from(&signing_key);
+  if !enroll_data.trusted {
+    return Err("Launcher enrollment rejected by server".to_string());
+  }
 
-  let signed_payload = stable_stringify(serde_json::json!({
-    "signatureInput": AUTH_INPUT,
-    "payload": {
-      "challengeId": challenge.challenge_id,
-      "nonce": challenge.nonce,
-      "issuedAt": challenge.issued_at,
-      "expiresAt": challenge.expires_at
-    }
-  }));
+  let challenge = request_challenge(state, api_base).await?;
 
-  let signature = signing_key.sign(signed_payload.as_bytes());
-  let signature_b64 = STANDARD.encode(signature.to_bytes());
-  let public_key_b64 = STANDARD.encode(verifying_key.to_bytes());
+  let signature_b64 = sign_challenge_payload(&signing_key, &challenge);
 
   let session_payload = SessionRequest {
     challenge_id: challenge.challenge_id,
@@ -454,4 +493,55 @@ fn normalize_json(value: Value) -> Value {
     }
     other => other,
   }
+}
+
+async fn request_challenge(state: &AppState, api_base: &str) -> Result<ChallengeResponse, String> {
+  state
+    .http
+    .post(format!("{api_base}/v1/launcher/auth/challenge"))
+    .send()
+    .await
+    .map_err(|error| format!("Launcher challenge request failed: {error}"))?
+    .json::<ChallengeResponse>()
+    .await
+    .map_err(|error| format!("Invalid launcher challenge payload: {error}"))
+}
+
+fn sign_challenge_payload(signing_key: &SigningKey, challenge: &ChallengeResponse) -> String {
+  let signed_payload = stable_stringify(serde_json::json!({
+    "signatureInput": AUTH_INPUT,
+    "payload": {
+      "challengeId": challenge.challenge_id,
+      "nonce": challenge.nonce,
+      "issuedAt": challenge.issued_at,
+      "expiresAt": challenge.expires_at
+    }
+  }));
+
+  let signature = signing_key.sign(signed_payload.as_bytes());
+  STANDARD.encode(signature.to_bytes())
+}
+
+fn load_or_create_device_signing_key(state: &AppState) -> Result<SigningKey, String> {
+  let path = launcher_device_key_path(state);
+  if let Ok(existing) = fs::read(&path) {
+    let key_bytes: [u8; 32] = existing
+      .as_slice()
+      .try_into()
+      .map_err(|_| "Invalid launcher device key length".to_string())?;
+    return Ok(SigningKey::from_bytes(&key_bytes));
+  }
+
+  let secret: [u8; 32] = rand::random();
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent)
+      .map_err(|error| format!("Failed to prepare launcher key directory: {error}"))?;
+  }
+  fs::write(&path, secret)
+    .map_err(|error| format!("Failed to persist launcher device key: {error}"))?;
+  Ok(SigningKey::from_bytes(&secret))
+}
+
+fn launcher_device_key_path(state: &AppState) -> PathBuf {
+  state.config.data_root.join("launcher-device.key")
 }
