@@ -36,7 +36,8 @@ export class CoreModPolicyService {
     return (
       mod.projectId === FANCY_MENU_PROJECT_ID ||
       name.includes('fancymenu') ||
-      name.includes('fancy menu')
+      name.includes('fancy menu') ||
+      name.includes('fancy-menu')
     );
   }
 
@@ -61,12 +62,8 @@ export class CoreModPolicyService {
   }
 
   private enforceManagedSide(mod: ManagedMod): ManagedMod {
-    if (this.isFabricApiMod(mod)) {
-      return { ...mod, side: 'both' };
-    }
-
     if (this.isFancyMenuMod(mod)) {
-      return { ...mod, side: 'client' };
+      return { ...mod, side: 'both' };
     }
 
     return mod;
@@ -76,8 +73,8 @@ export class CoreModPolicyService {
     return {
       fabricApiProjectId: FABRIC_API_PROJECT_ID,
       fancyMenuProjectId: FANCY_MENU_PROJECT_ID,
-      lockedProjectIds: [],
-      nonRemovableProjectIds: [],
+      lockedProjectIds: [FABRIC_API_PROJECT_ID],
+      nonRemovableProjectIds: [FABRIC_API_PROJECT_ID],
       rules: {
         fabricApiRequired: true,
         fabricApiVersionEditable: true,
@@ -113,29 +110,42 @@ export class CoreModPolicyService {
     });
 
     const fabricApiExisting = deduped.find((mod) => this.isFabricApiMod(mod));
+    const targetFabricSide = fabricApiExisting?.side ?? 'both';
     if (fabricApiExisting?.versionId) {
       try {
+        const resolvedFabric = await input.resolveMod(
+          FABRIC_API_PROJECT_ID,
+          minecraftVersion,
+          fabricApiExisting.versionId,
+        );
         filtered.push(
-          this.enforceManagedSide(
-            await input.resolveMod(
-              FABRIC_API_PROJECT_ID,
-              minecraftVersion,
-              fabricApiExisting.versionId,
-            ),
-          ),
+          this.enforceManagedSide({
+            ...resolvedFabric,
+            side: targetFabricSide,
+          }),
         );
       } catch {
+        const resolvedFabric = await input.resolveMod(
+          FABRIC_API_PROJECT_ID,
+          minecraftVersion,
+        );
         filtered.push(
-          this.enforceManagedSide(
-            await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
-          ),
+          this.enforceManagedSide({
+            ...resolvedFabric,
+            side: targetFabricSide,
+          }),
         );
       }
     } else {
+      const resolvedFabric = await input.resolveMod(
+        FABRIC_API_PROJECT_ID,
+        minecraftVersion,
+      );
       filtered.push(
-        this.enforceManagedSide(
-          await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
-        ),
+        this.enforceManagedSide({
+          ...resolvedFabric,
+          side: targetFabricSide,
+        }),
       );
     }
 

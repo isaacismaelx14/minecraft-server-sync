@@ -188,7 +188,29 @@ export type PublishPayload = {
     update: number;
     keep: number;
   };
+  serverModSummary: {
+    add: number;
+    remove: number;
+    update: number;
+    keep: number;
+    hasChanges: boolean;
+  };
   exarotonSync?: ExarotonSyncModsPayload;
+};
+
+export type PublishStartPayload = {
+  jobId: string;
+};
+
+export type PublishProgressStage =
+  | 'detecting-mod-changes'
+  | 'getting-mods'
+  | 'syncing-mods'
+  | 'done';
+
+export type PublishProgressPayload = {
+  stage: PublishProgressStage;
+  message: string;
 };
 
 export type UploadImagePayload = {

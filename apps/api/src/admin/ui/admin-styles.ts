@@ -851,12 +851,35 @@ export const ADMIN_STYLES = `
   }
 
   .check input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    padding: 0 !important;
     margin: 0;
     cursor: pointer;
-    accent-color: var(--brand-primary);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
     flex-shrink: 0;
+  }
+
+  .check input[type="checkbox"]:checked {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.6), inset 0 1px 2px rgba(255,255,255,0.3);
+  }
+
+  .check input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 14px;
+    font-weight: 800;
   }
 
   .alert-box {
@@ -915,40 +938,68 @@ export const ADMIN_STYLES = `
     padding: 12px 20px;
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
-    background: var(--brand-primary);
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
     color: #fff;
     gap: 8px;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(255,255,255,0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .btn:hover:not(:disabled)::after {
+    opacity: 1;
   }
 
   .btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    filter: brightness(1.1);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4), 0 0 12px rgba(99, 102, 241, 0.2);
   }
 
   .btn.ghost {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--text-secondary);
     box-shadow: none;
+    backdrop-filter: blur(4px);
+  }
+
+  .btn.ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   .btn.danger {
-    background: var(--danger);
+    background: linear-gradient(135deg, #e11d48, #be123c);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn.danger:hover:not(:disabled) {
+    box-shadow: 0 8px 20px rgba(225, 29, 72, 0.4), 0 0 12px rgba(225, 29, 72, 0.2);
   }
 
   .btn:disabled {
-    opacity: 0.35;
+    opacity: 0.4;
     cursor: not-allowed;
-    filter: grayscale(0.5);
+    filter: grayscale(0.8);
     box-shadow: none;
     transform: none !important;
   }
@@ -1155,112 +1206,196 @@ export const ADMIN_STYLES = `
   }
 
   .lock-badge {
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: var(--warning);
-    padding: 2px 10px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.1));
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    padding: 3px 12px;
     border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15);
+    backdrop-filter: blur(4px);
   }
 
-  .lock-badge::before { content: '🔒'; font-size: 0.8rem; }
+  .lock-badge::before { content: '🔒'; font-size: 0.85rem; filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6)); }
 
   /* ====== Installed Mods Grid ====== */
   .mods-section-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin: 0 0 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--line);
+    margin: 10px 0 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
 
   .mods-section-label.core {
     color: var(--warning);
-    border-color: rgba(245, 158, 11, 0.25);
+    border-color: rgba(245, 158, 11, 0.2);
+    text-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
   }
 
   .mods-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 10px 0;
   }
 
   .mod-grid-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    background: var(--bg-card);
-    border: 1px solid var(--line);
+    gap: 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-md);
-    padding: 16px 12px 12px;
-    transition: all var(--transition-fast);
+    padding: 20px 14px 14px;
+    transition: all 0.2s ease;
     position: relative;
     text-align: center;
+    animation: fadeIn 0.5s ease-out backwards;
   }
 
   .mod-grid-card:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--line-strong);
-    transform: translateY(-3px);
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.2);
+    z-index: 2;
   }
 
   .mod-grid-card.core-mod {
+    background: transparent;
     border-color: rgba(245, 158, 11, 0.2);
-    background: rgba(245, 158, 11, 0.04);
   }
 
-  .mod-grid-card.core-mod:hover { border-color: rgba(245, 158, 11, 0.4); }
+  .mod-grid-card.core-mod:hover { 
+    background: rgba(245, 158, 11, 0.03);
+    border-color: rgba(245, 158, 11, 0.4);
+  }
 
   .mod-grid-icon {
-    width: 52px;
-    height: 52px;
-    border-radius: var(--radius-sm);
+    width: 68px;
+    height: 68px;
+    border-radius: 22%;
     object-fit: contain;
-    border: 1px solid var(--line);
-    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0,0,0,0.5);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+    padding: 2px;
+  }
+  
+  .mod-grid-card:hover .mod-grid-icon {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
   }
 
   .mod-grid-name {
-    font-size: 0.84rem;
-    font-weight: 700;
-    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #ffffff;
     line-height: 1.3;
     word-break: break-word;
+    letter-spacing: 0.02em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-top: 4px;
+    transition: color 0.3s;
+  }
+
+  .mod-grid-card:hover .mod-grid-name {
+    color: #e0e7ff;
   }
 
   .mod-grid-meta {
-    font-size: 0.7rem;
-    color: var(--text-muted);
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.5);
     font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
   }
 
   .mod-grid-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
     flex-wrap: wrap;
     justify-content: center;
     margin-top: auto;
     width: 100%;
-    padding-top: 4px;
+    padding-top: 8px;
+  }
+
+  .mod-grid-actions select, .mod-grid-actions option {
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .mod-grid-actions select:focus {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .mod-grid-card .mod-card-check {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  
+  .mod-grid-card:hover .mod-card-check, .mod-grid-card .mod-card-check:has(input:checked) {
+    opacity: 1;
+  }
+
+  .mod-grid-card .mod-card-check input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .mod-grid-card .mod-card-check input[type="checkbox"]:checked {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+  }
+
+  .mod-grid-card .mod-card-check input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 13px;
+    font-weight: 800;
   }
 
   .mod-grid-badge {

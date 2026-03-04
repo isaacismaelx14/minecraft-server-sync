@@ -80,6 +80,47 @@ type ExarotonSyncStateFile = {
   }>;
 };
 
+type PublishSummary = {
+  add: number;
+  remove: number;
+  update: number;
+  keep: number;
+};
+
+type ServerModDiffSummary = PublishSummary & {
+  hasChanges: boolean;
+};
+
+type PublishProfileResult = {
+  version: number;
+  releaseVersion: string;
+  bumpType: 'major' | 'minor' | 'patch';
+  lockUrl: string;
+  summary: PublishSummary;
+  serverModSummary: ServerModDiffSummary;
+  exarotonSync?: ExarotonModsSyncResult;
+};
+
+type PublishProgressStage =
+  | 'detecting-mod-changes'
+  | 'getting-mods'
+  | 'syncing-mods'
+  | 'done';
+
+type PublishProgressEvent = {
+  stage: PublishProgressStage;
+  message: string;
+};
+
+type PublishSession = {
+  createdAt: number;
+  done: boolean;
+  events: PublishProgressEvent[];
+  result: PublishProfileResult | null;
+  error: string | null;
+  listeners: Set<(event: { type: 'progress' | 'done' | 'error'; data: unknown }) => void>;
+};
+
 interface ModrinthSearchResponse {
   hits: Array<{
     project_id: string;
@@ -147,10 +188,12 @@ interface FancyMenuBundleValidation {
 export class AdminService implements OnModuleInit {
   private readonly modrinthApiBase = 'https://api.modrinth.com/v2';
   private readonly fabricMetaBase = 'https://meta.fabricmc.net';
+  private readonly publishSessionTtlMs = 15 * 60 * 1000;
   private readonly fabricCache = new Map<
     string,
     { expiresAt: number; value: FabricLoaderRow[] }
   >();
+  private readonly publishSessions = new Map<string, PublishSession>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -167,6 +210,7 @@ export class AdminService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureAppSettings();
     await this.ensureAdminCredential();
+    setInterval(() => this.cleanupPublishSessions(), 60_000).unref();
   }
 
   async login(password: string, request: Request, response: Response) {
@@ -986,7 +1030,90 @@ export class AdminService implements OnModuleInit {
     });
   }
 
-  async publishProfile(input: PublishProfileDto, requestOrigin: string) {
+  async startPublishProfile(
+    input: PublishProfileDto,
+    requestOrigin: string,
+  ): Promise<{ jobId: string }> {
+    const jobId = randomBytes(12).toString('hex');
+    const session: PublishSession = {
+      createdAt: Date.now(),
+      done: false,
+      events: [],
+      result: null,
+      error: null,
+      listeners: new Set(),
+    };
+    this.publishSessions.set(jobId, session);
+
+    void this.publishProfile(input, requestOrigin, {
+      onProgress: (event) => this.pushPublishProgress(jobId, event),
+    })
+      .then((result) => {
+        this.finishPublishSession(jobId, result);
+      })
+      .catch((error) => {
+        this.failPublishSession(
+          jobId,
+          (error as Error).message || 'Publish failed',
+        );
+      });
+
+    return { jobId };
+  }
+
+  async openPublishStream(
+    jobId: string,
+    handlers: {
+      onProgress: (event: PublishProgressEvent) => void;
+      onDone: (result: PublishProfileResult) => void;
+      onError: (message: string) => void;
+    },
+  ): Promise<() => void> {
+    const session = this.publishSessions.get(jobId.trim());
+    if (!session) {
+      throw new NotFoundException('Publish job not found');
+    }
+
+    for (const event of session.events) {
+      handlers.onProgress(event);
+    }
+
+    if (session.done) {
+      if (session.error) {
+        handlers.onError(session.error);
+      } else if (session.result) {
+        handlers.onDone(session.result);
+      }
+      return () => undefined;
+    }
+
+    const listener = (event: {
+      type: 'progress' | 'done' | 'error';
+      data: unknown;
+    }) => {
+      if (event.type === 'progress') {
+        handlers.onProgress(event.data as PublishProgressEvent);
+        return;
+      }
+      if (event.type === 'done') {
+        handlers.onDone(event.data as PublishProfileResult);
+        return;
+      }
+      handlers.onError(String(event.data || 'Publish failed'));
+    };
+
+    session.listeners.add(listener);
+    return () => {
+      session.listeners.delete(listener);
+    };
+  }
+
+  async publishProfile(
+    input: PublishProfileDto,
+    requestOrigin: string,
+    options?: { onProgress?: (event: PublishProgressEvent) => void },
+  ): Promise<PublishProfileResult> {
+    const onProgress = options?.onProgress;
     const serverId = this.getServerId();
     const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
@@ -1029,10 +1156,22 @@ export class AdminService implements OnModuleInit {
 
       const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
       const summary = this.computeDiffSummary(latest.lockJson, generated);
+      const serverModSummary = this.computeServerModDiffSummary(
+        latest.lockJson,
+        generated,
+      );
       const lockSignature = this.signing.signLockPayload(generated);
       const allowedVersions = Array.from(
         new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
       );
+
+      onProgress?.({
+        stage: 'detecting-mod-changes',
+        message: `Getting mod changes (+${serverModSummary.add} / ~${serverModSummary.update} / -${serverModSummary.remove}).`,
+      });
+
+      await this.ensurePublishAllowedForServerModChanges(serverModSummary);
+
       const [appSettings] = await Promise.all([
         tx.appSetting.upsert({
           where: { id: APP_SETTING_ID },
@@ -1112,15 +1251,34 @@ export class AdminService implements OnModuleInit {
         bumpType,
         lockUrl,
         summary,
+        serverModSummary,
         generatedLock: generated,
       };
     });
 
-    const { generatedLock, ...publishPayload } = published;
-    const exarotonSync = await this.trySyncExarotonMods(generatedLock);
+    const { generatedLock, serverModSummary, ...publishPayload } = published;
+
+    let exarotonSync: ExarotonModsSyncResult | undefined;
+    if (serverModSummary.hasChanges) {
+      exarotonSync = await this.trySyncExarotonMods(generatedLock, {
+        onProgress,
+      });
+    } else {
+      exarotonSync = {
+        attempted: false,
+        success: false,
+        message: 'No server mod changes detected. Exaroton sync skipped.',
+        summary: { add: 0, remove: 0, keep: 0 },
+      };
+      onProgress?.({
+        stage: 'done',
+        message: 'Done. No server mod changes were pending for sync.',
+      });
+    }
 
     return {
       ...publishPayload,
+      serverModSummary,
       exarotonSync,
     };
   }
@@ -1577,10 +1735,103 @@ export class AdminService implements OnModuleInit {
     };
   }
 
+  private pushPublishProgress(jobId: string, event: PublishProgressEvent) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.events.push(event);
+    for (const listener of session.listeners) {
+      listener({ type: 'progress', data: event });
+    }
+  }
+
+  private finishPublishSession(jobId: string, result: PublishProfileResult) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.done = true;
+    session.result = result;
+    for (const listener of session.listeners) {
+      listener({ type: 'done', data: result });
+    }
+  }
+
+  private failPublishSession(jobId: string, message: string) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.done = true;
+    session.error = message;
+    for (const listener of session.listeners) {
+      listener({ type: 'error', data: message });
+    }
+  }
+
+  private cleanupPublishSessions() {
+    const now = Date.now();
+    for (const [jobId, session] of this.publishSessions.entries()) {
+      if (now - session.createdAt > this.publishSessionTtlMs) {
+        this.publishSessions.delete(jobId);
+      }
+    }
+  }
+
+  private async ensurePublishAllowedForServerModChanges(
+    serverModSummary: ServerModDiffSummary,
+  ) {
+    if (!serverModSummary.hasChanges) {
+      return;
+    }
+
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      return;
+    }
+
+    const settings = this.readExarotonSettings(integration);
+    if (!settings.modsSyncEnabled) {
+      return;
+    }
+
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      return;
+    }
+
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const apiKey = decryptExarotonApiKey(
+      {
+        ciphertext: integration.apiKeyCiphertext,
+        iv: integration.apiKeyIv,
+        authTag: integration.apiKeyAuthTag,
+      },
+      encryptionKey,
+    );
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    const isRunning = ![0, 7].includes(selectedServer.status);
+    if (isRunning) {
+      throw new BadRequestException(
+        'Cannot publish pending server mod changes while server is running. Stop the Exaroton server first.',
+      );
+    }
+  }
+
   private async trySyncExarotonMods(
     lock: ProfileLock,
+    options?: { onProgress?: (event: PublishProgressEvent) => void },
   ): Promise<ExarotonModsSyncResult> {
     const zero: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+    const onProgress = options?.onProgress;
     try {
       const integration = await this.prisma.exarotonIntegration.findUnique({
         where: { id: EXAROTON_INTEGRATION_ID },
@@ -1669,6 +1920,8 @@ export class AdminService implements OnModuleInit {
       );
 
       const summary: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+      let announcedDownloadStage = false;
+      let announcedSyncStage = false;
 
       for (const [filename, desiredFile] of desired.entries()) {
         const existing = previous.get(filename);
@@ -1677,7 +1930,22 @@ export class AdminService implements OnModuleInit {
           continue;
         }
 
+        if (!announcedDownloadStage) {
+          onProgress?.({
+            stage: 'getting-mods',
+            message: 'Getting mods to upload to server...',
+          });
+          announcedDownloadStage = true;
+        }
+
         const body = await this.downloadRemoteAsset(desiredFile.url);
+        if (!announcedSyncStage) {
+          onProgress?.({
+            stage: 'syncing-mods',
+            message: 'Syncing mods with server...',
+          });
+          announcedSyncStage = true;
+        }
         await this.exarotonClient.putFileData(
           apiKey,
           selectedServerId,
@@ -1690,6 +1958,13 @@ export class AdminService implements OnModuleInit {
       for (const [filename] of previous.entries()) {
         if (desired.has(filename)) {
           continue;
+        }
+        if (!announcedSyncStage) {
+          onProgress?.({
+            stage: 'syncing-mods',
+            message: 'Syncing mods with server...',
+          });
+          announcedSyncStage = true;
         }
         await this.exarotonClient.deleteFileData(
           apiKey,
@@ -1718,6 +1993,11 @@ export class AdminService implements OnModuleInit {
         JSON.stringify(nextState, null, 2),
         'application/json',
       );
+
+      onProgress?.({
+        stage: 'done',
+        message: 'Done. Mods synchronized with server.',
+      });
 
       return {
         attempted: true,
@@ -2066,6 +2346,59 @@ export class AdminService implements OnModuleInit {
     }
 
     return { add, remove, update, keep };
+  }
+
+  private computeServerModDiffSummary(
+    previousLockJson: unknown,
+    nextLock: ProfileLock,
+  ): ServerModDiffSummary {
+    const previous = ProfileLockSchema.safeParse(previousLockJson);
+    const previousMods = previous.success
+      ? previous.data.items.filter(
+          (item) =>
+            item.kind === 'mod' &&
+            (item.side === 'server' || item.side === 'both'),
+        )
+      : [];
+    const nextMods = nextLock.items.filter(
+      (item) =>
+        item.kind === 'mod' && (item.side === 'server' || item.side === 'both'),
+    );
+
+    const prevMap = new Map(
+      previousMods.map((item) => [this.itemKey(item), item.sha256]),
+    );
+    const nextMap = new Map(nextMods.map((item) => [this.itemKey(item), item.sha256]));
+
+    let add = 0;
+    let remove = 0;
+    let update = 0;
+    let keep = 0;
+
+    for (const [key, sha] of nextMap.entries()) {
+      const prevSha = prevMap.get(key);
+      if (!prevSha) {
+        add += 1;
+      } else if (prevSha === sha) {
+        keep += 1;
+      } else {
+        update += 1;
+      }
+    }
+
+    for (const key of prevMap.keys()) {
+      if (!nextMap.has(key)) {
+        remove += 1;
+      }
+    }
+
+    return {
+      add,
+      remove,
+      update,
+      keep,
+      hasChanges: add + remove + update > 0,
+    };
   }
 
   private flattenLockItems(lock: ProfileLock) {

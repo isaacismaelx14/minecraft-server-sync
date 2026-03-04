@@ -287,6 +287,87 @@ export class AdminController {
     return this.adminService.publishProfile(payload, origin);
   }
 
+  @Post('/v1/admin/profile/publish/start')
+  startPublishProfile(
+    @Body() payload: PublishProfileDto,
+    @Req() request: Request,
+  ) {
+    const host = request.get('host') ?? 'localhost:3000';
+    const forwardedProto = request
+      .get('x-forwarded-proto')
+      ?.split(',')[0]
+      ?.trim()
+      ?.toLowerCase();
+    const protocol =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : request.protocol;
+    const origin = `${protocol}://${host}`;
+    return this.adminService.startPublishProfile(payload, origin);
+  }
+
+  @Get('/v1/admin/profile/publish/stream')
+  async publishProfileStream(
+    @Query('jobId') jobId = '',
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const cleanJobId = jobId.trim();
+    if (!cleanJobId) {
+      res.status(400).json({ message: 'Missing publish job id' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closeUpstream: (() => void) | null = null;
+    const heartbeat = setInterval(() => {
+      send('ping', { ts: Date.now() });
+    }, 15000);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      if (closeUpstream) {
+        closeUpstream();
+        closeUpstream = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    req.on('close', cleanup);
+
+    try {
+      closeUpstream = await this.adminService.openPublishStream(cleanJobId, {
+        onProgress: (event) => send('progress', event),
+        onDone: (result) => {
+          send('done', result);
+          cleanup();
+        },
+        onError: (message) => {
+          send('error', { message });
+          cleanup();
+        },
+      });
+      send('ready', { ok: true });
+    } catch (error) {
+      send('error', {
+        message: (error as Error).message || 'Failed to open publish stream',
+      });
+      cleanup();
+    }
+  }
+
   @Post('/v1/admin/media/upload')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),

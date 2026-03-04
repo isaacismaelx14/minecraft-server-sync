@@ -14,7 +14,6 @@ import { useAdminContext } from './admin-context';
 import { requestJson } from './http';
 import type { ExarotonServerPayload } from './types';
 
-
 const ExarotonLogo = memo(function ExarotonLogo({
   className,
   style,
@@ -534,66 +533,66 @@ const ServersPage = memo(function ServersPage() {
 
           {isKeyStep ? (
             <>
-          <div className="step-header">
-            <h2>Connect Exaroton Account</h2>
-            <p>
-              Obtain your API key from{' '}
-              <a
-                href="https://exaroton.com/account/settings/"
-                target="_blank"
-                rel="noreferrer"
-                className="link-premium"
+              <div className="step-header">
+                <h2>Connect Exaroton Account</h2>
+                <p>
+                  Obtain your API key from{' '}
+                  <a
+                    href="https://exaroton.com/account/settings/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="link-premium"
+                  >
+                    exaroton.com/account/settings/
+                  </a>
+                </p>
+              </div>
+
+              <div className="security-banner">
+                <div className="security-banner-icon">🛡️</div>
+                <p>
+                  <b>Your key stays protected.</b> All requests run through our
+                  secure backend umbrella. After saving, we no longer expose
+                  your raw key in UI; it is encrypted at rest and only decrypted
+                  when an authorized action needs to call Exaroton.
+                </p>
+              </div>
+
+              <div className="api-key-container">
+                <label className="label">Exaroton API Key</label>
+                <input
+                  className="api-key-input"
+                  type="password"
+                  placeholder="Paste your secret API key here..."
+                  value={exaroton.apiKeyInput}
+                  onChange={(e) => actions.setExarotonApiKey(e.target.value)}
+                />
+              </div>
+
+              <div
+                className="row"
+                style={{ justifyContent: 'flex-end', gap: 12, marginTop: 12 }}
               >
-                exaroton.com/account/settings/
-              </a>
-            </p>
-          </div>
-
-          <div className="security-banner">
-            <div className="security-banner-icon">🛡️</div>
-            <p>
-              <b>Your key stays protected.</b> All requests run through our
-              secure backend umbrella. After saving, we no longer expose your
-              raw key in UI; it is encrypted at rest and only decrypted when an
-              authorized action needs to call Exaroton.
-            </p>
-          </div>
-
-          <div className="api-key-container">
-            <label className="label">Exaroton API Key</label>
-            <input
-              className="api-key-input"
-              type="password"
-              placeholder="Paste your secret API key here..."
-              value={exaroton.apiKeyInput}
-              onChange={(e) => actions.setExarotonApiKey(e.target.value)}
-            />
-          </div>
-
-          <div
-            className="row"
-            style={{ justifyContent: 'flex-end', gap: 12, marginTop: 12 }}
-          >
-            <button
-              className="btn ghost"
-              type="button"
-              onClick={() => {
-                actions.setExarotonStep('idle');
-                setSelectedIntegration(null);
-              }}
-            >
-              Back
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              style={{ padding: '12px 32px' }}
-              disabled={!exaroton.apiKeyInput || exaroton.busy}
-              onClick={() => void actions.connectExaroton()}
-            >
-              {exaroton.busy ? 'Connecting...' : 'Connect Account'}
-            </button>
-          </div>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => {
+                    actions.setExarotonStep('idle');
+                    setSelectedIntegration(null);
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  className="btn primary"
+                  type="button"
+                  style={{ padding: '12px 32px' }}
+                  disabled={!exaroton.apiKeyInput || exaroton.busy}
+                  onClick={() => void actions.connectExaroton()}
+                >
+                  {exaroton.busy ? 'Connecting...' : 'Connect Account'}
+                </button>
+              </div>
             </>
           ) : null}
         </div>
@@ -877,8 +876,7 @@ const ServersPage = memo(function ServersPage() {
                           checked={exaroton.settings.playerCanStartServer}
                           onChange={(event) =>
                             void actions.updateExarotonSettings({
-                              playerCanStartServer:
-                                event.currentTarget.checked,
+                              playerCanStartServer: event.currentTarget.checked,
                             })
                           }
                         />
@@ -891,8 +889,7 @@ const ServersPage = memo(function ServersPage() {
                           checked={exaroton.settings.playerCanStopServer}
                           onChange={(event) =>
                             void actions.updateExarotonSettings({
-                              playerCanStopServer:
-                                event.currentTarget.checked,
+                              playerCanStopServer: event.currentTarget.checked,
                             })
                           }
                         />
@@ -1070,6 +1067,8 @@ const TopBar = memo(function TopBar() {
     sessionState,
     selectedMods,
     hasPendingPublish,
+    hasPendingServerModChanges,
+    publishBlockReason,
     hasSavedDraft,
     isBusy,
     actions,
@@ -1079,6 +1078,10 @@ const TopBar = memo(function TopBar() {
     useState(false);
 
   const handlePublish = () => {
+    if (publishBlockReason) {
+      return;
+    }
+
     const shouldWarn =
       exaroton.connected &&
       exaroton.settings.modsSyncEnabled &&
@@ -1125,11 +1128,19 @@ const TopBar = memo(function TopBar() {
             <button
               className="btn"
               type="button"
-              disabled={isBusy.publish}
+              disabled={isBusy.publish || Boolean(publishBlockReason)}
               onClick={handlePublish}
+              title={publishBlockReason || undefined}
             >
-              {isBusy.publish ? 'Publishing...' : 'Publish'}
+              {isBusy.publish
+                ? hasPendingServerModChanges
+                  ? 'Publishing changes...'
+                  : 'Publishing...'
+                : 'Publish'}
             </button>
+            {publishBlockReason ? (
+              <span className="btn-tooltip">{publishBlockReason}</span>
+            ) : null}
           </div>
         ) : (
           <span className="publish-clean">All changes published</span>
@@ -2048,6 +2059,184 @@ const AddModsModal = memo(function AddModsModal({
   );
 });
 
+const ModGridCardItem = memo(function ModGridCardItem({
+  mod,
+  index = 0,
+  selectedModKeys,
+  setSelectedModKeys,
+  setRemoveTarget,
+  coreModPolicy,
+  exaroton,
+  modVersionOptions,
+  actions,
+}: {
+  mod: any;
+  index: number;
+  selectedModKeys: Set<string>;
+  setSelectedModKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setRemoveTarget: React.Dispatch<React.SetStateAction<any>>;
+  coreModPolicy: any;
+  exaroton: any;
+  modVersionOptions: any;
+  actions: any;
+}) {
+  const projectId = mod.projectId ?? '';
+  const modKey = projectId || mod.sha256;
+  const isLocked = coreModPolicy.nonRemovableProjectIds.includes(projectId);
+  const isFabric = projectId === coreModPolicy.fabricApiProjectId;
+  const isFancy = projectId === coreModPolicy.fancyMenuProjectId;
+  const versions = projectId ? (modVersionOptions[projectId] ?? []) : [];
+  const selectedVersion = versions.some((v: any) => v.id === mod.versionId)
+    ? mod.versionId
+    : '';
+
+  return (
+    <div
+      className={`mod-grid-card${isLocked ? ' core-mod' : ''}`}
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      {!isLocked ? (
+        <label className="mod-card-check">
+          <input
+            type="checkbox"
+            checked={selectedModKeys.has(modKey)}
+            onChange={(event) => {
+              const isChecked = event.currentTarget.checked;
+              setSelectedModKeys((current: Set<string>) => {
+                const next = new Set(current);
+                if (isChecked) {
+                  next.add(modKey);
+                } else {
+                  next.delete(modKey);
+                }
+                return next;
+              });
+            }}
+          />
+        </label>
+      ) : null}
+      {isLocked && (
+        <span
+          className="lock-badge mod-grid-badge"
+          style={{ fontSize: '0.6rem', padding: '1px 6px' }}
+        >
+          Core
+        </span>
+      )}
+      <img
+        src={
+          mod.iconUrl ||
+          (mod.projectId
+            ? `https://cdn.modrinth.com/data/${mod.projectId}/icon.png`
+            : 'https://modrinth.com/favicon.ico')
+        }
+        alt={mod.name}
+        className="mod-grid-icon"
+        onError={(e) => {
+          e.currentTarget.src = 'https://modrinth.com/favicon.ico';
+        }}
+      />
+      <div className="mod-grid-name">{mod.name}</div>
+      {mod.versionId && (
+        <div className="mod-grid-meta" title={mod.versionId}>
+          {mod.versionId}
+        </div>
+      )}
+      {mod.slug && (
+        <a
+          href={`https://modrinth.com/mod/${mod.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="modrinth-link"
+          title="View on Modrinth"
+          style={{ marginBottom: 2 }}
+        >
+          <ExternalLinkIcon />
+        </a>
+      )}
+      <div className="mod-grid-actions">
+        {exaroton.connected ? (
+          <select
+            value={mod.side || (isFabric ? 'both' : 'client')}
+            style={{
+              fontSize: '0.72rem',
+              padding: '3px 6px',
+              width: '100%',
+              marginBottom: 4,
+            }}
+            disabled={(isLocked && !isFabric) || isFancy}
+            onChange={(event) =>
+              actions.setModInstallTarget(
+                projectId,
+                event.currentTarget.value as 'client' | 'server' | 'both',
+                mod.sha256,
+              )
+            }
+            title={isFancy ? 'FancyMenu is User only' : 'Install target'}
+          >
+            {isFancy ? (
+              <option value="client">User</option>
+            ) : (
+              <>
+                <option value="client">User</option>
+                <option value="both">User + Server</option>
+                <option value="server">Server</option>
+              </>
+            )}
+          </select>
+        ) : null}
+
+        {projectId && (
+          <>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+              onClick={() => void actions.loadModVersions(projectId)}
+              disabled={isLocked}
+            >
+              Versions
+            </button>
+            {versions.length > 0 && (
+              <select
+                value={selectedVersion}
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '3px 6px',
+                  width: '100%',
+                  marginTop: 2,
+                }}
+                onChange={(e) =>
+                  void actions.applyModVersion(projectId, e.currentTarget.value)
+                }
+                disabled={isLocked}
+              >
+                <option value="">Select version</option>
+                {versions.map((v: any) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} ({v.versionType})
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          className="btn danger"
+          style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+          disabled={isLocked}
+          onClick={() =>
+            setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })
+          }
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+});
+
 const ModManagerPage = memo(function ModManagerPage() {
   const {
     exaroton,
@@ -2059,6 +2248,12 @@ const ModManagerPage = memo(function ModManagerPage() {
   } = useAdminContext();
 
   const [showAddMods, setShowAddMods] = useState(false);
+  const [bulkTarget, setBulkTarget] = useState<'client' | 'server' | 'both'>(
+    'both',
+  );
+  const [selectedModKeys, setSelectedModKeys] = useState<Set<string>>(
+    new Set(),
+  );
   const [removeTarget, setRemoveTarget] = useState<{
     projectId: string;
     sha256: string;
@@ -2092,134 +2287,31 @@ const ModManagerPage = memo(function ModManagerPage() {
     setShowAddMods(false);
   };
 
-  const ModGridCard = ({ mod }: { mod: (typeof selectedMods)[number] }) => {
-    const projectId = mod.projectId ?? '';
-    const isLocked = coreModPolicy.nonRemovableProjectIds.includes(projectId);
-    const isFabric = projectId === coreModPolicy.fabricApiProjectId;
-    const versions = projectId ? (modVersionOptions[projectId] ?? []) : [];
-    const selectedVersion = versions.some((v) => v.id === mod.versionId)
-      ? mod.versionId
-      : '';
+  const selectableMods = useMemo(
+    () =>
+      selectedMods.filter((mod) => {
+        const projectId = mod.projectId ?? '';
+        return !coreModPolicy.nonRemovableProjectIds.includes(projectId);
+      }),
+    [selectedMods, coreModPolicy],
+  );
 
-    return (
-      <div className={`mod-grid-card${isLocked ? ' core-mod' : ''}`}>
-        {isLocked && (
-          <span
-            className="lock-badge mod-grid-badge"
-            style={{ fontSize: '0.6rem', padding: '1px 6px' }}
-          >
-            Core
-          </span>
-        )}
-        <img
-          src={
-            mod.iconUrl ||
-            (mod.projectId
-              ? `https://cdn.modrinth.com/data/${mod.projectId}/icon.png`
-              : 'https://modrinth.com/favicon.ico')
-          }
-          alt={mod.name}
-          className="mod-grid-icon"
-          onError={(e) => {
-            e.currentTarget.src = 'https://modrinth.com/favicon.ico';
-          }}
-        />
-        <div className="mod-grid-name">{mod.name}</div>
-        {mod.versionId && (
-          <div className="mod-grid-meta" title={mod.versionId}>
-            {mod.versionId}
-          </div>
-        )}
-        {mod.slug && (
-          <a
-            href={`https://modrinth.com/mod/${mod.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="modrinth-link"
-            title="View on Modrinth"
-            style={{ marginBottom: 2 }}
-          >
-            <ExternalLinkIcon />
-          </a>
-        )}
-        <div className="mod-grid-actions">
-          {exaroton.connected ? (
-            <select
-              value={mod.side || 'client'}
-              style={{
-                fontSize: '0.72rem',
-                padding: '3px 6px',
-                width: '100%',
-                marginBottom: 4,
-              }}
-              disabled={isLocked}
-              onChange={(event) =>
-                actions.setModInstallTarget(
-                  projectId,
-                  event.currentTarget.value as 'client' | 'server' | 'both',
-                  mod.sha256,
-                )
-              }
-              title="Install target"
-            >
-              <option value="client">User</option>
-              <option value="server">Server</option>
-              <option value="both">User + Server</option>
-            </select>
-          ) : null}
-
-          {projectId && (
-            <>
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-                onClick={() => void actions.loadModVersions(projectId)}
-              >
-                Versions
-              </button>
-              {versions.length > 0 && (
-                <select
-                  value={selectedVersion}
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '3px 6px',
-                    width: '100%',
-                    marginTop: 2,
-                  }}
-                  onChange={(e) =>
-                    void actions.applyModVersion(
-                      projectId,
-                      e.currentTarget.value,
-                    )
-                  }
-                  disabled={isLocked && !isFabric}
-                >
-                  <option value="">Select version</option>
-                  {versions.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name} ({v.versionType})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </>
-          )}
-          <button
-            type="button"
-            className="btn danger"
-            style={{ padding: '4px 8px', fontSize: '0.72rem' }}
-            disabled={isLocked}
-            onClick={() =>
-              setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })
-            }
-          >
-            Remove
-          </button>
-        </div>
-      </div>
+  const allSelectableSelected =
+    selectableMods.length > 0 &&
+    selectableMods.every((mod) =>
+      selectedModKeys.has(mod.projectId || mod.sha256),
     );
-  };
+
+  const selectedBulkEntries = useMemo(
+    () =>
+      selectedMods
+        .filter((mod) => selectedModKeys.has(mod.projectId || mod.sha256))
+        .map((mod) => ({
+          projectId: mod.projectId,
+          sha256: mod.sha256,
+        })),
+    [selectedModKeys, selectedMods],
+  );
 
   return (
     <>
@@ -2265,38 +2357,122 @@ const ModManagerPage = memo(function ModManagerPage() {
           {statuses.mods.text}
         </div>
 
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={allSelectableSelected}
+              onChange={(event) => {
+                if (!event.currentTarget.checked) {
+                  setSelectedModKeys(new Set());
+                  return;
+                }
+                setSelectedModKeys(
+                  new Set(
+                    selectableMods.map((mod) => mod.projectId || mod.sha256),
+                  ),
+                );
+              }}
+            />
+            <span>Select all editable mods</span>
+          </label>
+
+          {selectedBulkEntries.length > 0 ? (
+            <div className="row" style={{ gap: 8 }}>
+              {exaroton.connected ? (
+                <>
+                  <select
+                    value={bulkTarget}
+                    onChange={(event) =>
+                      setBulkTarget(
+                        event.currentTarget.value as
+                          | 'client'
+                          | 'server'
+                          | 'both',
+                      )
+                    }
+                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                  >
+                    <option value="client">Bulk: User</option>
+                    <option value="both">Bulk: User + Server</option>
+                    <option value="server">Bulk: Server</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() =>
+                      actions.setModsInstallTargetBulk(
+                        selectedBulkEntries,
+                        bulkTarget,
+                      )
+                    }
+                  >
+                    Apply Target
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => {
+                  actions.removeModsBulk(selectedBulkEntries);
+                  setSelectedModKeys(new Set());
+                }}
+              >
+                Delete Selected
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         {selectedMods.length === 0 ? (
           <p className="hint" style={{ marginTop: 16 }}>
             No mods installed. Click "Add Mods" to get started.
           </p>
         ) : (
           <>
-            {coreMods.length > 0 && (
-              <>
-                <div className="mods-section-label core">
-                  🔒 Core Mods — {coreMods.length}
-                </div>
-                <div className="mods-grid" style={{ marginBottom: 28 }}>
-                  {coreMods.map((mod) => (
-                    <ModGridCard
-                      key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
-                      mod={mod}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
             {userMods.length > 0 && (
               <>
                 <div className="mods-section-label">
                   📦 User Mods — {userMods.length}
                 </div>
                 <div className="mods-grid">
-                  {userMods.map((mod) => (
-                    <ModGridCard
+                  {userMods.map((mod, index) => (
+                    <ModGridCardItem
                       key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
                       mod={mod}
+                      index={index}
+                      selectedModKeys={selectedModKeys}
+                      setSelectedModKeys={setSelectedModKeys}
+                      setRemoveTarget={setRemoveTarget}
+                      coreModPolicy={coreModPolicy}
+                      exaroton={exaroton}
+                      modVersionOptions={modVersionOptions}
+                      actions={actions}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {coreMods.length > 0 && (
+              <>
+                <div className="mods-section-label core">
+                  🔒 Core Mods — {coreMods.length}
+                </div>
+                <div className="mods-grid" style={{ marginBottom: 28 }}>
+                  {coreMods.map((mod, index) => (
+                    <ModGridCardItem
+                      key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
+                      mod={mod}
+                      index={index}
+                      selectedModKeys={selectedModKeys}
+                      setSelectedModKeys={setSelectedModKeys}
+                      setRemoveTarget={setRemoveTarget}
+                      coreModPolicy={coreModPolicy}
+                      exaroton={exaroton}
+                      modVersionOptions={modVersionOptions}
+                      actions={actions}
                     />
                   ))}
                 </div>

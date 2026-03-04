@@ -99,13 +99,36 @@ describe('CoreModPolicyService', () => {
     expect(fabric?.side).toBe('both');
   });
 
-  it('does not lock Fabric API in metadata', () => {
+  it('marks Fabric API as core and non-removable in metadata', () => {
     const metadata = service.buildMetadata(true);
     expect(metadata.lockedProjectIds.includes(FABRIC_API_PROJECT_ID)).toBe(
-      false,
+      true,
     );
     expect(
       metadata.nonRemovableProjectIds.includes(FABRIC_API_PROJECT_ID),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it('preserves Fabric API side from incoming mods', async () => {
+    const mods = await service.normalizeMods({
+      mods: [
+        {
+          kind: 'mod',
+          name: 'Fabric API',
+          provider: 'modrinth',
+          side: 'server',
+          projectId: FABRIC_API_PROJECT_ID,
+          versionId: 'fabric-v1',
+          url: 'https://example.com/fabric-v1.jar',
+          sha256: 'd'.repeat(64),
+        },
+      ],
+      minecraftVersion: '1.20.1',
+      fancyMenuEnabled: false,
+      resolveMod: resolver,
+    });
+
+    const fabric = mods.find((mod) => mod.projectId === FABRIC_API_PROJECT_ID);
+    expect(fabric?.side).toBe('server');
   });
 });

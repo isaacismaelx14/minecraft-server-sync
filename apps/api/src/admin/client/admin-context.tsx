@@ -31,7 +31,9 @@ import type {
   FancyMenuPayload,
   InstallModsPayload,
   ModVersionsPayload,
+  PublishProgressPayload,
   PublishPayload,
+  PublishStartPayload,
   SaveDraftPayload,
   SaveSettingsPayload,
   SearchResult,
@@ -144,6 +146,8 @@ type AdminContextValue = {
   exaroton: ExarotonState;
   sessionState: 'pending' | 'active';
   hasPendingPublish: boolean;
+  hasPendingServerModChanges: boolean;
+  publishBlockReason: string | null;
   hasSavedDraft: boolean;
   rail: RailState;
   isBusy: {
@@ -163,10 +167,15 @@ type AdminContextValue = {
     confirmInstall: () => Promise<void>;
     cancelInstall: () => void;
     removeMod: (projectId: string, sha256?: string) => void;
+    removeModsBulk: (entries: Array<{ projectId?: string; sha256?: string }>) => void;
     setModInstallTarget: (
       projectId: string,
       target: 'client' | 'server' | 'both',
       sha256?: string,
+    ) => void;
+    setModsInstallTargetBulk: (
+      entries: Array<{ projectId?: string; sha256?: string }>,
+      target: 'client' | 'server' | 'both',
     ) => void;
     loadModVersions: (projectId: string) => Promise<void>;
     applyModVersion: (projectId: string, versionId: string) => Promise<void>;
@@ -268,8 +277,8 @@ const DEFAULT_FORM: FormState = {
 const DEFAULT_POLICY: CoreModPolicy = {
   fabricApiProjectId: 'P7dR8mSH',
   fancyMenuProjectId: 'Wq5SjeWM',
-  lockedProjectIds: [],
-  nonRemovableProjectIds: [],
+  lockedProjectIds: ['P7dR8mSH'],
+  nonRemovableProjectIds: ['P7dR8mSH'],
   rules: {
     fabricApiRequired: true,
     fabricApiVersionEditable: true,
@@ -393,7 +402,58 @@ function modFingerprint(mod: AdminMod): string {
     mod.versionId ?? '',
     mod.sha256 ?? '',
     mod.url ?? '',
+    mod.side ?? 'client',
   ].join('|');
+}
+
+function isServerRelevantMod(mod: AdminMod): boolean {
+  return mod.side === 'server' || mod.side === 'both';
+}
+
+function computeServerModDiffSummary(current: AdminMod[], baseline: AdminMod[]) {
+  const baselineMap = new Map<string, AdminMod>();
+  for (const mod of baseline.filter(isServerRelevantMod)) {
+    baselineMap.set(mod.projectId || mod.name, mod);
+  }
+
+  const currentMap = new Map<string, AdminMod>();
+  for (const mod of current.filter(isServerRelevantMod)) {
+    currentMap.set(mod.projectId || mod.name, mod);
+  }
+
+  let add = 0;
+  let remove = 0;
+  let update = 0;
+  let keep = 0;
+
+  for (const [id, mod] of currentMap) {
+    const base = baselineMap.get(id);
+    if (!base) {
+      add += 1;
+    } else if (
+      base.versionId !== mod.versionId ||
+      base.sha256 !== mod.sha256 ||
+      base.url !== mod.url
+    ) {
+      update += 1;
+    } else {
+      keep += 1;
+    }
+  }
+
+  for (const id of baselineMap.keys()) {
+    if (!currentMap.has(id)) {
+      remove += 1;
+    }
+  }
+
+  return {
+    add,
+    remove,
+    update,
+    keep,
+    hasChanges: add + remove + update > 0,
+  };
 }
 
 function sameMods(left: AdminMod[], right: AdminMod[]): boolean {
@@ -605,6 +665,63 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       }));
     },
     [],
+  );
+
+  const isClientRequiredMod = useCallback(
+    (projectId: string, mods: AdminMod[]): boolean => {
+      if (projectId === coreModPolicy.fabricApiProjectId) {
+        return true;
+      }
+      if (projectId === coreModPolicy.fancyMenuProjectId) {
+        return true;
+      }
+
+      for (const mod of mods) {
+        if (!mod.projectId || mod.side === 'server') {
+          continue;
+        }
+        const analysis = dependencyMap[mod.projectId];
+        if (analysis?.requiredDependencies?.includes(projectId)) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+    [coreModPolicy.fabricApiProjectId, coreModPolicy.fancyMenuProjectId, dependencyMap],
+  );
+
+  const normalizeInstallTarget = useCallback(
+    (
+      projectId: string,
+      requestedTarget: 'client' | 'server' | 'both',
+      mods: AdminMod[],
+    ): { target: 'client' | 'server' | 'both'; reason: string | null } => {
+      if (projectId === coreModPolicy.fabricApiProjectId) {
+        return { target: requestedTarget, reason: null };
+      }
+
+      if (projectId === coreModPolicy.fancyMenuProjectId) {
+        return {
+          target: 'client',
+          reason: 'FancyMenu is user-side only.',
+        };
+      }
+
+      if (requestedTarget === 'server' && isClientRequiredMod(projectId, mods)) {
+        return {
+          target: 'both',
+          reason: 'This mod is required by a user-side mod, so target was set to User + Server.',
+        };
+      }
+
+      return { target: requestedTarget, reason: null };
+    },
+    [
+      coreModPolicy.fabricApiProjectId,
+      coreModPolicy.fancyMenuProjectId,
+      isClientRequiredMod,
+    ],
   );
 
   const refreshExarotonStatus = useCallback(async () => {
@@ -1374,20 +1491,130 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       target: 'client' | 'server' | 'both',
       sha256?: string,
     ) => {
-      setSelectedMods((current) =>
-        current.map((entry) => {
+      const targetKey = projectId ||
+        selectedModsRef.current.find((entry) => sha256 && entry.sha256 === sha256)
+          ?.projectId ||
+        '';
+      const normalized = normalizeInstallTarget(
+        targetKey,
+        target,
+        selectedModsRef.current,
+      );
+
+      setSelectedMods((current) => {
+        const next = current.map((entry) => {
           if (projectId && entry.projectId === projectId) {
-            return { ...entry, side: target };
+            return { ...entry, side: normalized.target };
           }
           if (sha256 && entry.sha256 === sha256) {
-            return { ...entry, side: target };
+            return { ...entry, side: normalized.target };
           }
           return entry;
-        }),
+        });
+        selectedModsRef.current = next;
+        return next;
+      });
+      setStatus(
+        'mods',
+        normalized.reason || 'Mod install target updated.',
+        'ok',
       );
-      setStatus('mods', 'Mod install target updated.', 'ok');
     },
-    [setStatus],
+    [normalizeInstallTarget, setStatus],
+  );
+
+  const setModsInstallTargetBulk = useCallback(
+    (
+      entries: Array<{ projectId?: string; sha256?: string }>,
+      target: 'client' | 'server' | 'both',
+    ) => {
+      const keys = new Set(
+        entries.map((entry) => entry.projectId || entry.sha256).filter(Boolean),
+      );
+      if (!keys.size) {
+        return;
+      }
+
+      const current = selectedModsRef.current;
+      const touched = current.filter((mod) =>
+        keys.has(mod.projectId || mod.sha256),
+      );
+
+      const nextById = new Map<string, 'client' | 'server' | 'both'>();
+      let autoAdjustedCount = 0;
+      for (const mod of touched) {
+        const projectId = mod.projectId || '';
+        const normalized = normalizeInstallTarget(projectId, target, current);
+        if (normalized.target !== target) {
+          autoAdjustedCount += 1;
+        }
+        nextById.set(mod.projectId || mod.sha256, normalized.target);
+      }
+
+      setSelectedMods((mods) => {
+        const next = mods.map((mod) => {
+          const key = mod.projectId || mod.sha256;
+          const mapped = nextById.get(key);
+          if (!mapped) {
+            return mod;
+          }
+          return { ...mod, side: mapped };
+        });
+        selectedModsRef.current = next;
+        return next;
+      });
+
+      if (autoAdjustedCount > 0) {
+        setStatus(
+          'mods',
+          `Bulk target updated. ${String(autoAdjustedCount)} mod(s) were auto-adjusted to safe targets.`,
+          'ok',
+        );
+        return;
+      }
+
+      setStatus('mods', 'Bulk install target updated.', 'ok');
+    },
+    [normalizeInstallTarget, setStatus],
+  );
+
+  const removeModsBulk = useCallback(
+    (entries: Array<{ projectId?: string; sha256?: string }>) => {
+      if (!entries.length) {
+        return;
+      }
+
+      const keys = new Set(
+        entries.map((entry) => entry.projectId || entry.sha256).filter(Boolean),
+      );
+      const nonRemovable = new Set(coreModPolicy.nonRemovableProjectIds);
+      if (form.fancyMenuEnabled === 'true') {
+        nonRemovable.add(coreModPolicy.fancyMenuProjectId);
+      }
+
+      const next = selectedModsRef.current.filter((entry) => {
+        const key = entry.projectId || entry.sha256;
+        if (!keys.has(key)) {
+          return true;
+        }
+        if (entry.projectId && nonRemovable.has(entry.projectId)) {
+          return true;
+        }
+        return false;
+      });
+
+      const removedCount = selectedModsRef.current.length - next.length;
+      selectedModsRef.current = next;
+      setSelectedMods(next);
+      setStatus(
+        'mods',
+        removedCount > 0
+          ? `Removed ${String(removedCount)} mod(s).`
+          : 'No removable mods in selection.',
+        removedCount > 0 ? 'ok' : 'error',
+      );
+    },
+    [coreModPolicy, form.fancyMenuEnabled, setStatus],
   );
 
   const loadModVersions = useCallback(
@@ -1589,6 +1816,24 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
   const publishProfile = useCallback(async () => {
     if (!validateFormFields()) return;
 
+    const localServerModSummary = computeServerModDiffSummary(
+      selectedModsRef.current,
+      latestProfileModsRef.current,
+    );
+    const localPublishBlockReason =
+      localServerModSummary.hasChanges &&
+      exaroton.connected &&
+      exaroton.selectedServer &&
+      exaroton.settings.modsSyncEnabled &&
+      ![0, 7].includes(exaroton.selectedServer.status)
+        ? 'Cannot publish pending server mod changes while Exaroton server is running. Stop the server first.'
+        : null;
+
+    if (localPublishBlockReason) {
+      setStatus('publish', localPublishBlockReason, 'error');
+      return;
+    }
+
     const minecraftVersion = form.minecraftVersion.trim();
     const loaderVersion = form.loaderVersion.trim();
     if (!minecraftVersion || !loaderVersion) {
@@ -1619,20 +1864,71 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       );
       setSelectedMods(synced);
 
-      const published = await requestJson<PublishPayload>(
-        '/v1/admin/profile/publish',
+      const payload = {
+        profileId: form.profileId.trim(),
+        serverName: form.serverName.trim(),
+        serverAddress: form.serverAddress.trim(),
+        minecraftVersion,
+        loaderVersion,
+        mods: synced,
+        fancyMenu: collectFancyMenuPayload(form),
+        branding: collectBrandingPayload(form),
+      };
+
+      const started = await requestJson<PublishStartPayload>(
+        '/v1/admin/profile/publish/start',
         'POST',
-        {
-          profileId: form.profileId.trim(),
-          serverName: form.serverName.trim(),
-          serverAddress: form.serverAddress.trim(),
-          minecraftVersion,
-          loaderVersion,
-          mods: synced,
-          fancyMenu: collectFancyMenuPayload(form),
-          branding: collectBrandingPayload(form),
-        },
+        payload,
       );
+
+      const published = await new Promise<PublishPayload>((resolve, reject) => {
+        const stream = new EventSource(
+          `/v1/admin/profile/publish/stream?jobId=${encodeURIComponent(started.jobId)}`,
+        );
+
+        const cleanup = () => {
+          stream.close();
+        };
+
+        const onProgress = (event: Event) => {
+          try {
+            const parsed = JSON.parse(
+              (event as MessageEvent<string>).data,
+            ) as PublishProgressPayload;
+            setStatus('publish', parsed.message, 'idle');
+          } catch {
+            setStatus('publish', 'Publishing next release...', 'idle');
+          }
+        };
+
+        const onDone = (event: Event) => {
+          cleanup();
+          try {
+            const parsed = JSON.parse(
+              (event as MessageEvent<string>).data,
+            ) as PublishPayload;
+            resolve(parsed);
+          } catch {
+            reject(new Error('Publish stream returned an invalid payload'));
+          }
+        };
+
+        const onError = (event: Event) => {
+          cleanup();
+          try {
+            const parsed = JSON.parse(
+              (event as MessageEvent<string>).data,
+            ) as { message?: string };
+            reject(new Error(parsed.message || 'Publish failed.'));
+          } catch {
+            reject(new Error('Publish failed.'));
+          }
+        };
+
+        stream.addEventListener('progress', onProgress as EventListener);
+        stream.addEventListener('done', onDone as EventListener);
+        stream.addEventListener('error', onError as EventListener);
+      });
       setForm((current) => ({
         ...current,
         currentVersion: published.version,
@@ -1686,6 +1982,9 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     selectedModsRef,
     setBusyPublish,
     setStatus,
+    exaroton.connected,
+    exaroton.selectedServer,
+    exaroton.settings.modsSyncEnabled,
     validateFormFields,
   ]);
 
@@ -1882,6 +2181,40 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     };
   }, [coreModPolicy, form.fancyMenuEnabled]);
 
+  const serverModSummary = useMemo(() => {
+    return computeServerModDiffSummary(
+      selectedMods,
+      latestProfileModsRef.current,
+    );
+  }, [selectedMods]);
+
+  const hasPendingServerModChanges = serverModSummary.hasChanges;
+
+  const publishBlockReason = useMemo<string | null>(() => {
+    if (!hasPendingServerModChanges) {
+      return null;
+    }
+    if (!exaroton.connected || !exaroton.selectedServer) {
+      return null;
+    }
+    if (!exaroton.settings.modsSyncEnabled) {
+      return null;
+    }
+
+    const status = exaroton.selectedServer.status;
+    const isRunning = ![0, 7].includes(status);
+    if (!isRunning) {
+      return null;
+    }
+
+    return 'Cannot publish pending server mod changes while Exaroton server is running. Stop the server first.';
+  }, [
+    exaroton.connected,
+    exaroton.selectedServer,
+    exaroton.settings.modsSyncEnabled,
+    hasPendingServerModChanges,
+  ]);
+
   const hasPendingPublish = useMemo<boolean>(() => {
     if (sessionState !== 'active') {
       return false;
@@ -1961,6 +2294,8 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       exaroton,
       sessionState,
       hasPendingPublish,
+      hasPendingServerModChanges,
+      publishBlockReason,
       hasSavedDraft,
       rail,
       summaryStats,
@@ -1982,7 +2317,9 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         confirmInstall,
         cancelInstall,
         removeMod,
+        removeModsBulk,
         setModInstallTarget,
+        setModsInstallTargetBulk,
         loadModVersions,
         applyModVersion,
         saveSettings,
@@ -2031,6 +2368,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       exarotonAction,
       form,
       hasPendingPublish,
+      hasPendingServerModChanges,
       hasSavedDraft,
       listExarotonServers,
       loadFabricVersions,
@@ -2040,9 +2378,12 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       modVersionOptions,
       pendingInstall,
       publishProfile,
+      publishBlockReason,
       rail,
       removeMod,
+      removeModsBulk,
       setModInstallTarget,
+      setModsInstallTargetBulk,
       requestInstall,
       saveDraft,
       saveSettings,
