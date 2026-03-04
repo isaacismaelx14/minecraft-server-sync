@@ -543,7 +543,7 @@ export class AdminService implements OnModuleInit {
 
     await this.prisma.exarotonIntegration.upsert({
       where: { id: EXAROTON_INTEGRATION_ID },
-      create: ({
+      create: {
         id: EXAROTON_INTEGRATION_ID,
         apiKeyCiphertext: encrypted.ciphertext,
         apiKeyIv: encrypted.iv,
@@ -561,8 +561,8 @@ export class AdminService implements OnModuleInit {
         playerCanStopServer: existingSettings.playerCanStopServer,
         playerCanRestartServer: existingSettings.playerCanRestartServer,
         connectedAt: new Date(),
-      } as unknown) as Prisma.ExarotonIntegrationCreateInput,
-      update: ({
+      },
+      update: {
         apiKeyCiphertext: encrypted.ciphertext,
         apiKeyIv: encrypted.iv,
         apiKeyAuthTag: encrypted.authTag,
@@ -579,7 +579,7 @@ export class AdminService implements OnModuleInit {
         playerCanStopServer: existingSettings.playerCanStopServer,
         playerCanRestartServer: existingSettings.playerCanRestartServer,
         connectedAt: new Date(),
-      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
+      },
     });
 
     return {
@@ -710,7 +710,7 @@ export class AdminService implements OnModuleInit {
 
     const updated = await this.prisma.exarotonIntegration.update({
       where: { id: EXAROTON_INTEGRATION_ID },
-      data: ({
+      data: {
         modsSyncEnabled: input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
         playerCanViewStatus: nextPlayerCanViewStatus,
         playerCanViewOnlinePlayers: nextPlayerCanViewOnlinePlayers,
@@ -718,7 +718,7 @@ export class AdminService implements OnModuleInit {
         playerCanStartServer: nextPlayerCanStartServer,
         playerCanStopServer: nextPlayerCanStopServer,
         playerCanRestartServer: nextPlayerCanRestartServer,
-      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
+      },
     });
 
     return {
@@ -1378,7 +1378,9 @@ export class AdminService implements OnModuleInit {
           releaseMinor: nextSemver.minor,
           releasePatch: nextSemver.patch,
           supportedMinecraftVersions: allowedVersions,
-          publishDraft: Prisma.DbNull,
+          publishDraft:
+            ((Prisma as unknown as { DbNull?: unknown; JsonNull?: unknown }).DbNull ??
+              (Prisma as unknown as { JsonNull?: unknown }).JsonNull) as Prisma.InputJsonValue,
         },
       });
 

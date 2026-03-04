@@ -4,7 +4,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "pnpm run admin:build-client && nest build",
+    "build": "pnpm run prisma:generate && pnpm run admin:build-client && nest build",
     "dev": "pnpm run prisma:generate && pnpm run admin:build-client && nest start --watch",
     "start": "pnpm run admin:build-client && nest start",
     "start:prod": "node dist/main",
