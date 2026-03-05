@@ -1,5 +1,13 @@
 # Changelog
 
+## [@mss/launcher/v0.2.1](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.2.1) (2026-03-05)
+
+[Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Flauncher%2Fv0.2.0...%40mss%2Flauncher%2Fv0.2.1)
+
+## CI
+
+- **launcher:** split launcher release workflow into build and asset publish jobs ([31d0a67](https://github.com/isaacismaelx14/minecraft-server-sync/commit/31d0a67b57d130c58915502f00059050ca532e92))
+
 ## [@mss/launcher/v0.2.0](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.2.0) (2026-03-05)
 
 [Release Tag](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.2.0)
