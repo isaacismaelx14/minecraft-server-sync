@@ -120,7 +120,9 @@ type PublishSession = {
   events: PublishProgressEvent[];
   result: PublishProfileResult | null;
   error: string | null;
-  listeners: Set<(event: { type: 'progress' | 'done' | 'error'; data: unknown }) => void>;
+  listeners: Set<
+    (event: { type: 'progress' | 'done' | 'error'; data: unknown }) => void
+  >;
 };
 
 interface ModrinthSearchResponse {
@@ -540,7 +542,9 @@ export class AdminService implements OnModuleInit {
     const encrypted = encryptExarotonApiKey(cleanApiKey, encryptionKey);
     const existingSettings = this.readExarotonSettings(existing);
     const selected = existing?.selectedServerId
-      ? servers.find((entry: ExarotonServer) => entry.id === existing.selectedServerId) || null
+      ? servers.find(
+          (entry: ExarotonServer) => entry.id === existing.selectedServerId,
+        ) || null
       : null;
 
     await this.prisma.exarotonIntegration.upsert({
@@ -588,7 +592,9 @@ export class AdminService implements OnModuleInit {
       configured: true,
       connected: true,
       account,
-      servers: servers.map((entry: ExarotonServer) => this.mapExarotonServer(entry)),
+      servers: servers.map((entry: ExarotonServer) =>
+        this.mapExarotonServer(entry),
+      ),
       selectedServer: selected ? this.mapExarotonServer(selected) : null,
       settings: this.mapExarotonSettings(existingSettings),
     };
@@ -713,7 +719,8 @@ export class AdminService implements OnModuleInit {
     const updated = await this.prisma.exarotonIntegration.update({
       where: { id: EXAROTON_INTEGRATION_ID },
       data: {
-        modsSyncEnabled: input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
+        modsSyncEnabled:
+          input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
         playerCanViewStatus: nextPlayerCanViewStatus,
         playerCanViewOnlinePlayers: nextPlayerCanViewOnlinePlayers,
         playerCanModifyStatus: nextPlayerCanModifyStatus,
@@ -758,7 +765,9 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!latest) {
-      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+      throw new NotFoundException(
+        `No profile version found for server '${serverId}'`,
+      );
     }
 
     const lock = ProfileLockSchema.parse(latest.lockJson);
@@ -786,7 +795,10 @@ export class AdminService implements OnModuleInit {
       throw new BadRequestException('Select an Exaroton server first');
     }
 
-    const initial = await this.exarotonClient.getServer(apiKey, selectedServerId);
+    const initial = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
     handlers.onStatus(this.mapExarotonServer(initial));
 
     const close = this.exarotonClient.openServerStatusStream(
@@ -889,13 +901,17 @@ export class AdminService implements OnModuleInit {
     }
 
     if (action === 'start' && !integration.playerCanStartServer) {
-      throw new ForbiddenException('Player start server permission is disabled');
+      throw new ForbiddenException(
+        'Player start server permission is disabled',
+      );
     }
     if (action === 'stop' && !integration.playerCanStopServer) {
       throw new ForbiddenException('Player stop server permission is disabled');
     }
     if (action === 'restart' && !integration.playerCanRestartServer) {
-      throw new ForbiddenException('Player restart server permission is disabled');
+      throw new ForbiddenException(
+        'Player restart server permission is disabled',
+      );
     }
 
     await this.exarotonServerAction(action);
@@ -1278,146 +1294,150 @@ export class AdminService implements OnModuleInit {
     const serverId = this.getServerId();
     const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
-    const published = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const [server, latest] = await Promise.all([
-        tx.server.findUnique({ where: { id: serverId } }),
-        tx.profileVersion.findFirst({
-          where: { serverId },
-          orderBy: { version: 'desc' },
-        }),
-      ]);
+    const published = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const [server, latest] = await Promise.all([
+          tx.server.findUnique({ where: { id: serverId } }),
+          tx.profileVersion.findFirst({
+            where: { serverId },
+            orderBy: { version: 'desc' },
+          }),
+        ]);
 
-      if (!server || !latest) {
-        throw new NotFoundException(
-          `No profile version found for server '${serverId}'`,
-        );
-      }
+        if (!server || !latest) {
+          throw new NotFoundException(
+            `No profile version found for server '${serverId}'`,
+          );
+        }
 
-      const nextVersion = latest.version + 1;
-      const profileId =
-        input.profileId?.trim() || server.profileId || latest.profileId;
-      const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
+        const nextVersion = latest.version + 1;
+        const profileId =
+          input.profileId?.trim() || server.profileId || latest.profileId;
+        const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
 
-      const generated = await this.buildLockPayload({
-        profileId,
-        version: nextVersion,
-        serverName: input.serverName,
-        serverAddress: input.serverAddress,
-        minecraftVersion: input.minecraftVersion,
-        loaderVersion: input.loaderVersion,
-        mods: input.mods,
-        fancyMenu,
-        branding: {
-          logoUrl: input.branding?.logoUrl?.trim() || undefined,
-          backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
-          newsUrl: input.branding?.newsUrl?.trim() || undefined,
-        },
-        previousLockJson: latest.lockJson,
-      });
-
-      const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
-      const summary = this.computeDiffSummary(latest.lockJson, generated);
-      const serverModSummary = this.computeServerModDiffSummary(
-        latest.lockJson,
-        generated,
-      );
-      const lockSignature = this.signing.signLockPayload(generated);
-      const allowedVersions = Array.from(
-        new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
-      );
-
-      onProgress?.({
-        stage: 'detecting-mod-changes',
-        message: `Getting mod changes (+${serverModSummary.add} / ~${serverModSummary.update} / -${serverModSummary.remove}).`,
-      });
-
-      await this.ensurePublishAllowedForServerModChanges(serverModSummary);
-
-      const [appSettings] = await Promise.all([
-        tx.appSetting.upsert({
-          where: { id: APP_SETTING_ID },
-          create: {
-            id: APP_SETTING_ID,
-            supportedMinecraftVersions: allowedVersions,
-            supportedPlatforms: ['fabric'],
-            releaseMajor: 1,
-            releaseMinor: 0,
-            releasePatch: 0,
-          },
-          update: {},
-        }),
-      ]);
-      const currentSemver = {
-        major: appSettings.releaseMajor,
-        minor: appSettings.releaseMinor,
-        patch: appSettings.releasePatch,
-      };
-      const bumpType = this.classifyReleaseBump({
-        latest,
-        input,
-        summary,
-      });
-      const nextSemver = this.bumpSemver(currentSemver, bumpType);
-      const releaseVersion = this.formatSemver(nextSemver);
-
-      await tx.server.update({
-        where: { id: serverId },
-        data: {
-          name: input.serverName.trim(),
-          address: input.serverAddress.trim(),
-          profileId,
-          fancyMenuEnabled: fancyMenu.enabled,
-          fancyMenuSettings: fancyMenu as unknown as object,
-          allowedMinecraftVersions: allowedVersions,
-        },
-      });
-
-      await tx.profileVersion.create({
-        data: {
-          serverId,
+        const generated = await this.buildLockPayload({
           profileId,
           version: nextVersion,
+          serverName: input.serverName,
+          serverAddress: input.serverAddress,
+          minecraftVersion: input.minecraftVersion,
+          loaderVersion: input.loaderVersion,
+          mods: input.mods,
+          fancyMenu,
+          branding: {
+            logoUrl: input.branding?.logoUrl?.trim() || undefined,
+            backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
+            newsUrl: input.branding?.newsUrl?.trim() || undefined,
+          },
+          previousLockJson: latest.lockJson,
+        });
+
+        const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
+        const summary = this.computeDiffSummary(latest.lockJson, generated);
+        const serverModSummary = this.computeServerModDiffSummary(
+          latest.lockJson,
+          generated,
+        );
+        const lockSignature = this.signing.signLockPayload(generated);
+        const allowedVersions = Array.from(
+          new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
+        );
+
+        onProgress?.({
+          stage: 'detecting-mod-changes',
+          message: `Getting mod changes (+${serverModSummary.add} / ~${serverModSummary.update} / -${serverModSummary.remove}).`,
+        });
+
+        await this.ensurePublishAllowedForServerModChanges(serverModSummary);
+
+        const [appSettings] = await Promise.all([
+          tx.appSetting.upsert({
+            where: { id: APP_SETTING_ID },
+            create: {
+              id: APP_SETTING_ID,
+              supportedMinecraftVersions: allowedVersions,
+              supportedPlatforms: ['fabric'],
+              releaseMajor: 1,
+              releaseMinor: 0,
+              releasePatch: 0,
+            },
+            update: {},
+          }),
+        ]);
+        const currentSemver = {
+          major: appSettings.releaseMajor,
+          minor: appSettings.releaseMinor,
+          patch: appSettings.releasePatch,
+        };
+        const bumpType = this.classifyReleaseBump({
+          latest,
+          input,
+          summary,
+        });
+        const nextSemver = this.bumpSemver(currentSemver, bumpType);
+        const releaseVersion = this.formatSemver(nextSemver);
+
+        await tx.server.update({
+          where: { id: serverId },
+          data: {
+            name: input.serverName.trim(),
+            address: input.serverAddress.trim(),
+            profileId,
+            fancyMenuEnabled: fancyMenu.enabled,
+            fancyMenuSettings: fancyMenu as unknown as object,
+            allowedMinecraftVersions: allowedVersions,
+          },
+        });
+
+        await tx.profileVersion.create({
+          data: {
+            serverId,
+            profileId,
+            version: nextVersion,
+            releaseVersion,
+            minecraftVersion: generated.minecraftVersion,
+            loader: generated.loader,
+            loaderVersion: generated.loaderVersion,
+            defaultServerName: generated.defaultServer.name,
+            defaultServerAddress: generated.defaultServer.address,
+            fancyMenuEnabled: generated.fancyMenu.enabled,
+            fancyMenuSettings: generated.fancyMenu as unknown as object,
+            lockUrl,
+            summaryAdd: summary.add,
+            summaryRemove: summary.remove,
+            summaryUpdate: summary.update,
+            summaryKeep: summary.keep,
+            signature: lockSignature?.signature,
+            lockJson: generated as unknown as object,
+          },
+        });
+
+        await tx.appSetting.update({
+          where: { id: APP_SETTING_ID },
+          data: {
+            releaseMajor: nextSemver.major,
+            releaseMinor: nextSemver.minor,
+            releasePatch: nextSemver.patch,
+            supportedMinecraftVersions: allowedVersions,
+            publishDraft: ((
+              Prisma as unknown as { DbNull?: unknown; JsonNull?: unknown }
+            ).DbNull ??
+              (Prisma as unknown as { JsonNull?: unknown })
+                .JsonNull) as Prisma.InputJsonValue,
+          },
+        });
+
+        return {
+          version: nextVersion,
           releaseVersion,
-          minecraftVersion: generated.minecraftVersion,
-          loader: generated.loader,
-          loaderVersion: generated.loaderVersion,
-          defaultServerName: generated.defaultServer.name,
-          defaultServerAddress: generated.defaultServer.address,
-          fancyMenuEnabled: generated.fancyMenu.enabled,
-          fancyMenuSettings: generated.fancyMenu as unknown as object,
+          bumpType,
           lockUrl,
-          summaryAdd: summary.add,
-          summaryRemove: summary.remove,
-          summaryUpdate: summary.update,
-          summaryKeep: summary.keep,
-          signature: lockSignature?.signature,
-          lockJson: generated as unknown as object,
-        },
-      });
-
-      await tx.appSetting.update({
-        where: { id: APP_SETTING_ID },
-        data: {
-          releaseMajor: nextSemver.major,
-          releaseMinor: nextSemver.minor,
-          releasePatch: nextSemver.patch,
-          supportedMinecraftVersions: allowedVersions,
-          publishDraft:
-            ((Prisma as unknown as { DbNull?: unknown; JsonNull?: unknown }).DbNull ??
-              (Prisma as unknown as { JsonNull?: unknown }).JsonNull) as Prisma.InputJsonValue,
-        },
-      });
-
-      return {
-        version: nextVersion,
-        releaseVersion,
-        bumpType,
-        lockUrl,
-        summary,
-        serverModSummary,
-        generatedLock: generated,
-      };
-    });
+          summary,
+          serverModSummary,
+          generatedLock: generated,
+        };
+      },
+    );
 
     const { generatedLock, serverModSummary, ...publishPayload } = published;
 
@@ -1540,7 +1560,6 @@ export class AdminService implements OnModuleInit {
       entryCount: validation.entryCount,
     };
   }
-
 
   private async ensureAdminCredential(): Promise<void> {
     const existing = await this.prisma.adminCredential.findUnique({
@@ -1688,7 +1707,8 @@ export class AdminService implements OnModuleInit {
     return {
       serverStatusEnabled: true as const,
       modsSyncEnabled: input.modsSyncEnabled ?? true,
-      playerCanViewStatus: playerCanModifyStatus || input.playerCanViewStatus !== false,
+      playerCanViewStatus:
+        playerCanModifyStatus || input.playerCanViewStatus !== false,
       playerCanViewOnlinePlayers:
         input.playerCanViewOnlinePlayers !== false &&
         (playerCanModifyStatus || input.playerCanViewStatus !== false),
@@ -1812,7 +1832,8 @@ export class AdminService implements OnModuleInit {
         selectedServerAddress: integration.selectedServerAddress,
         modsSyncEnabled: integrationSettings.modsSyncEnabled,
         playerCanViewStatus: integrationSettings.playerCanViewStatus,
-        playerCanViewOnlinePlayers: integrationSettings.playerCanViewOnlinePlayers,
+        playerCanViewOnlinePlayers:
+          integrationSettings.playerCanViewOnlinePlayers,
         playerCanModifyStatus: integrationSettings.playerCanModifyStatus,
         playerCanStartServer: integrationSettings.playerCanStartServer,
         playerCanStopServer: integrationSettings.playerCanStopServer,
@@ -1905,7 +1926,10 @@ export class AdminService implements OnModuleInit {
 
     if (selectedServerId) {
       try {
-        const live = await this.exarotonClient.getServer(apiKey, selectedServerId);
+        const live = await this.exarotonClient.getServer(
+          apiKey,
+          selectedServerId,
+        );
         selectedServer = this.mapExarotonServer(live);
       } catch {
         selectedServer = {
@@ -2076,7 +2100,9 @@ export class AdminService implements OnModuleInit {
       );
 
       const serverMods = lock.items.filter(
-        (item) => item.kind === 'mod' && (item.side === 'server' || item.side === 'both'),
+        (item) =>
+          item.kind === 'mod' &&
+          (item.side === 'server' || item.side === 'both'),
       );
 
       const desired = new Map<
@@ -2114,7 +2140,10 @@ export class AdminService implements OnModuleInit {
         );
       }
 
-      const state = await this.readExarotonModsSyncState(apiKey, selectedServerId);
+      const state = await this.readExarotonModsSyncState(
+        apiKey,
+        selectedServerId,
+      );
       const previous = new Map(
         (state?.files ?? []).map((file) => [file.filename, file]),
       );
@@ -2125,7 +2154,9 @@ export class AdminService implements OnModuleInit {
 
       for (const [filename, desiredFile] of desired.entries()) {
         const existing = previous.get(filename);
-        if (existing?.sha256?.toLowerCase() === desiredFile.sha256.toLowerCase()) {
+        if (
+          existing?.sha256?.toLowerCase() === desiredFile.sha256.toLowerCase()
+        ) {
           summary.keep += 1;
           continue;
         }
@@ -2209,9 +2240,7 @@ export class AdminService implements OnModuleInit {
       return {
         attempted: true,
         success: false,
-        message:
-          (error as Error).message ||
-          'Exaroton server mod sync failed.',
+        message: (error as Error).message || 'Exaroton server mod sync failed.',
         summary: zero,
       };
     }
@@ -2232,7 +2261,9 @@ export class AdminService implements OnModuleInit {
     }
 
     try {
-      const parsed = JSON.parse(payload.toString('utf8')) as ExarotonSyncStateFile;
+      const parsed = JSON.parse(
+        payload.toString('utf8'),
+      ) as ExarotonSyncStateFile;
       if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.files)) {
         return null;
       }
@@ -2568,7 +2599,9 @@ export class AdminService implements OnModuleInit {
     const prevMap = new Map(
       previousMods.map((item) => [this.itemKey(item), item.sha256]),
     );
-    const nextMap = new Map(nextMods.map((item) => [this.itemKey(item), item.sha256]));
+    const nextMap = new Map(
+      nextMods.map((item) => [this.itemKey(item), item.sha256]),
+    );
 
     let add = 0;
     let remove = 0;

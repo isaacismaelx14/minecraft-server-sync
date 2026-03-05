@@ -47,8 +47,9 @@ export class SigningService implements OnModuleInit {
     }
 
     if (keyBytes.length === 32) {
-      this.secretKey = nacl.sign.keyPair.fromSeed(new Uint8Array(keyBytes))
-        .secretKey;
+      this.secretKey = nacl.sign.keyPair.fromSeed(
+        new Uint8Array(keyBytes),
+      ).secretKey;
       return;
     }
 
@@ -57,7 +58,10 @@ export class SigningService implements OnModuleInit {
     );
   }
 
-  signProfileMetadata(payload: unknown, signedAt?: Date): SignatureMetadata | null {
+  signProfileMetadata(
+    payload: unknown,
+    signedAt?: Date,
+  ): SignatureMetadata | null {
     return this.sign(PROFILE_METADATA_INPUT, payload, signedAt);
   }
 

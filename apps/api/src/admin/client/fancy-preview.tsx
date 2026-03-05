@@ -41,7 +41,10 @@ export const FancyPreviewCanvas = memo(function FancyPreviewCanvas({
 
         <div className="mc-preview-buttons">
           {model.buttons
-            .filter((button: FancyMenuPreviewModel['buttons'][number]) => button.visible)
+            .filter(
+              (button: FancyMenuPreviewModel['buttons'][number]) =>
+                button.visible,
+            )
             .map((button: FancyMenuPreviewModel['buttons'][number]) => (
               <button
                 key={`${button.key}-${button.label}`}

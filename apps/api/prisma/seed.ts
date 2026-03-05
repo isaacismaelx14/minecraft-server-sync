@@ -18,9 +18,10 @@ async function main() {
   const defaultBaseUrl = railwayDomain
     ? `https://${railwayDomain}`
     : 'http://localhost:3000';
-  const baseUrl = (configuredBaseUrl && configuredBaseUrl.length > 0
-    ? configuredBaseUrl
-    : defaultBaseUrl
+  const baseUrl = (
+    configuredBaseUrl && configuredBaseUrl.length > 0
+      ? configuredBaseUrl
+      : defaultBaseUrl
   ).replace(/\/+$/, '');
   const derivedLockUrl = `${baseUrl}/v1/locks/${profileId}/${lock.version}`;
   const lockUrl = process.env.LOCK_URL?.trim() || derivedLockUrl;
@@ -66,7 +67,11 @@ async function main() {
       fancyMenuEnabled: lock.fancyMenu.enabled,
       fancyMenuSettings: lock.fancyMenu as unknown as object,
       lockUrl,
-      summaryAdd: lock.items.length + lock.resources.length + lock.shaders.length + lock.configs.length,
+      summaryAdd:
+        lock.items.length +
+        lock.resources.length +
+        lock.shaders.length +
+        lock.configs.length,
       summaryRemove: 0,
       summaryUpdate: 0,
       summaryKeep: 0,

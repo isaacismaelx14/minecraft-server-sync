@@ -173,7 +173,9 @@ type AdminContextValue = {
     confirmInstall: () => Promise<void>;
     cancelInstall: () => void;
     removeMod: (projectId: string, sha256?: string) => void;
-    removeModsBulk: (entries: Array<{ projectId?: string; sha256?: string }>) => void;
+    removeModsBulk: (
+      entries: Array<{ projectId?: string; sha256?: string }>,
+    ) => void;
     setModInstallTarget: (
       projectId: string,
       target: 'client' | 'server' | 'both',
@@ -418,7 +420,10 @@ function isServerRelevantMod(mod: AdminMod): boolean {
   return mod.side === 'server' || mod.side === 'both';
 }
 
-function computeServerModDiffSummary(current: AdminMod[], baseline: AdminMod[]) {
+function computeServerModDiffSummary(
+  current: AdminMod[],
+  baseline: AdminMod[],
+) {
   const baselineMap = new Map<string, AdminMod>();
   for (const mod of baseline.filter(isServerRelevantMod)) {
     baselineMap.set(mod.projectId || mod.name, mod);
@@ -551,7 +556,8 @@ function mapStatusToExarotonState(
     showApiKey: previous?.showApiKey ?? false,
     servers: previous?.servers ?? [],
     selectedServer: payload.selectedServer,
-    settings: payload.settings ?? previous?.settings ?? DEFAULT_EXAROTON.settings,
+    settings:
+      payload.settings ?? previous?.settings ?? DEFAULT_EXAROTON.settings,
     busy: false,
     error: payload.error ?? '',
     connectionStep: nextStep,
@@ -694,7 +700,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
 
       return false;
     },
-    [coreModPolicy.fabricApiProjectId, coreModPolicy.fancyMenuProjectId, dependencyMap],
+    [
+      coreModPolicy.fabricApiProjectId,
+      coreModPolicy.fancyMenuProjectId,
+      dependencyMap,
+    ],
   );
 
   const normalizeInstallTarget = useCallback(
@@ -714,10 +724,14 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         };
       }
 
-      if (requestedTarget === 'server' && isClientRequiredMod(projectId, mods)) {
+      if (
+        requestedTarget === 'server' &&
+        isClientRequiredMod(projectId, mods)
+      ) {
         return {
           target: 'both',
-          reason: 'This mod is required by a user-side mod, so target was set to User + Server.',
+          reason:
+            'This mod is required by a user-side mod, so target was set to User + Server.',
         };
       }
 
@@ -952,9 +966,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     const onStatus = (event: Event) => {
       const message = event as MessageEvent<string>;
       try {
-        const payload = JSON.parse(
-          message.data,
-        ) as ExarotonStreamStatusPayload;
+        const payload = JSON.parse(message.data) as ExarotonStreamStatusPayload;
         const next = payload.selectedServer;
         if (!next?.id) {
           return;
@@ -1497,9 +1509,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       target: 'client' | 'server' | 'both',
       sha256?: string,
     ) => {
-      const targetKey = projectId ||
-        selectedModsRef.current.find((entry) => sha256 && entry.sha256 === sha256)
-          ?.projectId ||
+      const targetKey =
+        projectId ||
+        selectedModsRef.current.find(
+          (entry) => sha256 && entry.sha256 === sha256,
+        )?.projectId ||
         '';
       const normalized = normalizeInstallTarget(
         targetKey,
@@ -1922,9 +1936,9 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         const onError = (event: Event) => {
           cleanup();
           try {
-            const parsed = JSON.parse(
-              (event as MessageEvent<string>).data,
-            ) as { message?: string };
+            const parsed = JSON.parse((event as MessageEvent<string>).data) as {
+              message?: string;
+            };
             reject(new Error(parsed.message || 'Publish failed.'));
           } catch {
             reject(new Error('Publish failed.'));
@@ -1958,7 +1972,10 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       setSnapshotTick((current) => current + 1);
 
       setHasSavedDraft(false);
-      if (published.exarotonSync?.attempted && !published.exarotonSync.success) {
+      if (
+        published.exarotonSync?.attempted &&
+        !published.exarotonSync.success
+      ) {
         setStatus(
           'publish',
           `${published.releaseVersion || `v${published.version}`} published. Exaroton sync warning: ${published.exarotonSync.message}`,
@@ -2097,7 +2114,8 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         setExaroton((current) => ({
           ...current,
           busy: false,
-          error: (error as Error).message || 'Failed to save Exaroton settings.',
+          error:
+            (error as Error).message || 'Failed to save Exaroton settings.',
         }));
         setStatus(
           'exaroton',

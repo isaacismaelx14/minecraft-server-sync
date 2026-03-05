@@ -203,7 +203,11 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
   }
 
   public clearSessionCookies(response: Response) {
-    const options = { path: '/', secure: this.cookieSecure, sameSite: 'strict' as const };
+    const options = {
+      path: '/',
+      secure: this.cookieSecure,
+      sameSite: 'strict' as const,
+    };
     response.clearCookie(ACCESS_COOKIE, options);
     response.clearCookie(REFRESH_COOKIE, options);
     response.clearCookie(CSRF_COOKIE, options);

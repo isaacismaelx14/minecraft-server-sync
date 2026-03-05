@@ -24,7 +24,10 @@ export class LockfileController {
         response.setHeader('x-mvl-signature', result.signature);
       }
       if (result.signatureAlgorithm) {
-        response.setHeader('x-mvl-signature-algorithm', result.signatureAlgorithm);
+        response.setHeader(
+          'x-mvl-signature-algorithm',
+          result.signatureAlgorithm,
+        );
       }
       if (result.signatureKeyId) {
         response.setHeader('x-mvl-signature-key-id', result.signatureKeyId);

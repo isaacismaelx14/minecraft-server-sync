@@ -58,11 +58,9 @@ export class LauncherSecurityUseCases implements OnModuleInit {
 
   onModuleInit() {
     setInterval(() => {
-      this.repository
-        .cleanup(new Date())
-        .catch((error: unknown) => {
-          this.logger.warn(`launcher-security cleanup failed: ${String(error)}`);
-        });
+      this.repository.cleanup(new Date()).catch((error: unknown) => {
+        this.logger.warn(`launcher-security cleanup failed: ${String(error)}`);
+      });
     }, 30_000).unref();
   }
 
@@ -123,7 +121,10 @@ export class LauncherSecurityUseCases implements OnModuleInit {
   }
 
   async revokePairingClaim(claimId: string): Promise<{ revoked: boolean }> {
-    const revoked = await this.repository.revokePairingClaim(claimId, new Date());
+    const revoked = await this.repository.revokePairingClaim(
+      claimId,
+      new Date(),
+    );
     if (revoked) {
       this.audit('claim_revoked', { claimId });
     }
@@ -171,17 +172,19 @@ export class LauncherSecurityUseCases implements OnModuleInit {
     installCode?: string;
   }) {
     const now = new Date();
-    const { challenge, publicKeyBase64 } = await this.verifyChallengeSignature(input);
+    const { challenge, publicKeyBase64 } =
+      await this.verifyChallengeSignature(input);
 
     const installationId = input.installationId.trim();
     const publicKeyHash = this.sha256(publicKeyBase64);
-    const deviceFingerprintHash = this.sha256(this.normalizeFingerprint(input.deviceFingerprint));
+    const deviceFingerprintHash = this.sha256(
+      this.normalizeFingerprint(input.deviceFingerprint),
+    );
     const appVersion = this.normalizeOptional(input.appVersion);
     const platform = this.normalizeOptional(input.platform);
 
-    const existing = await this.repository.findTrustedDeviceByInstallationId(
-      installationId,
-    );
+    const existing =
+      await this.repository.findTrustedDeviceByInstallationId(installationId);
 
     if (existing && existing.revokedAt) {
       throw new UnauthorizedException('Launcher installation is revoked');
@@ -195,7 +198,12 @@ export class LauncherSecurityUseCases implements OnModuleInit {
 
     if (existing) {
       if (existing.deviceFingerprintHash !== deviceFingerprintHash) {
-        await this.requirePairingClaim(input, installationId, deviceFingerprintHash, now);
+        await this.requirePairingClaim(
+          input,
+          installationId,
+          deviceFingerprintHash,
+          now,
+        );
       }
 
       await this.repository.updateTrustedDevice({
@@ -212,7 +220,12 @@ export class LauncherSecurityUseCases implements OnModuleInit {
       return { trusted: true, rotated: true };
     }
 
-    await this.requirePairingClaim(input, installationId, deviceFingerprintHash, now);
+    await this.requirePairingClaim(
+      input,
+      installationId,
+      deviceFingerprintHash,
+      now,
+    );
 
     await this.repository.createTrustedDevice({
       id: randomBytes(12).toString('hex'),
@@ -240,13 +253,13 @@ export class LauncherSecurityUseCases implements OnModuleInit {
     userAgent: string,
   ) {
     const now = new Date();
-    const { challenge, publicKeyBase64 } = await this.verifyChallengeSignature(input);
+    const { challenge, publicKeyBase64 } =
+      await this.verifyChallengeSignature(input);
     const publicKeyHash = this.sha256(publicKeyBase64);
     const installationId = input.installationId.trim();
 
-    const trustedDevice = await this.repository.findTrustedDeviceByInstallationId(
-      installationId,
-    );
+    const trustedDevice =
+      await this.repository.findTrustedDeviceByInstallationId(installationId);
 
     if (!trustedDevice || trustedDevice.revokedAt) {
       throw new UnauthorizedException(
@@ -319,15 +332,25 @@ export class LauncherSecurityUseCases implements OnModuleInit {
     }
 
     if (Math.abs(now - input.timestampMs) > this.requestSkewMs) {
-      throw new UnauthorizedException('Launcher request timestamp out of range');
+      throw new UnauthorizedException(
+        'Launcher request timestamp out of range',
+      );
     }
 
-    const signatureBytes = this.base64ToBytes(input.signatureBase64, 'signature');
+    const signatureBytes = this.base64ToBytes(
+      input.signatureBase64,
+      'signature',
+    );
     if (signatureBytes.length !== 64) {
-      throw new UnauthorizedException('Launcher request signature must be 64 bytes');
+      throw new UnauthorizedException(
+        'Launcher request signature must be 64 bytes',
+      );
     }
 
-    const publicKeyBytes = this.base64ToBytes(session.publicKeyBase64, 'public key');
+    const publicKeyBytes = this.base64ToBytes(
+      session.publicKeyBase64,
+      'public key',
+    );
     const canonicalBody = this.normalize(input.body ?? {});
     const message = this.stableStringify({
       signatureInput: REQUEST_INPUT,
@@ -368,7 +391,10 @@ export class LauncherSecurityUseCases implements OnModuleInit {
       throw new UnauthorizedException('Launcher request nonce already used');
     }
 
-    await this.repository.extendSession(session.id, new Date(now + this.sessionTtlMs));
+    await this.repository.extendSession(
+      session.id,
+      new Date(now + this.sessionTtlMs),
+    );
 
     return { tokenId: session.tokenId };
   }
@@ -389,7 +415,12 @@ export class LauncherSecurityUseCases implements OnModuleInit {
   ) {
     if (this.pairingV2Enabled) {
       const claim = await this.resolveClaim(input);
-      if (!claim || claim.revokedAt || claim.consumedAt || isExpired(claim.expiresAt, now)) {
+      if (
+        !claim ||
+        claim.revokedAt ||
+        claim.consumedAt ||
+        isExpired(claim.expiresAt, now)
+      ) {
         this.audit('invalid_claim', { installationId });
         throw new UnauthorizedException('Invalid or expired pairing claim');
       }
@@ -403,7 +434,9 @@ export class LauncherSecurityUseCases implements OnModuleInit {
 
       if (!consumed) {
         this.audit('invalid_claim', { installationId });
-        throw new UnauthorizedException('Pairing claim has already been consumed');
+        throw new UnauthorizedException(
+          'Pairing claim has already been consumed',
+        );
       }
 
       this.audit('claim_consumed', {
@@ -420,7 +453,10 @@ export class LauncherSecurityUseCases implements OnModuleInit {
     }
 
     const installCode = input.installCode?.trim() ?? '';
-    if (!installCode || this.sha256(installCode) !== this.legacyInstallCodeHash) {
+    if (
+      !installCode ||
+      this.sha256(installCode) !== this.legacyInstallCodeHash
+    ) {
       throw new UnauthorizedException('Invalid launcher install code');
     }
   }
@@ -447,7 +483,9 @@ export class LauncherSecurityUseCases implements OnModuleInit {
     clientPublicKey: string;
     signature: string;
   }) {
-    const challenge = await this.repository.findChallengeById(input.challengeId);
+    const challenge = await this.repository.findChallengeById(
+      input.challengeId,
+    );
     const now = new Date();
 
     if (
@@ -458,7 +496,10 @@ export class LauncherSecurityUseCases implements OnModuleInit {
       throw new UnauthorizedException('Invalid or expired launcher challenge');
     }
 
-    const publicKeyBytes = this.base64ToBytes(input.clientPublicKey, 'public key');
+    const publicKeyBytes = this.base64ToBytes(
+      input.clientPublicKey,
+      'public key',
+    );
     if (publicKeyBytes.length !== 32) {
       throw new UnauthorizedException('Launcher public key must be 32 bytes');
     }

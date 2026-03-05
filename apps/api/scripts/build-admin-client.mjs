@@ -31,7 +31,9 @@ for (const { entry, outfile } of entries) {
     minify: true,
     legalComments: 'none',
     define: {
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
+      'process.env.NODE_ENV': JSON.stringify(
+        process.env.NODE_ENV ?? 'production',
+      ),
     },
   });
 }

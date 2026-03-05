@@ -1728,9 +1728,12 @@ function formatDateTime(value: string | null): string {
 }
 
 const LauncherPairingPanel = memo(function LauncherPairingPanel() {
-  const [apiBaseUrl, setApiBaseUrl] = useState(() => toIsoLocalInputValue(window.location.origin));
+  const [apiBaseUrl, setApiBaseUrl] = useState(() =>
+    toIsoLocalInputValue(window.location.origin),
+  );
   const [claims, setClaims] = useState<LauncherPairingClaimListItem[]>([]);
-  const [latestClaim, setLatestClaim] = useState<LauncherPairingClaimIssuePayload | null>(null);
+  const [latestClaim, setLatestClaim] =
+    useState<LauncherPairingClaimIssuePayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -1747,7 +1750,9 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
       );
       setClaims(next);
     } catch (requestError) {
-      setError((requestError as Error).message || 'Failed to load pairing claims');
+      setError(
+        (requestError as Error).message || 'Failed to load pairing claims',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -1773,7 +1778,9 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
       setMessage('Pairing claim generated.');
       await refreshClaims();
     } catch (requestError) {
-      setError((requestError as Error).message || 'Failed to create pairing claim');
+      setError(
+        (requestError as Error).message || 'Failed to create pairing claim',
+      );
     } finally {
       setIsCreating(false);
     }
@@ -1797,17 +1804,21 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
         `/v1/admin/launcher/pairing/claims/${encodeURIComponent(claimId)}`,
         'DELETE',
       );
-      setClaims((prev) => prev.map((entry) =>
-        entry.id === claimId
-          ? { ...entry, revokedAt: new Date().toISOString() }
-          : entry,
-      ));
+      setClaims((prev) =>
+        prev.map((entry) =>
+          entry.id === claimId
+            ? { ...entry, revokedAt: new Date().toISOString() }
+            : entry,
+        ),
+      );
       if (latestClaim?.claimId === claimId) {
         setLatestClaim(null);
       }
       setMessage('Pairing claim revoked.');
     } catch (requestError) {
-      setError((requestError as Error).message || 'Failed to revoke pairing claim');
+      setError(
+        (requestError as Error).message || 'Failed to revoke pairing claim',
+      );
     }
   };
 
@@ -1824,14 +1835,19 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
       setMessage(`Launcher trust reset at ${formatDateTime(payload.resetAt)}.`);
       await refreshClaims();
     } catch (requestError) {
-      setError((requestError as Error).message || 'Failed to reset launcher trust');
+      setError(
+        (requestError as Error).message || 'Failed to reset launcher trust',
+      );
     } finally {
       setIsResetting(false);
     }
   };
 
   const activeClaims = claims.filter(
-    (entry) => !entry.revokedAt && !entry.consumedAt && new Date(entry.expiresAt).getTime() > Date.now(),
+    (entry) =>
+      !entry.revokedAt &&
+      !entry.consumedAt &&
+      new Date(entry.expiresAt).getTime() > Date.now(),
   );
 
   return (
@@ -1848,7 +1864,8 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
         </button>
       </div>
       <p className="hint">
-        Generate one-time claims for secure launcher enrollment. Give users the deep link or the fallback pairing code.
+        Generate one-time claims for secure launcher enrollment. Give users the
+        deep link or the fallback pairing code.
       </p>
 
       <div className="grid">
@@ -1885,7 +1902,10 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
         <div className="alert-box" style={{ marginTop: 12 }}>
           <div className="grid" style={{ gap: 8 }}>
             <DataItem label="Claim ID" value={latestClaim.claimId} />
-            <DataItem label="Expires" value={formatDateTime(latestClaim.expiresAt)} />
+            <DataItem
+              label="Expires"
+              value={formatDateTime(latestClaim.expiresAt)}
+            />
             <TextInput
               name="latestPairingCode"
               label="Pairing Code"
@@ -1897,7 +1917,9 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
               <button
                 className="btn ghost"
                 type="button"
-                onClick={() => void copyValue(latestClaim.pairingCode, 'Pairing code')}
+                onClick={() =>
+                  void copyValue(latestClaim.pairingCode, 'Pairing code')
+                }
               >
                 Copy Pairing Code
               </button>
@@ -1913,7 +1935,9 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
               <button
                 className="btn ghost"
                 type="button"
-                onClick={() => void copyValue(latestClaim.deepLink, 'Deep link')}
+                onClick={() =>
+                  void copyValue(latestClaim.deepLink, 'Deep link')
+                }
               >
                 Copy Deep Link
               </button>
@@ -1930,10 +1954,16 @@ const LauncherPairingPanel = memo(function LauncherPairingPanel() {
       ) : (
         <div className="list compact">
           {activeClaims.map((claim) => (
-            <div key={claim.id} className="item" style={{ alignItems: 'flex-start' }}>
+            <div
+              key={claim.id}
+              className="item"
+              style={{ alignItems: 'flex-start' }}
+            >
               <div style={{ flex: 1 }}>
                 <div className="name">{claim.id}</div>
-                <div className="meta">Expires {formatDateTime(claim.expiresAt)}</div>
+                <div className="meta">
+                  Expires {formatDateTime(claim.expiresAt)}
+                </div>
               </div>
               <button
                 className="btn danger ghost"

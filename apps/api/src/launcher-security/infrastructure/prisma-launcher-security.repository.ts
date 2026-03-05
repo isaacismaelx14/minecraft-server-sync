@@ -1,14 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../db/prisma.service';
-import type {
-  LauncherSecurityRepositoryPort,
-} from '../ports/launcher-security-repository.port';
+import type { LauncherSecurityRepositoryPort } from '../ports/launcher-security-repository.port';
 
 @Injectable()
-export class PrismaLauncherSecurityRepository
-  implements LauncherSecurityRepositoryPort
-{
+export class PrismaLauncherSecurityRepository implements LauncherSecurityRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
   createPairingClaim(input: {

@@ -132,15 +132,18 @@ export class ExarotonApiClient {
     body: Buffer | string,
     contentType = 'application/octet-stream',
   ): Promise<void> {
-    const payload =
-      body instanceof Buffer ? new Uint8Array(body) : body;
-    await this.requestJsonAction(token, this.buildFileDataPath(serverId, filePath), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': contentType,
+    const payload = body instanceof Buffer ? new Uint8Array(body) : body;
+    await this.requestJsonAction(
+      token,
+      this.buildFileDataPath(serverId, filePath),
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': contentType,
+        },
+        body: payload,
       },
-      body: payload,
-    });
+    );
   }
 
   async deleteFileData(
@@ -148,9 +151,13 @@ export class ExarotonApiClient {
     serverId: string,
     filePath: string,
   ): Promise<void> {
-    await this.requestJsonAction(token, this.buildFileDataPath(serverId, filePath), {
-      method: 'DELETE',
-    });
+    await this.requestJsonAction(
+      token,
+      this.buildFileDataPath(serverId, filePath),
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   openServerStatusStream(

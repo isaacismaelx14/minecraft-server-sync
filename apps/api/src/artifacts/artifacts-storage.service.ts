@@ -88,9 +88,11 @@ export class ArtifactsStorageService {
 
       const basePath = parsedBase.pathname.replace(/\/+$/, '');
       const sameOrigin =
-        parsed.protocol === parsedBase.protocol && parsed.host === parsedBase.host;
+        parsed.protocol === parsedBase.protocol &&
+        parsed.host === parsedBase.host;
       const matchesBasePath =
-        parsed.pathname === basePath || parsed.pathname.startsWith(`${basePath}/`);
+        parsed.pathname === basePath ||
+        parsed.pathname.startsWith(`${basePath}/`);
 
       if (sameOrigin && matchesBasePath) {
         const encodedPath = parsed.pathname
@@ -120,7 +122,6 @@ export class ArtifactsStorageService {
   }
 
   private decodeAndNormalizeKey(encodedPath: string): string {
-
     const decodedPath = encodedPath
       .split('/')
       .filter((segment) => segment.length > 0)
@@ -247,7 +248,9 @@ export class ArtifactsStorageService {
   }
 
   private resolveAssetsPublicBaseUrl(): string | null {
-    const configured = this.config.get<string>('ASSETS_PUBLIC_BASE_URL')?.trim();
+    const configured = this.config
+      .get<string>('ASSETS_PUBLIC_BASE_URL')
+      ?.trim();
     if (!configured) {
       return null;
     }

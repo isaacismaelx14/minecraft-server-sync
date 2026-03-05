@@ -118,9 +118,7 @@ export class LauncherService {
     return admin.getLauncherPlayerServerStatus();
   }
 
-  performPlayerServerAction(
-    action: 'start' | 'stop' | 'restart',
-  ): Promise<{
+  performPlayerServerAction(action: 'start' | 'stop' | 'restart'): Promise<{
     selectedServer: {
       id: string;
       name: string;
