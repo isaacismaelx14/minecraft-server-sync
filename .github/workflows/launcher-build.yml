@@ -5,6 +5,10 @@ on:
     tags:
       - "@mss/shared/v*"
 
+# Beta channel launcher distribution flow.
+# Stable launcher releases are handled by semantic-release + launcher-release
+# using @mss/launcher/v* tags and the semantic release notes entry as source of truth.
+
 jobs:
   build-launcher:
     strategy:
@@ -279,6 +283,8 @@ jobs:
             --required windows,macos
 
       - name: Publish beta GitHub Release
+        # This intentionally creates a separate beta release channel entry.
+        # It must not be used for stable @mss/launcher/v* release notes ownership.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}

@@ -96,7 +96,7 @@ jobs:
         run: |
           if [ -z "${{ secrets.RELEASE_WORKFLOW_TOKEN }}" ]; then
             echo "RELEASE_WORKFLOW_TOKEN is required." >&2
-            echo "Reason: tags pushed with GITHUB_TOKEN do not trigger downstream tag workflows (api-build / launcher-build)." >&2
+            echo "Reason: tags pushed with GITHUB_TOKEN do not trigger downstream tag workflows (api-build / launcher-release)." >&2
             exit 1
           fi
 
