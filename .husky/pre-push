@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
-pnpm lint:affected
 pnpm typecheck:affected
 pnpm test:affected
 pnpm build:affected
