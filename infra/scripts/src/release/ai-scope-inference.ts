@@ -31,19 +31,51 @@ const DEFAULT_MODEL =
   process.env.OPENAI_SCOPE_INFER_MODEL?.trim() || "gpt-4.1-mini";
 const DEFAULT_MAX_INPUT_CHARS = 12000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1400;
-const MAX_COMMITS_PER_REQUEST = 80;
+const MAX_COMMITS_TOTAL = 80;
+const MAX_COMMITS_PER_BATCH = 12;
 const MAX_BODY_CHARS_PER_COMMIT = 1200;
 
 export async function inferScopedEntriesWithAi(
   params: InferScopedEntriesWithAiParams,
 ): Promise<Map<string, { entries: ParsedEntry[]; breakingNotes: string[] }>> {
-  const candidates = params.commits.slice(0, MAX_COMMITS_PER_REQUEST);
-  const compactInput = buildCompactInput({
-    commits: candidates,
-    config: params.config,
-    maxInputChars: params.maxInputChars ?? DEFAULT_MAX_INPUT_CHARS,
-  });
+  const candidates = params.commits.slice(0, MAX_COMMITS_TOTAL);
+  const batches = chunkCommits(candidates, MAX_COMMITS_PER_BATCH);
+  const merged = new Map<
+    string,
+    { entries: ParsedEntry[]; breakingNotes: string[] }
+  >();
 
+  for (const batch of batches) {
+    const compactInput = buildCompactInput({
+      commits: batch,
+      config: params.config,
+      maxInputChars: params.maxInputChars ?? DEFAULT_MAX_INPUT_CHARS,
+    });
+
+    const outputText = await requestInferenceText({
+      apiKey: params.apiKey,
+      model: params.model,
+      maxOutputTokens: params.maxOutputTokens,
+      compactInput,
+    });
+    const outputJson = parseInferenceJson(outputText);
+    const batchResult = validateAndConvertInference(outputJson, params.config);
+    mergeInferenceMaps(merged, batchResult);
+  }
+
+  return merged;
+}
+
+async function requestInferenceText(params: {
+  apiKey: string;
+  model?: string;
+  maxOutputTokens?: number;
+  compactInput: {
+    allowedTypes: string[];
+    allowedScopes: Record<string, string>;
+    commits: Array<{ hash: string; subject: string; body: string }>;
+  };
+}): Promise<string> {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -64,7 +96,7 @@ export async function inferScopedEntriesWithAi(
           content: [
             {
               type: "input_text",
-              text: buildUserPrompt(compactInput),
+              text: buildUserPrompt(params.compactInput),
             },
           ],
         },
@@ -87,15 +119,7 @@ export async function inferScopedEntriesWithAi(
   if (!outputText) {
     throw new Error("AI scope inference response was empty.");
   }
-
-  let outputJson: ScopeInferenceResponse;
-  try {
-    outputJson = JSON.parse(outputText) as ScopeInferenceResponse;
-  } catch {
-    throw new Error("AI scope inference did not return valid JSON.");
-  }
-
-  return validateAndConvertInference(outputJson, params.config);
+  return outputText;
 }
 
 function buildCompactInput(params: {
@@ -137,7 +161,7 @@ function buildSystemPrompt(): string {
   return [
     "You classify git commits into conventional entries with required scope.",
     "Use only provided data. Never invent capabilities.",
-    "Return strict JSON only, no markdown.",
+    "Return strict JSON only, no markdown or prose.",
     'Output schema: {"commits":[{"hash":"...", "entries":[{"type":"feat|fix|perf|refactor|docs|style|chore|build|ci|test","scope":"...", "description":"...", "breaking":false}], "breakingNotes":["..."]}]}',
     "For each commit, include entries only if confidence is high.",
     "If unsure, return empty entries for that commit.",
@@ -154,6 +178,56 @@ function buildUserPrompt(payload: unknown): string {
     "JSON payload:",
     JSON.stringify(payload, null, 2),
   ].join("\n");
+}
+
+function parseInferenceJson(outputText: string): ScopeInferenceResponse {
+  const direct = tryParseJson(outputText);
+  if (direct) {
+    return direct;
+  }
+
+  const strippedFence = stripMarkdownCodeFence(outputText);
+  if (strippedFence) {
+    const parsedFence = tryParseJson(strippedFence);
+    if (parsedFence) {
+      return parsedFence;
+    }
+  }
+
+  const objectSlice = sliceFirstJsonObject(outputText);
+  if (objectSlice) {
+    const parsedSlice = tryParseJson(objectSlice);
+    if (parsedSlice) {
+      return parsedSlice;
+    }
+  }
+
+  const preview = outputText.slice(0, 260).replace(/\s+/gu, " ").trim();
+  throw new Error(
+    `AI scope inference did not return valid JSON. Model output preview: ${preview}`,
+  );
+}
+
+function tryParseJson(value: string): ScopeInferenceResponse | null {
+  try {
+    return JSON.parse(value) as ScopeInferenceResponse;
+  } catch {
+    return null;
+  }
+}
+
+function stripMarkdownCodeFence(value: string): string | null {
+  const fenced = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu);
+  return fenced?.[1]?.trim() ?? null;
+}
+
+function sliceFirstJsonObject(value: string): string | null {
+  const first = value.indexOf("{");
+  const last = value.lastIndexOf("}");
+  if (first === -1 || last === -1 || last <= first) {
+    return null;
+  }
+  return value.slice(first, last + 1);
 }
 
 function validateAndConvertInference(
@@ -212,6 +286,37 @@ function validateAndConvertInference(
   }
 
   return map;
+}
+
+function chunkCommits(
+  commits: ParsedCommit[],
+  chunkSize: number,
+): ParsedCommit[][] {
+  const chunks: ParsedCommit[][] = [];
+  for (let i = 0; i < commits.length; i += chunkSize) {
+    chunks.push(commits.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function mergeInferenceMaps(
+  target: Map<string, { entries: ParsedEntry[]; breakingNotes: string[] }>,
+  source: Map<string, { entries: ParsedEntry[]; breakingNotes: string[] }>,
+): void {
+  for (const [hash, data] of source) {
+    const existing = target.get(hash);
+    if (!existing) {
+      target.set(hash, data);
+      continue;
+    }
+
+    target.set(hash, {
+      entries: dedupeEntries([...existing.entries, ...data.entries]),
+      breakingNotes: [
+        ...new Set([...existing.breakingNotes, ...data.breakingNotes]),
+      ],
+    });
+  }
 }
 
 function sanitize(input: string, maxLength: number): string {
