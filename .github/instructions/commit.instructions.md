@@ -18,6 +18,7 @@ Optional breaking format:
 `type(scope)!: short summary`
 
 Rules:
+
 - `type` must be lowercase
 - `scope` is mandatory
 - summary should be concise, imperative, and without trailing period
@@ -25,6 +26,7 @@ Rules:
 ## Allowed Types
 
 Only these are allowed:
+
 - `feat`
 - `fix`
 - `perf`
@@ -39,18 +41,21 @@ Only these are allowed:
 ## Allowed Scopes
 
 Only these are allowed:
+
 - `api`
 - `launcher`
 - `platform`
 - `desktop`
 - `shared`
 - `core`
+- `release`
 
-Do not use any other scope (for example: `release` is invalid).
+Do not use any other scope.
 
 ## Breaking Changes
 
 When introducing breaking behavior:
+
 1. Use `!` in title
 2. Include body line:
    `BREAKING CHANGE: <what changed and migration guidance>`
@@ -58,19 +63,23 @@ When introducing breaking behavior:
 ## Multi-change Commit Bodies
 
 When needed, body bullet lines must also be conventional:
+
 - `* feat(api): ...`
 - `* fix(shared): ...`
 
 ## Examples
 
 Valid:
+
 - `ci(platform): update semantic release workflow inputs`
 - `feat(api): expose package version at root endpoint`
 - `fix(launcher): show app version in compact header`
+- `chore(release): @mss/api/v0.1.0-beta.32`
 
 Invalid:
+
 - `feat: add release flow` (missing scope)
-- `feat(release): add release flow` (scope not allowed)
+- `feat(unknown): add release flow` (scope not allowed)
 - `Update workflow` (not conventional)
 
 ## Enforcement

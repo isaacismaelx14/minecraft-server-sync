@@ -12,7 +12,8 @@
     "platform": "launcher",
     "desktop": "launcher",
     "shared": "shared",
-    "core": "shared"
+    "core": "shared",
+    "release": "release"
   },
   "types": {
     "feat": {

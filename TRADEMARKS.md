@@ -15,4 +15,3 @@ Maintainer unless otherwise stated.
   notes), as long as there is no implied endorsement.
 
 This policy is in addition to the restrictions in `LICENSE.md`.
-

@@ -33,4 +33,3 @@ Report incidents by opening a private communication channel with maintainers via
 GitHub. Include links, screenshots, timestamps, and context.
 
 All reports will be handled as confidentially as possible.
-

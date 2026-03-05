@@ -4,16 +4,16 @@ on:
   push:
     branches: [main]
     paths:
-      - 'mods/**'
-      - 'gradle/**'
-      - 'build.gradle'
-      - 'build.gradle.kts'
-      - 'settings.gradle'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - '.github/workflows/mod-build.yml'
+      - "mods/**"
+      - "gradle/**"
+      - "build.gradle"
+      - "build.gradle.kts"
+      - "settings.gradle"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - ".github/workflows/mod-build.yml"
 
 jobs:
   build-mod:
@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3

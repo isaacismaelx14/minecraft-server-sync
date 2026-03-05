@@ -6,4 +6,3 @@ This repository is source-available and distributed under
 
 No rights are granted for commercial use, redistribution, or hosted delivery
 except as explicitly permitted by `LICENSE.md`.
-

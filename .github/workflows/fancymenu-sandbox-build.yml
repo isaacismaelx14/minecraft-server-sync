@@ -4,20 +4,20 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/fancymenu-sandbox/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - '.github/workflows/fancymenu-sandbox-build.yml'
+      - "apps/fancymenu-sandbox/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/fancymenu-sandbox-build.yml"
   pull_request:
     paths:
-      - 'apps/fancymenu-sandbox/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - '.github/workflows/fancymenu-sandbox-build.yml'
+      - "apps/fancymenu-sandbox/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/fancymenu-sandbox-build.yml"
 
 jobs:
   build-fancymenu-sandbox:

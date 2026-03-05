@@ -27,4 +27,3 @@ is unavailable, contact maintainers privately on GitHub with:
 
 Please follow coordinated disclosure. Public disclosure should wait until a fix
 or mitigation is available.
-

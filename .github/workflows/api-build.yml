@@ -7,24 +7,24 @@ on:
       - "@mss/api/v*"
       - "@mss/shared/v*"
     paths:
-      - 'apps/api/**'
-      - 'packages/shared/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - 'turbo.json'
-      - '.github/workflows/api-build.yml'
+      - "apps/api/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "turbo.json"
+      - ".github/workflows/api-build.yml"
   pull_request:
     paths:
-      - 'apps/api/**'
-      - 'packages/shared/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - 'turbo.json'
-      - '.github/workflows/api-build.yml'
+      - "apps/api/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "turbo.json"
+      - ".github/workflows/api-build.yml"
 
 jobs:
   build-api:

@@ -6,14 +6,14 @@ on:
     tags:
       - "@mss/shared/v*"
     paths:
-      - 'apps/launcher/**'
-      - 'packages/shared/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.base.json'
-      - 'turbo.json'
-      - '.github/workflows/launcher-build.yml'
+      - "apps/launcher/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "turbo.json"
+      - ".github/workflows/launcher-build.yml"
 
 jobs:
   build-launcher:

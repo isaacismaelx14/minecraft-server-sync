@@ -149,7 +149,7 @@ jobs:
         with:
           projectPath: apps/launcher
           tagName: ${{ github.ref_name }}
-          releaseName: '@mss/launcher v${{ steps.version.outputs.version }}'
+          releaseName: "@mss/launcher v${{ steps.version.outputs.version }}"
           releaseBody: Automated @mss/launcher release for ${{ github.ref_name }}.
           releaseDraft: false
           prerelease: ${{ steps.version.outputs.is_prerelease }}

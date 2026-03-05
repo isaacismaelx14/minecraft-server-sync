@@ -45,6 +45,7 @@ This repository is `source-available` and **not** OSI open source.
    - `Log in with {appName} account` (disabled, badge `VERY SOON`)
 
 If detection finds no launcher, wizard supports:
+
 - manual executable/app selection (file picker)
 - skip for now
 
@@ -85,6 +86,7 @@ instances/<serverId>/
 Sample file: `infra/sample-data/profile.lock.json`
 
 Includes:
+
 - `items` (mods, including server-lock mod)
 - `resources`
 - `shaders`
@@ -92,6 +94,7 @@ Includes:
 - full SHA-256 integrity fields
 
 Sample mod set includes:
+
 - Fabric API
 - Sodium
 - Iris
@@ -163,6 +166,7 @@ Configure profile source from the app sidebar:
 - or `Profile Lock URL` (direct lockfile)
 
 Settings persist at:
+
 - macOS: `~/Library/Application Support/minecraft-server-syncer/settings.json`
 - Windows: `%LOCALAPPDATA%\minecraft-server-syncer\settings.json`
 
@@ -179,6 +183,7 @@ The generated Prism instance is linked to the managed `minecraft_dir`.
 ### Official Minecraft Launcher (fallback)
 
 If automation is not feasible, app shows guidance:
+
 1. open launcher
 2. create installation for target MC + loader
 3. set game directory to syncer `minecraft_dir`
@@ -190,6 +195,7 @@ pnpm --filter @mss/launcher tauri:build
 ```
 
 Outputs:
+
 - Windows: `.exe` (NSIS) and `.msi`
 - macOS: `.dmg`
 
