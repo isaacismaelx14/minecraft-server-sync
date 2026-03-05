@@ -621,12 +621,19 @@ async function recoverScopedCommitsWithAi(params: {
     config: params.config,
   });
 
+  let inferredCommitCount = 0;
+  let skippedRecoverableCommitCount = 0;
   const next = params.parsedCommits.map((commit) => {
     const recovery = inferred.get(commit.hash);
+    const recoverableErrors = commit.errors.filter(isRecoverableScopeError);
     if (!recovery || recovery.entries.length === 0) {
+      if (recoverableErrors.length > 0) {
+        skippedRecoverableCommitCount += 1;
+      }
       return commit;
     }
 
+    inferredCommitCount += 1;
     return {
       ...commit,
       entries: dedupeEntries([...commit.entries, ...recovery.entries]),
@@ -637,7 +644,18 @@ async function recoverScopedCommitsWithAi(params: {
     };
   });
 
-  return next;
+  // In AI scope-inference mode, recoverable legacy formatting errors are downgraded
+  // to skips if the model cannot infer scope with confidence.
+  const normalized = next.map((commit) => ({
+    ...commit,
+    errors: commit.errors.filter((error) => !isRecoverableScopeError(error)),
+  }));
+
+  console.log(
+    `[${params.target}] AI scope inference recovered ${inferredCommitCount} commit(s); skipped ${skippedRecoverableCommitCount} commit(s) with low confidence.`,
+  );
+
+  return normalized;
 }
 
 function isRecoverableScopeError(error: string): boolean {
