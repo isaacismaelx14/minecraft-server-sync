@@ -9,7 +9,14 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
+    "lint:staged": "node scripts/lint-staged.mjs",
+    "lint:affected": "turbo run lint --affected",
+    "format:check": "prettier --check .",
+    "format:check-staged": "node scripts/check-staged-format.mjs",
     "typecheck": "turbo run typecheck",
+    "typecheck:affected": "turbo run typecheck --affected",
+    "test:affected": "turbo run test --affected",
+    "build:affected": "turbo run build --affected",
     "clean": "turbo run clean && rm -rf node_modules",
     "release:target": "pnpm --filter @mss/infra-scripts release:target",
     "release:api": "pnpm release:target -- --target api",
@@ -20,6 +27,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "prettier": "^3.6.2",
     "turbo": "^2.5.0",
     "typescript": "^5.9.2"
   }
