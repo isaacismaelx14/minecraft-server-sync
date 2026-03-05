@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { generateManifest, type ParsedArgs } from "./generate-updater-manifest";
 
-function buildArgs(root: string, required: Set<"windows" | "macos">): ParsedArgs {
+function buildArgs(
+  root: string,
+  required: Set<"windows" | "macos">,
+): ParsedArgs {
   return {
     owner: "isaacismaelx14",
     repo: "minecraft-server-sync",
@@ -21,27 +24,55 @@ function runFixtures(): void {
   try {
     const windowsDir = join(tempRoot, "windows");
     mkdirSync(windowsDir, { recursive: true });
-    writeFileSync(join(windowsDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"), "bin");
-    writeFileSync(join(windowsDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"), "sig-win");
-    const windowsOnly = generateManifest(buildArgs(windowsDir, new Set(["windows"])));
+    writeFileSync(
+      join(windowsDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      "bin",
+    );
+    writeFileSync(
+      join(windowsDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"),
+      "sig-win",
+    );
+    const windowsOnly = generateManifest(
+      buildArgs(windowsDir, new Set(["windows"])),
+    );
     assert.ok(windowsOnly.platforms["windows-x86_64"]);
     assert.equal(windowsOnly.platforms["windows-x86_64"]?.signature, "sig-win");
 
     const macDir = join(tempRoot, "mac");
     mkdirSync(macDir, { recursive: true });
-    writeFileSync(join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz"), "bin");
-    writeFileSync(join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz.sig"), "sig-mac");
+    writeFileSync(
+      join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz"),
+      "bin",
+    );
+    writeFileSync(
+      join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz.sig"),
+      "sig-mac",
+    );
     const macOnly = generateManifest(buildArgs(macDir, new Set(["macos"])));
     assert.ok(macOnly.platforms["darwin-aarch64"]);
     assert.equal(macOnly.platforms["darwin-aarch64"]?.signature, "sig-mac");
 
     const dualDir = join(tempRoot, "dual");
     mkdirSync(dualDir, { recursive: true });
-    writeFileSync(join(dualDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"), "bin");
-    writeFileSync(join(dualDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"), "sig-win-dual");
-    writeFileSync(join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz"), "bin");
-    writeFileSync(join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz.sig"), "sig-mac-dual");
-    const dual = generateManifest(buildArgs(dualDir, new Set(["windows", "macos"])));
+    writeFileSync(
+      join(dualDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      "bin",
+    );
+    writeFileSync(
+      join(dualDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"),
+      "sig-win-dual",
+    );
+    writeFileSync(
+      join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz"),
+      "bin",
+    );
+    writeFileSync(
+      join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz.sig"),
+      "sig-mac-dual",
+    );
+    const dual = generateManifest(
+      buildArgs(dualDir, new Set(["windows", "macos"])),
+    );
     assert.ok(dual.platforms["windows-x86_64"]);
     assert.ok(dual.platforms["darwin-aarch64"]);
     assert.ok(dual.platforms["darwin-x86_64"]);
@@ -49,14 +80,25 @@ function runFixtures(): void {
     const genericMacDir = join(tempRoot, "generic-mac");
     mkdirSync(genericMacDir, { recursive: true });
     writeFileSync(join(genericMacDir, "MSS+ Client.app.tar.gz"), "bin");
-    writeFileSync(join(genericMacDir, "MSS+ Client.app.tar.gz.sig"), "sig-generic");
-    writeFileSync(join(genericMacDir, "MSS+.Client_0.1.0-beta.999_aarch64.dmg"), "dmg");
-    const genericMac = generateManifest(buildArgs(genericMacDir, new Set(["macos"])));
+    writeFileSync(
+      join(genericMacDir, "MSS+ Client.app.tar.gz.sig"),
+      "sig-generic",
+    );
+    writeFileSync(
+      join(genericMacDir, "MSS+.Client_0.1.0-beta.999_aarch64.dmg"),
+      "dmg",
+    );
+    const genericMac = generateManifest(
+      buildArgs(genericMacDir, new Set(["macos"])),
+    );
     assert.ok(genericMac.platforms["darwin-aarch64"]);
 
     const incompleteDir = join(tempRoot, "incomplete");
     mkdirSync(incompleteDir, { recursive: true });
-    writeFileSync(join(incompleteDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"), "bin");
+    writeFileSync(
+      join(incompleteDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      "bin",
+    );
     assert.throws(
       () => generateManifest(buildArgs(incompleteDir, new Set(["windows"]))),
       /No signature found/u,

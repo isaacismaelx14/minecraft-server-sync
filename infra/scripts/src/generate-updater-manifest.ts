@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -62,7 +68,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   const notes = values.get("notes")?.trim() ?? "";
   const requiredRaw = values.get("required")?.trim() ?? "windows,macos";
   const required = new Set<"windows" | "macos">();
-  for (const value of requiredRaw.split(",").map((item) => item.trim().toLowerCase())) {
+  for (const value of requiredRaw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())) {
     if (value === "windows" || value === "macos") {
       required.add(value);
     }
@@ -127,17 +135,25 @@ function similarityScore(assetFile: string, sigFile: string): number {
   if (assetFile.endsWith(".msi") && sigFile.endsWith(".msi.sig")) {
     score += 5;
   }
-  if (assetFile.endsWith(".app.tar.gz") && sigFile.endsWith(".app.tar.gz.sig")) {
+  if (
+    assetFile.endsWith(".app.tar.gz") &&
+    sigFile.endsWith(".app.tar.gz.sig")
+  ) {
     score += 8;
   }
 
   return score;
 }
 
-function chooseSignature(assetPath: string, signatureCandidates: string[]): string | null {
+function chooseSignature(
+  assetPath: string,
+  signatureCandidates: string[],
+): string | null {
   const assetFile = basename(assetPath);
 
-  const exact = signatureCandidates.find((candidate) => basename(candidate) === `${assetFile}.sig`);
+  const exact = signatureCandidates.find(
+    (candidate) => basename(candidate) === `${assetFile}.sig`,
+  );
   if (exact) {
     return exact;
   }
@@ -156,7 +172,12 @@ function chooseSignature(assetPath: string, signatureCandidates: string[]): stri
   return best?.path ?? null;
 }
 
-function releaseAssetUrl(owner: string, repo: string, tag: string, assetName: string): string {
+function releaseAssetUrl(
+  owner: string,
+  repo: string,
+  tag: string,
+  assetName: string,
+): string {
   return `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetName)}`;
 }
 
@@ -164,7 +185,9 @@ function readSignature(path: string): string {
   return readFileSync(path, "utf-8").trim();
 }
 
-function parseArchFromName(name: string): "universal" | "aarch64" | "x86_64" | null {
+function parseArchFromName(
+  name: string,
+): "universal" | "aarch64" | "x86_64" | null {
   const lower = name.toLowerCase();
   if (lower.includes("universal")) {
     return "universal";
@@ -172,13 +195,20 @@ function parseArchFromName(name: string): "universal" | "aarch64" | "x86_64" | n
   if (lower.includes("aarch64") || lower.includes("arm64")) {
     return "aarch64";
   }
-  if (lower.includes("x86_64") || lower.includes("x64") || lower.includes("amd64")) {
+  if (
+    lower.includes("x86_64") ||
+    lower.includes("x64") ||
+    lower.includes("amd64")
+  ) {
     return "x86_64";
   }
   return null;
 }
 
-function inferMacArch(assetName: string, files: string[]): "universal" | "aarch64" | "x86_64" {
+function inferMacArch(
+  assetName: string,
+  files: string[],
+): "universal" | "aarch64" | "x86_64" {
   const direct = parseArchFromName(assetName);
   if (direct) {
     return direct;
@@ -216,12 +246,18 @@ function pickWindowsUpdater(files: string[]): MatchResult {
     const lower = basename(path).toLowerCase();
     return lower.endsWith(".exe") || lower.endsWith(".msi");
   });
-  const signatures = files.filter((path) => basename(path).toLowerCase().endsWith(".sig"));
+  const signatures = files.filter((path) =>
+    basename(path).toLowerCase().endsWith(".sig"),
+  );
 
   const nsisAsset =
-    windowsAssets.find((path) => basename(path).toLowerCase().includes("setup.exe")) ??
+    windowsAssets.find((path) =>
+      basename(path).toLowerCase().includes("setup.exe"),
+    ) ??
     windowsAssets.find((path) => basename(path).toLowerCase().endsWith(".exe"));
-  const fallbackMsi = windowsAssets.find((path) => basename(path).toLowerCase().endsWith(".msi"));
+  const fallbackMsi = windowsAssets.find((path) =>
+    basename(path).toLowerCase().endsWith(".msi"),
+  );
   const selectedAsset = nsisAsset ?? fallbackMsi;
 
   if (!selectedAsset) {
@@ -230,29 +266,39 @@ function pickWindowsUpdater(files: string[]): MatchResult {
 
   const matchedSig = chooseSignature(selectedAsset, signatures);
   if (!matchedSig) {
-    throw new Error(`No signature found for Windows updater asset: ${basename(selectedAsset)}`);
+    throw new Error(
+      `No signature found for Windows updater asset: ${basename(selectedAsset)}`,
+    );
   }
 
   return { assetPath: selectedAsset, sigPath: matchedSig };
 }
 
 function pickMacUpdater(files: string[]): MatchResult {
-  const macAssets = files.filter((path) => basename(path).toLowerCase().endsWith(".app.tar.gz"));
-  const signatures = files.filter((path) => basename(path).toLowerCase().endsWith(".sig"));
+  const macAssets = files.filter((path) =>
+    basename(path).toLowerCase().endsWith(".app.tar.gz"),
+  );
+  const signatures = files.filter((path) =>
+    basename(path).toLowerCase().endsWith(".sig"),
+  );
 
   if (macAssets.length === 0) {
     throw new Error("No macOS updater asset found (.app.tar.gz).");
   }
 
   const selectedAsset =
-    macAssets.find((path) => basename(path).toLowerCase().includes("universal")) ?? macAssets[0];
+    macAssets.find((path) =>
+      basename(path).toLowerCase().includes("universal"),
+    ) ?? macAssets[0];
   if (!selectedAsset) {
     throw new Error("No macOS updater asset selected.");
   }
 
   const matchedSig = chooseSignature(selectedAsset, signatures);
   if (!matchedSig) {
-    throw new Error(`No signature found for macOS updater asset: ${basename(selectedAsset)}`);
+    throw new Error(
+      `No signature found for macOS updater asset: ${basename(selectedAsset)}`,
+    );
   }
 
   return { assetPath: selectedAsset, sigPath: matchedSig };
@@ -277,35 +323,67 @@ export function generateManifest(input: ParsedArgs): ManifestContent {
     const winSignature = readSignature(windows.sigPath);
     const isNsis = winAssetName.toLowerCase().endsWith(".exe");
     const installer = isNsis ? "nsis" : "msi";
-    const url = releaseAssetUrl(input.owner, input.repo, input.tag, winAssetName);
+    const url = releaseAssetUrl(
+      input.owner,
+      input.repo,
+      input.tag,
+      winAssetName,
+    );
 
     manifest.platforms["windows-x86_64"] = { signature: winSignature, url };
-    manifest.platforms[`windows-x86_64-${installer}`] = { signature: winSignature, url };
+    manifest.platforms[`windows-x86_64-${installer}`] = {
+      signature: winSignature,
+      url,
+    };
   }
 
   if (input.required.has("macos")) {
     const mac = pickMacUpdater(files);
     const macAssetName = basename(mac.assetPath);
     const macSignature = readSignature(mac.sigPath);
-    const url = releaseAssetUrl(input.owner, input.repo, input.tag, macAssetName);
+    const url = releaseAssetUrl(
+      input.owner,
+      input.repo,
+      input.tag,
+      macAssetName,
+    );
     const arch = inferMacArch(macAssetName, files);
 
     if (arch === "universal") {
       manifest.platforms["darwin-aarch64"] = { signature: macSignature, url };
-      manifest.platforms["darwin-aarch64-app"] = { signature: macSignature, url };
+      manifest.platforms["darwin-aarch64-app"] = {
+        signature: macSignature,
+        url,
+      };
       manifest.platforms["darwin-x86_64"] = { signature: macSignature, url };
-      manifest.platforms["darwin-x86_64-app"] = { signature: macSignature, url };
+      manifest.platforms["darwin-x86_64-app"] = {
+        signature: macSignature,
+        url,
+      };
     } else {
       manifest.platforms[`darwin-${arch}`] = { signature: macSignature, url };
-      manifest.platforms[`darwin-${arch}-app`] = { signature: macSignature, url };
+      manifest.platforms[`darwin-${arch}-app`] = {
+        signature: macSignature,
+        url,
+      };
     }
   }
 
-  if (input.required.has("windows") && !Object.keys(manifest.platforms).some((key) => key.startsWith("windows-"))) {
-    throw new Error("Manifest generation failed: required Windows updater entries are missing.");
+  if (
+    input.required.has("windows") &&
+    !Object.keys(manifest.platforms).some((key) => key.startsWith("windows-"))
+  ) {
+    throw new Error(
+      "Manifest generation failed: required Windows updater entries are missing.",
+    );
   }
-  if (input.required.has("macos") && !Object.keys(manifest.platforms).some((key) => key.startsWith("darwin-"))) {
-    throw new Error("Manifest generation failed: required macOS updater entries are missing.");
+  if (
+    input.required.has("macos") &&
+    !Object.keys(manifest.platforms).some((key) => key.startsWith("darwin-"))
+  ) {
+    throw new Error(
+      "Manifest generation failed: required macOS updater entries are missing.",
+    );
   }
 
   return manifest;

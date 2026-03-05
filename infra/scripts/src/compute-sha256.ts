@@ -1,22 +1,24 @@
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { resolve } from 'node:path';
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { resolve } from "node:path";
 
 function hashFile(path: string): Promise<string> {
   return new Promise((resolveHash, reject) => {
-    const hash = createHash('sha256');
+    const hash = createHash("sha256");
     const stream = createReadStream(path);
 
-    stream.on('error', reject);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => resolveHash(hash.digest('hex')));
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolveHash(hash.digest("hex")));
   });
 }
 
 async function main() {
   const fileArg = process.argv[2];
   if (!fileArg) {
-    throw new Error('Usage: pnpm --filter @mss/infra-scripts sha256 <file-path>');
+    throw new Error(
+      "Usage: pnpm --filter @mss/infra-scripts sha256 <file-path>",
+    );
   }
 
   const absolute = resolve(process.cwd(), fileArg);

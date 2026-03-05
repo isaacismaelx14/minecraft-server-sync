@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildChangelogEntry, buildReleaseBody, prependChangelog } from "../changelog";
+import {
+  buildChangelogEntry,
+  buildReleaseBody,
+  prependChangelog,
+} from "../changelog";
 
 describe("changelog formatter", () => {
   it("formats release body and changelog entry", () => {
@@ -19,7 +23,10 @@ describe("changelog formatter", () => {
           description: "add launcher pairing endpoint",
           commitHash: "9937db7b7298cd9c19e1f24927b8407c4f1af099",
           breaking: false,
-          details: ["feat(api): add challenge rotation", "fix(api): reject stale claims"],
+          details: [
+            "feat(api): add challenge rotation",
+            "fix(api): reject stale claims",
+          ],
         },
         {
           type: "fix",
@@ -75,9 +82,16 @@ describe("changelog formatter", () => {
 
   it("prepends entry into existing changelog", () => {
     const current = `# Changelog\n\n## [@mss/api/v0.1.0](https://example.com) (2026-03-01)\n\n- initial release\n`;
-    const updated = prependChangelog(current, "## [@mss/api/v0.2.0](https://example.com) (2026-03-04)\n\n- new release\n");
+    const updated = prependChangelog(
+      current,
+      "## [@mss/api/v0.2.0](https://example.com) (2026-03-04)\n\n- new release\n",
+    );
 
-    expect(updated).toContain("## [@mss/api/v0.2.0](https://example.com) (2026-03-04)");
-    expect(updated.indexOf("@mss/api/v0.2.0")).toBeLessThan(updated.indexOf("@mss/api/v0.1.0"));
+    expect(updated).toContain(
+      "## [@mss/api/v0.2.0](https://example.com) (2026-03-04)",
+    );
+    expect(updated.indexOf("@mss/api/v0.2.0")).toBeLessThan(
+      updated.indexOf("@mss/api/v0.1.0"),
+    );
   });
 });

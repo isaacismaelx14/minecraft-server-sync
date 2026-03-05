@@ -74,10 +74,7 @@ function parseSemver(input: string): ParsedVersion {
     typeof numRaw === "string" && numRaw.length > 0
       ? Number.parseInt(numRaw, 10)
       : undefined;
-  if (
-    typeof prereleaseNumber === "number" &&
-    Number.isNaN(prereleaseNumber)
-  ) {
+  if (typeof prereleaseNumber === "number" && Number.isNaN(prereleaseNumber)) {
     throw new Error(`Invalid semantic version prerelease number: ${input}`);
   }
 
@@ -105,15 +102,16 @@ function applyBump(version: ParsedVersion, bump: BumpType): ParsedVersion {
   if (bump === "minor") {
     return { major: version.major, minor: version.minor + 1, patch: 0 };
   }
-  return { major: version.major, minor: version.minor, patch: version.patch + 1 };
+  return {
+    major: version.major,
+    minor: version.minor,
+    patch: version.patch + 1,
+  };
 }
 
 function formatSemver(version: ParsedVersion): string {
   const base = `${version.major}.${version.minor}.${version.patch}`;
-  if (
-    version.prereleaseLabel &&
-    typeof version.prereleaseNumber === "number"
-  ) {
+  if (version.prereleaseLabel && typeof version.prereleaseNumber === "number") {
     return `${base}-${version.prereleaseLabel}.${version.prereleaseNumber}`;
   }
   return base;

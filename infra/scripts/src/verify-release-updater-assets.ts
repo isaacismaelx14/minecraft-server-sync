@@ -51,7 +51,9 @@ function parseArgs(argv: string[]): VerifyArgs {
   const tag = values.get("tag")?.trim();
   const requiredRaw = values.get("required")?.trim() ?? "windows,macos";
   const required = new Set<"windows" | "macos">();
-  for (const value of requiredRaw.split(",").map((item) => item.trim().toLowerCase())) {
+  for (const value of requiredRaw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())) {
     if (value === "windows" || value === "macos") {
       required.add(value);
     }
@@ -80,26 +82,40 @@ async function fetchJson<T>(url: string, token?: string): Promise<T> {
 
   const response = await fetch(url, { headers });
   if (!response.ok) {
-    throw new Error(`GitHub API request failed (${response.status}) for ${url}`);
+    throw new Error(
+      `GitHub API request failed (${response.status}) for ${url}`,
+    );
   }
   return (await response.json()) as T;
 }
 
 function hasWindowsAssets(assets: ReleaseAsset[]): boolean {
   const names = assets.map((asset) => asset.name.toLowerCase());
-  const hasInstaller = names.some((name) =>
-    name.endsWith(".exe") || name.endsWith(".msi") || name.endsWith(".nsis.zip") || name.endsWith(".msi.zip"),
+  const hasInstaller = names.some(
+    (name) =>
+      name.endsWith(".exe") ||
+      name.endsWith(".msi") ||
+      name.endsWith(".nsis.zip") ||
+      name.endsWith(".msi.zip"),
   );
-  const hasSignature = names.some((name) =>
-    name.endsWith(".exe.sig") || name.endsWith(".msi.sig") || name.endsWith(".nsis.zip.sig") || name.endsWith(".msi.zip.sig"),
+  const hasSignature = names.some(
+    (name) =>
+      name.endsWith(".exe.sig") ||
+      name.endsWith(".msi.sig") ||
+      name.endsWith(".nsis.zip.sig") ||
+      name.endsWith(".msi.zip.sig"),
   );
   return hasInstaller && hasSignature;
 }
 
 function hasMacAssets(assets: ReleaseAsset[]): boolean {
   const names = assets.map((asset) => asset.name.toLowerCase());
-  const hasAppArchive = names.some((name) => name.endsWith(".app.tar.gz") || name.endsWith(".app.zip"));
-  const hasSignature = names.some((name) => name.endsWith(".app.tar.gz.sig") || name.endsWith(".app.zip.sig"));
+  const hasAppArchive = names.some(
+    (name) => name.endsWith(".app.tar.gz") || name.endsWith(".app.zip"),
+  );
+  const hasSignature = names.some(
+    (name) => name.endsWith(".app.tar.gz.sig") || name.endsWith(".app.zip.sig"),
+  );
   return hasAppArchive && hasSignature;
 }
 
@@ -137,7 +153,9 @@ async function main(): Promise<void> {
     args.token,
   );
 
-  const latestJsonAsset = release.assets.find((asset) => asset.name === "latest.json");
+  const latestJsonAsset = release.assets.find(
+    (asset) => asset.name === "latest.json",
+  );
   if (!latestJsonAsset) {
     throw new Error(`Release ${release.tag_name} is missing latest.json`);
   }
@@ -153,13 +171,17 @@ async function main(): Promise<void> {
 
   for (const [platform, info] of Object.entries(latest.platforms ?? {})) {
     if (!info?.signature || !info?.url) {
-      throw new Error(`latest.json platform '${platform}' is missing signature or url.`);
+      throw new Error(
+        `latest.json platform '${platform}' is missing signature or url.`,
+      );
     }
 
     const signedFile = decodeSignedFilename(info.signature);
     const urlFile = filenameFromAssetUrl(info.url);
     if (!signedFile || !urlFile) {
-      throw new Error(`Could not decode signed/url filename for platform '${platform}'.`);
+      throw new Error(
+        `Could not decode signed/url filename for platform '${platform}'.`,
+      );
     }
     if (signedFile !== urlFile) {
       throw new Error(
@@ -179,7 +201,9 @@ async function main(): Promise<void> {
 
   if (args.required.has("macos")) {
     if (!hasMacAssets(release.assets)) {
-      throw new Error("Release is missing macOS updater asset (.app archive) + signature.");
+      throw new Error(
+        "Release is missing macOS updater asset (.app archive) + signature.",
+      );
     }
     if (!platformKeys.some((key) => key.startsWith("darwin-"))) {
       throw new Error("latest.json is missing macOS platforms.");

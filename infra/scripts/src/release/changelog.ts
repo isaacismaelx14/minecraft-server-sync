@@ -55,7 +55,10 @@ export function buildChangelogEntry(input: ReleaseDocumentInput): string {
   return `${title}\n\n${buildReleaseBody(input)}\n`;
 }
 
-export function prependChangelog(existingContent: string | null, entry: string): string {
+export function prependChangelog(
+  existingContent: string | null,
+  entry: string,
+): string {
   if (!existingContent || existingContent.trim().length === 0) {
     return `# Changelog\n\n${entry}`.trimEnd() + "\n";
   }
@@ -67,16 +70,24 @@ export function prependChangelog(existingContent: string | null, entry: string):
     }
     const head = existingContent.slice(0, firstSectionIndex + 1);
     const tail = existingContent.slice(firstSectionIndex + 1);
-    return `${head}${entry}\n${tail}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+    return (
+      `${head}${entry}\n${tail}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n"
+    );
   }
 
-  return `# Changelog\n\n${entry}\n${existingContent.trim()}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  return (
+    `# Changelog\n\n${entry}\n${existingContent.trim()}`
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd() + "\n"
+  );
 }
 
 function groupBySection(changes: ChangeItem[]): Map<string, ChangeItem[]> {
   const grouped = new Map<string, ChangeItem[]>();
   for (const change of changes) {
-    const key = change.breaking ? `${change.section} (breaking)` : change.section;
+    const key = change.breaking
+      ? `${change.section} (breaking)`
+      : change.section;
     const list = grouped.get(key) ?? [];
     list.push(change);
     grouped.set(key, list);

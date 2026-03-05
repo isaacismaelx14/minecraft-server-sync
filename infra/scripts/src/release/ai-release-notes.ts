@@ -42,13 +42,16 @@ type CompactPayload = {
   }>;
 };
 
-const DEFAULT_MODEL = process.env.OPENAI_RELEASE_NOTES_MODEL?.trim() || "gpt-4.1-mini";
+const DEFAULT_MODEL =
+  process.env.OPENAI_RELEASE_NOTES_MODEL?.trim() || "gpt-4.1-mini";
 const DEFAULT_MAX_INPUT_CHARS = 12000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 900;
 const MAX_ITEMS_PER_SECTION = 30;
 const MAX_DETAILS_PER_ITEM = 3;
 
-export async function generateAiReleaseNotes(params: GenerateAiReleaseNotesParams): Promise<string> {
+export async function generateAiReleaseNotes(
+  params: GenerateAiReleaseNotesParams,
+): Promise<string> {
   const compact = compactReleaseContext({
     target: params.target,
     version: params.version,
@@ -76,7 +79,10 @@ export async function generateAiReleaseNotes(params: GenerateAiReleaseNotesParam
       temperature: 0.2,
       max_output_tokens: params.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       input: [
-        { role: "system", content: [{ type: "input_text", text: systemPrompt }] },
+        {
+          role: "system",
+          content: [{ type: "input_text", text: systemPrompt }],
+        },
         { role: "user", content: [{ type: "input_text", text: userPrompt }] },
       ],
     }),
@@ -84,7 +90,9 @@ export async function generateAiReleaseNotes(params: GenerateAiReleaseNotesParam
 
   const raw = await response.text();
   if (!response.ok) {
-    throw new Error(`AI release notes request failed (${response.status}): ${raw}`);
+    throw new Error(
+      `AI release notes request failed (${response.status}): ${raw}`,
+    );
   }
 
   const parsed = JSON.parse(raw) as {
@@ -155,15 +163,22 @@ export function compactReleaseContext(params: {
       keptItems: kept,
       omittedItems: omitted,
     },
-    breakingChanges: params.breakingNotes.map((note) => sanitizeText(note, 220)).slice(0, 12),
+    breakingChanges: params.breakingNotes
+      .map((note) => sanitizeText(note, 220))
+      .slice(0, 12),
     sections,
   };
 
   return enforceCharBudget(payload, params.maxInputChars);
 }
 
-function enforceCharBudget(payload: CompactPayload, maxInputChars: number): CompactPayload {
-  const clone: CompactPayload = JSON.parse(JSON.stringify(payload)) as CompactPayload;
+function enforceCharBudget(
+  payload: CompactPayload,
+  maxInputChars: number,
+): CompactPayload {
+  const clone: CompactPayload = JSON.parse(
+    JSON.stringify(payload),
+  ) as CompactPayload;
   let serialized = JSON.stringify(clone);
   if (serialized.length <= maxInputChars) {
     return clone;
@@ -223,7 +238,10 @@ function buildSystemPrompt(audience: ReleaseNotesAudience): string {
   ].join(" ");
 }
 
-function buildUserPrompt(payload: CompactPayload, audience: ReleaseNotesAudience): string {
+function buildUserPrompt(
+  payload: CompactPayload,
+  audience: ReleaseNotesAudience,
+): string {
   return [
     `Audience: ${audience}`,
     "Generate release notes from the following JSON payload.",
@@ -253,7 +271,10 @@ function extractOutputText(response: {
   }
   const fromContent = response.output
     ?.flatMap((item) => item.content ?? [])
-    .filter((content) => content.type === "output_text" && typeof content.text === "string")
+    .filter(
+      (content) =>
+        content.type === "output_text" && typeof content.text === "string",
+    )
     .map((content) => content.text ?? "")
     .join("\n");
   return fromContent?.trim() ? fromContent : null;

@@ -17,46 +17,61 @@ type CreateGithubReleaseInput = {
 };
 
 export function getGithubRepoFromGitRemote(): RepoIdentity {
-  const remote = execSync("git remote get-url origin", { encoding: "utf8" }).trim();
+  const remote = execSync("git remote get-url origin", {
+    encoding: "utf8",
+  }).trim();
   const parsed = parseGithubRemote(remote);
   if (!parsed) {
-    throw new Error(`Could not parse GitHub owner/repo from origin remote: ${remote}`);
+    throw new Error(
+      `Could not parse GitHub owner/repo from origin remote: ${remote}`,
+    );
   }
   return parsed;
 }
 
-export async function createGithubRelease(input: CreateGithubReleaseInput): Promise<{ htmlUrl: string }> {
-  const response = await fetch(`https://api.github.com/repos/${input.owner}/${input.repo}/releases`, {
-    method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${input.token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "mvl-semantic-release",
-      "Content-Type": "application/json",
+export async function createGithubRelease(
+  input: CreateGithubReleaseInput,
+): Promise<{ htmlUrl: string }> {
+  const response = await fetch(
+    `https://api.github.com/repos/${input.owner}/${input.repo}/releases`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${input.token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "mvl-semantic-release",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tag_name: input.tagName,
+        name: input.name,
+        body: input.body,
+        draft: false,
+        prerelease: Boolean(input.prerelease),
+      }),
     },
-    body: JSON.stringify({
-      tag_name: input.tagName,
-      name: input.name,
-      body: input.body,
-      draft: false,
-      prerelease: Boolean(input.prerelease),
-    }),
-  });
+  );
 
   const raw = await response.text();
   if (!response.ok) {
-    throw new Error(`Failed to create GitHub release (${response.status}): ${raw}`);
+    throw new Error(
+      `Failed to create GitHub release (${response.status}): ${raw}`,
+    );
   }
 
   const parsed = JSON.parse(raw) as { html_url?: string };
   return {
-    htmlUrl: parsed.html_url ?? `${`https://github.com/${input.owner}/${input.repo}`}/releases/tag/${encodeURIComponent(input.tagName)}`,
+    htmlUrl:
+      parsed.html_url ??
+      `${`https://github.com/${input.owner}/${input.repo}`}/releases/tag/${encodeURIComponent(input.tagName)}`,
   };
 }
 
 function parseGithubRemote(remote: string): RepoIdentity | null {
-  const ssh = remote.match(/^git@github\.com:(?<owner>[^/]+)\/(?<repo>[^.]+)(?:\.git)?$/u);
+  const ssh = remote.match(
+    /^git@github\.com:(?<owner>[^/]+)\/(?<repo>[^.]+)(?:\.git)?$/u,
+  );
   if (ssh?.groups?.owner && ssh.groups.repo) {
     return {
       owner: ssh.groups.owner,
@@ -65,7 +80,9 @@ function parseGithubRemote(remote: string): RepoIdentity | null {
     };
   }
 
-  const https = remote.match(/^https:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^.]+)(?:\.git)?$/u);
+  const https = remote.match(
+    /^https:\/\/github\.com\/(?<owner>[^/]+)\/(?<repo>[^.]+)(?:\.git)?$/u,
+  );
   if (https?.groups?.owner && https.groups.repo) {
     return {
       owner: https.groups.owner,

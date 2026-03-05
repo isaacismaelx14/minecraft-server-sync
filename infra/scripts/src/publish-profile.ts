@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { ProfileLockSchema } from '@mss/shared';
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { ProfileLockSchema } from "@mss/shared";
 
 interface SeedPayload {
   serverId: string;
@@ -19,11 +19,14 @@ interface SeedPayload {
 }
 
 function main() {
-  const serverId = process.env.SERVER_ID ?? 'mvl';
-  const apiBase = process.env.API_BASE_URL ?? 'http://localhost:3000';
+  const serverId = process.env.SERVER_ID ?? "mvl";
+  const apiBase = process.env.API_BASE_URL ?? "http://localhost:3000";
 
-  const lockPath = resolve(process.cwd(), '../../infra/sample-data/profile.lock.json');
-  const raw = JSON.parse(readFileSync(lockPath, 'utf-8'));
+  const lockPath = resolve(
+    process.cwd(),
+    "../../infra/sample-data/profile.lock.json",
+  );
+  const raw = JSON.parse(readFileSync(lockPath, "utf-8"));
   const lock = ProfileLockSchema.parse(raw);
 
   const payload: SeedPayload = {
@@ -42,7 +45,10 @@ function main() {
     lockJson: lock,
   };
 
-  const outputPath = resolve(process.cwd(), '../../infra/sample-data/profile.seed.json');
+  const outputPath = resolve(
+    process.cwd(),
+    "../../infra/sample-data/profile.seed.json",
+  );
   writeFileSync(outputPath, JSON.stringify(payload, null, 2));
   console.log(`Wrote ${outputPath}`);
 }
