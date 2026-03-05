@@ -9,8 +9,16 @@ import {
   type ParsedReleaseConfig,
   type ReleaseLevel,
 } from "./release/commit-parser";
-import { buildChangelogEntry, buildReleaseBody, prependChangelog, type ChangeItem } from "./release/changelog";
-import { createGithubRelease, getGithubRepoFromGitRemote } from "./release/github";
+import {
+  buildChangelogEntry,
+  buildReleaseBody,
+  prependChangelog,
+  type ChangeItem,
+} from "./release/changelog";
+import {
+  createGithubRelease,
+  getGithubRepoFromGitRemote,
+} from "./release/github";
 import {
   computeNextVersion,
   normalizeSemver,
@@ -41,16 +49,34 @@ type CliArgs = {
   fromTag?: string;
 };
 
+type GitHubRepo = ReturnType<typeof getGithubRepoFromGitRemote>;
+
+const AUTO_TARGET = "auto";
 const USAGE =
-  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = resolve(process.cwd(), "../..");
   const config = loadConfig(resolve(repoRoot, "release.config.json"));
+  const allowedTargets = Object.keys(config.targets);
 
-  if (!config.targets[args.target]) {
-    throw new Error(`Unknown target \"${args.target}\". Allowed: ${Object.keys(config.targets).join(", ")}`);
+  if (args.target !== AUTO_TARGET && !config.targets[args.target]) {
+    throw new Error(
+      `Unknown target \"${args.target}\". Allowed: ${[...allowedTargets, AUTO_TARGET].join(", ")}`,
+    );
+  }
+
+  if (args.target === AUTO_TARGET && args.fromTag) {
+    throw new Error(
+      "--from-tag is only supported with an explicit target (api|launcher|shared).",
+    );
+  }
+
+  if (args.target === AUTO_TARGET && args.nextVersion) {
+    throw new Error(
+      "--next-version is only supported with an explicit target (api|launcher|shared).",
+    );
   }
 
   if (!args.dryRun) {
@@ -58,41 +84,154 @@ async function main(): Promise<void> {
     ensureCleanWorkingTree();
   }
 
-  const targetRelativePath = config.targets[args.target];
+  const releaseHead = getCurrentHead();
+  const repo = getGithubRepoFromGitRemote();
+  const targetsToEvaluate =
+    args.target === AUTO_TARGET ? allowedTargets : [args.target];
+
+  if (args.target === AUTO_TARGET) {
+    const missingBootstrapTags: string[] = [];
+    for (const target of targetsToEvaluate) {
+      const existingTag = getLatestTargetTag(config.releaseNamespace, target);
+      if (existingTag) {
+        continue;
+      }
+
+      const targetRelativePath = config.targets[target];
+      if (!targetRelativePath) {
+        continue;
+      }
+      const packageJsonPath = resolve(
+        repoRoot,
+        targetRelativePath,
+        "package.json",
+      );
+      const currentVersion = readPackageVersion(packageJsonPath);
+      const bootstrapTag = `${config.releaseNamespace}/${target}/v${currentVersion}`;
+      missingBootstrapTags.push(bootstrapTag);
+    }
+
+    if (missingBootstrapTags.length > 0) {
+      throw new Error(
+        "Auto release requires baseline tags for all targets. Bootstrap first:\n" +
+          missingBootstrapTags
+            .map((tag) => `  git tag ${tag}\n  git push origin ${tag}`)
+            .join("\n"),
+      );
+    }
+  }
+
+  let releasedTargets = 0;
+
+  for (const target of targetsToEvaluate) {
+    const released = await releaseTarget({
+      args,
+      config,
+      repoRoot,
+      repo,
+      target,
+      releaseHead,
+      showTargetHeader: args.target === AUTO_TARGET,
+    });
+    if (released) {
+      releasedTargets += 1;
+    }
+  }
+
+  if (releasedTargets === 0) {
+    if (args.target === AUTO_TARGET) {
+      console.log("No releaseable changes detected for any target.");
+    } else {
+      console.log(`No releaseable changes detected for target ${args.target}.`);
+    }
+    return;
+  }
+
+  if (args.dryRun) {
+    console.log(`\nDry run complete. Planned releases: ${releasedTargets}`);
+  } else {
+    console.log(
+      `All releases completed. Total targets released: ${releasedTargets}`,
+    );
+  }
+}
+
+async function releaseTarget(params: {
+  args: CliArgs;
+  config: ReleaseConfig;
+  repoRoot: string;
+  repo: GitHubRepo;
+  target: string;
+  releaseHead: string;
+  showTargetHeader: boolean;
+}): Promise<boolean> {
+  const {
+    args,
+    config,
+    repoRoot,
+    repo,
+    target,
+    releaseHead,
+    showTargetHeader,
+  } = params;
+
+  if (showTargetHeader) {
+    console.log(`\n=== Evaluating target: ${target} ===`);
+  }
+
+  const targetRelativePath = config.targets[target];
   if (!targetRelativePath) {
-    throw new Error(`Missing target path for ${args.target} in release.config.json`);
+    throw new Error(`Missing target path for ${target} in release.config.json`);
   }
   const targetPath = resolve(repoRoot, targetRelativePath);
   const packageJsonPath = resolve(targetPath, "package.json");
   const changelogPath = resolve(targetPath, "CHANGELOG.md");
 
   const currentVersion = readPackageVersion(packageJsonPath);
-  const previousTag = args.fromTag ?? getLatestTargetTag(config.releaseNamespace, args.target);
-  const commits = getCommitsSinceTag(previousTag);
+  const previousTag =
+    args.fromTag ?? getLatestTargetTag(config.releaseNamespace, target);
+  if (!previousTag) {
+    const bootstrapTag = `${config.releaseNamespace}/${target}/v${currentVersion}`;
+    throw new Error(
+      `[${target}] No release tag found (${config.releaseNamespace}/${target}/v*). Bootstrap first:\n` +
+        `  git tag ${bootstrapTag}\n` +
+        `  git push origin ${bootstrapTag}`,
+    );
+  }
+  const commits = getCommitsSinceTag(previousTag, releaseHead);
 
   if (commits.length === 0) {
-    console.log(`No commits found since ${previousTag ?? "repo start"}. Nothing to release.`);
-    return;
+    console.log(
+      `[${target}] No commits found since ${previousTag ?? "repo start"}.`,
+    );
+    return false;
   }
 
   const parsedCommits = parseCommits(commits, config);
   const errors = parsedCommits.flatMap((commit) => commit.errors);
   if (errors.length > 0) {
-    throw new Error(`Release aborted due to invalid commits:\n- ${errors.join("\n- ")}`);
+    throw new Error(
+      `[${target}] Release aborted due to invalid commits:\n- ${errors.join("\n- ")}`,
+    );
   }
 
-  const { changes, breakingNotes } = collectTargetChanges(parsedCommits, args.target);
+  const { changes, breakingNotes } = collectTargetChanges(
+    parsedCommits,
+    target,
+  );
 
   if (changes.length === 0 && breakingNotes.length === 0) {
-    console.log(`No changes mapped to target \"${args.target}\" since ${previousTag ?? "repo start"}. Nothing to release.`);
-    return;
+    console.log(
+      `[${target}] No scoped changes since ${previousTag ?? "repo start"}.`,
+    );
+    return false;
   }
 
   const detectedBump = determineReleaseLevel(
     changes.map((change) => ({
       type: change.type,
       scope: change.scope,
-      target: args.target,
+      target,
       description: change.description,
       breaking: change.breaking,
       section: change.section,
@@ -109,13 +248,12 @@ async function main(): Promise<void> {
     explicitBump: args.bump,
     nextVersion: args.nextVersion,
   });
-  const scopedReleaseName = `${config.releaseNamespace}/${args.target}`;
+  const scopedReleaseName = `${config.releaseNamespace}/${target}`;
   const newTag = `${scopedReleaseName}/v${nextVersion}`;
-  const repo = getGithubRepoFromGitRemote();
   const date = new Date().toISOString().slice(0, 10);
 
   const rawReleaseBody = buildReleaseBody({
-    target: args.target,
+    target,
     version: nextVersion,
     date,
     repoWebUrl: repo.webUrl,
@@ -126,7 +264,7 @@ async function main(): Promise<void> {
   });
 
   const changelogEntry = buildChangelogEntry({
-    target: args.target,
+    target,
     version: nextVersion,
     date,
     repoWebUrl: repo.webUrl,
@@ -140,7 +278,7 @@ async function main(): Promise<void> {
   if (args.notesMode === "ai") {
     releaseBody = await buildAiBodyWithFallback({
       args,
-      target: args.target,
+      target,
       version: nextVersion,
       channel: args.channel,
       newTag,
@@ -152,7 +290,7 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`Target: ${args.target}`);
+  console.log(`Target: ${target}`);
   console.log(`Current version: ${currentVersion}`);
   console.log(`Detected bump: ${detectedBump}`);
   console.log(`Release channel: ${args.channel}`);
@@ -169,12 +307,18 @@ async function main(): Promise<void> {
     console.log(changelogEntry);
     console.log("\n--- RELEASE NOTES ---\n");
     console.log(releaseBody);
-    console.log("\nDry run complete. No files or git refs were modified.");
-    return;
+    return true;
   }
 
-  const modifiedFiles = bumpTargetVersion(args.target, nextVersion, repoRoot, packageJsonPath);
-  const existingChangelog = existsSync(changelogPath) ? readFileSync(changelogPath, "utf8") : null;
+  const modifiedFiles = bumpTargetVersion(
+    target,
+    nextVersion,
+    repoRoot,
+    packageJsonPath,
+  );
+  const existingChangelog = existsSync(changelogPath)
+    ? readFileSync(changelogPath, "utf8")
+    : null;
   const nextChangelog = prependChangelog(existingChangelog, changelogEntry);
   writeFileSync(changelogPath, nextChangelog, "utf8");
 
@@ -190,7 +334,9 @@ async function main(): Promise<void> {
   if (!args.skipGithub) {
     const token = process.env.GITHUB_TOKEN?.trim();
     if (!token) {
-      throw new Error("GITHUB_TOKEN is required to create a GitHub release (or pass --skip-github).");
+      throw new Error(
+        "GITHUB_TOKEN is required to create a GitHub release (or pass --skip-github).",
+      );
     }
 
     const result = await createGithubRelease({
@@ -207,6 +353,7 @@ async function main(): Promise<void> {
   }
 
   console.log(`Release completed: ${newTag}`);
+  return true;
 }
 
 async function buildAiBodyWithFallback(params: {
@@ -224,9 +371,13 @@ async function buildAiBodyWithFallback(params: {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     if (params.args.notesAiStrict) {
-      throw new Error("OPENAI_API_KEY is required for --notes-mode ai when --notes-ai-strict is enabled.");
+      throw new Error(
+        "OPENAI_API_KEY is required for --notes-mode ai when --notes-ai-strict is enabled.",
+      );
     }
-    console.warn("OPENAI_API_KEY is missing. Falling back to raw release notes.");
+    console.warn(
+      "OPENAI_API_KEY is missing. Falling back to raw release notes.",
+    );
     return params.rawReleaseBody;
   }
 
@@ -257,7 +408,9 @@ async function buildAiBodyWithFallback(params: {
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`AI release notes failed, using raw notes fallback: ${message}`);
+    console.warn(
+      `AI release notes failed, using raw notes fallback: ${message}`,
+    );
     return params.rawReleaseBody;
   }
 }
@@ -319,7 +472,9 @@ function parseArgs(argv: string[]): CliArgs {
         throw new Error(`Missing value for ${token}. ${USAGE}`);
       }
       if (next !== "alpha" && next !== "beta" && next !== "release") {
-        throw new Error(`Invalid --channel value: ${next}. Expected alpha|beta|release.`);
+        throw new Error(
+          `Invalid --channel value: ${next}. Expected alpha|beta|release.`,
+        );
       }
       args.channel = next;
       i += 1;
@@ -332,7 +487,9 @@ function parseArgs(argv: string[]): CliArgs {
         throw new Error(`Missing value for ${token}. ${USAGE}`);
       }
       if (next !== "major" && next !== "minor" && next !== "patch") {
-        throw new Error(`Invalid --bump value: ${next}. Expected major|minor|patch.`);
+        throw new Error(
+          `Invalid --bump value: ${next}. Expected major|minor|patch.`,
+        );
       }
       args.bump = next;
       i += 1;
@@ -355,7 +512,9 @@ function parseArgs(argv: string[]): CliArgs {
         throw new Error(`Missing value for ${token}. ${USAGE}`);
       }
       if (next !== "raw" && next !== "ai") {
-        throw new Error(`Invalid --notes-mode value: ${next}. Expected raw|ai.`);
+        throw new Error(
+          `Invalid --notes-mode value: ${next}. Expected raw|ai.`,
+        );
       }
       args.notesMode = next;
       i += 1;
@@ -412,28 +571,46 @@ function parseArgs(argv: string[]): CliArgs {
 
 function loadConfig(configPath: string): ReleaseConfig {
   const raw = JSON.parse(readFileSync(configPath, "utf8")) as ReleaseConfig;
-  if (!raw.defaultBranch || !raw.releaseNamespace || !raw.targets || !raw.scopeMap || !raw.types) {
+  if (
+    !raw.defaultBranch ||
+    !raw.releaseNamespace ||
+    !raw.targets ||
+    !raw.scopeMap ||
+    !raw.types
+  ) {
     throw new Error(`Invalid release config at ${configPath}`);
   }
   return raw;
 }
 
 function ensureOnDefaultBranch(defaultBranch: string): void {
-  const currentBranch = execSync("git branch --show-current", { encoding: "utf8" }).trim();
+  const currentBranch = execSync("git branch --show-current", {
+    encoding: "utf8",
+  }).trim();
   if (currentBranch !== defaultBranch) {
-    throw new Error(`Releases must run on ${defaultBranch}. Current branch is ${currentBranch}.`);
+    throw new Error(
+      `Releases must run on ${defaultBranch}. Current branch is ${currentBranch}.`,
+    );
   }
 }
 
 function ensureCleanWorkingTree(): void {
-  const status = execSync("git status --porcelain", { encoding: "utf8" }).trim();
+  const status = execSync("git status --porcelain", {
+    encoding: "utf8",
+  }).trim();
   if (status.length > 0) {
     throw new Error("Working tree must be clean before running release.");
   }
 }
 
+function getCurrentHead(): string {
+  return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+}
+
 function readPackageVersion(packageJsonPath: string): string {
-  const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: string };
+  const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    version?: string;
+  };
   if (!parsed.version) {
     throw new Error(`Expected semantic version in ${packageJsonPath}`);
   }
@@ -441,14 +618,20 @@ function readPackageVersion(packageJsonPath: string): string {
 }
 
 function getLatestTargetTag(namespace: string, target: string): string | null {
-  const out = execSync(`git tag --list \"${namespace}/${target}/v*\" --sort=-v:refname`, { encoding: "utf8" }).trim();
+  const out = execSync(
+    `git tag --list \"${namespace}/${target}/v*\" --sort=-v:refname`,
+    { encoding: "utf8" },
+  ).trim();
   const first = out.split(/\r?\n/u).find((line) => line.trim().length > 0);
   return first ?? null;
 }
 
-function getCommitsSinceTag(tag: string | null): GitCommit[] {
-  const range = tag ? `${tag}..HEAD` : "HEAD";
-  const output = execSync(`git log ${range} --pretty=format:%H%x1f%s%x1f%b%x1e`, { encoding: "utf8" });
+function getCommitsSinceTag(tag: string | null, headRef = "HEAD"): GitCommit[] {
+  const range = tag ? `${tag}..${headRef}` : headRef;
+  const output = execSync(
+    `git log ${range} --pretty=format:%H%x1f%s%x1f%b%x1e`,
+    { encoding: "utf8" },
+  );
   return output
     .split("\x1e")
     .map((entry) => entry.trim())
@@ -472,17 +655,26 @@ function collectTargetChanges(
   const breakingNotes: string[] = [];
 
   for (const commit of parsedCommits) {
-    const scopedEntries = dedupeEntries(commit.entries.filter((entry) => entry.target === target));
+    const scopedEntries = dedupeEntries(
+      commit.entries.filter((entry) => entry.target === target),
+    );
     if (scopedEntries.length === 0) {
       continue;
     }
 
-    const headerEntries = scopedEntries.filter((entry) => entry.source === "header");
-    const bodyEntries = scopedEntries.filter((entry) => entry.source === "body");
+    const headerEntries = scopedEntries.filter(
+      (entry) => entry.source === "header",
+    );
+    const bodyEntries = scopedEntries.filter(
+      (entry) => entry.source === "body",
+    );
 
     for (const headerEntry of headerEntries) {
       const details = bodyEntries
-        .map((bodyEntry) => `${bodyEntry.type}(${bodyEntry.scope}): ${bodyEntry.description}`)
+        .map(
+          (bodyEntry) =>
+            `${bodyEntry.type}(${bodyEntry.scope}): ${bodyEntry.description}`,
+        )
         .filter((detail, index, list) => list.indexOf(detail) === index);
 
       result.push({
@@ -545,12 +737,21 @@ function releaseFromType(type: string, config: ReleaseConfig): ReleaseLevel {
   return rule.release;
 }
 
-function bumpTargetVersion(target: string, nextVersion: string, repoRoot: string, packageJsonPath: string): string[] {
+function bumpTargetVersion(
+  target: string,
+  nextVersion: string,
+  repoRoot: string,
+  packageJsonPath: string,
+): string[] {
   if (target === "launcher") {
-    execFileSync("node", ["apps/launcher/scripts/set-release-version.mjs", nextVersion], {
-      cwd: repoRoot,
-      stdio: "inherit",
-    });
+    execFileSync(
+      "node",
+      ["apps/launcher/scripts/set-release-version.mjs", nextVersion],
+      {
+        cwd: repoRoot,
+        stdio: "inherit",
+      },
+    );
     return [
       resolve(repoRoot, "apps/launcher/package.json"),
       resolve(repoRoot, "apps/launcher/src-tauri/tauri.conf.json"),
@@ -558,7 +759,9 @@ function bumpTargetVersion(target: string, nextVersion: string, repoRoot: string
     ];
   }
 
-  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version: string };
+  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    version: string;
+  };
   pkg.version = nextVersion;
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   return [packageJsonPath];

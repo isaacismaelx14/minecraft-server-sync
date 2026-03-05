@@ -6,9 +6,10 @@ on:
       target:
         description: Release target
         required: true
-        default: api
+        default: auto
         type: choice
         options:
+          - auto
           - api
           - launcher
           - shared

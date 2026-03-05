@@ -19,6 +19,7 @@
     "build:affected": "turbo run build --affected",
     "clean": "turbo run clean && rm -rf node_modules",
     "release:target": "pnpm --filter @mss/infra-scripts release:target",
+    "release:auto": "pnpm release:target -- --target auto",
     "release:api": "pnpm release:target -- --target api",
     "release:launcher": "pnpm release:target -- --target launcher",
     "release:shared": "pnpm release:target -- --target shared",
