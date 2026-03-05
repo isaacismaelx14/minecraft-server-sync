@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { dedupeEntries, determineReleaseLevel, parseCommit } from "../commit-parser";
+import {
+  dedupeEntries,
+  determineReleaseLevel,
+  parseCommit,
+} from "../commit-parser";
 
 const config = {
   scopeMap: {
@@ -70,9 +74,13 @@ describe("commit-parser", () => {
       config,
     );
 
-    expect(parsed.breakingNotes).toEqual(["existing tokens are no longer accepted"]);
+    expect(parsed.breakingNotes).toEqual([
+      "existing tokens are no longer accepted",
+    ]);
     expect(parsed.entries[0]?.breaking).toBe(true);
-    expect(determineReleaseLevel(parsed.entries, parsed.breakingNotes)).toBe("major");
+    expect(determineReleaseLevel(parsed.entries, parsed.breakingNotes)).toBe(
+      "major",
+    );
   });
 
   it("parses body bullets from squash commits", () => {
@@ -91,11 +99,32 @@ describe("commit-parser", () => {
     );
 
     expect(parsed.errors).toEqual([]);
-    expect(parsed.entries.map((entry) => `${entry.type}:${entry.scope}:${entry.source}`)).toEqual([
-      "feat:platform:body",
-      "fix:api:body",
-      "feat:shared:body",
-    ]);
+    expect(
+      parsed.entries.map(
+        (entry) => `${entry.type}:${entry.scope}:${entry.source}`,
+      ),
+    ).toEqual(["feat:platform:body", "fix:api:body", "feat:shared:body"]);
+  });
+
+  it("parses checklist and numbered body entries from squash commits", () => {
+    const parsed = parseCommit(
+      {
+        hash: "6677889",
+        subject: "Merge pull request #12",
+        body: [
+          "- [x] feat(api): add status endpoint",
+          "1. fix(shared): guard null config",
+        ].join("\n"),
+      },
+      config,
+    );
+
+    expect(parsed.errors).toEqual([]);
+    expect(
+      parsed.entries.map(
+        (entry) => `${entry.type}:${entry.scope}:${entry.source}`,
+      ),
+    ).toEqual(["feat:api:body", "fix:shared:body"]);
   });
 
   it("dedupes repeated entries", () => {
@@ -123,16 +152,33 @@ describe("commit-parser", () => {
       config,
     );
 
-    expect(parsed.errors).toEqual(['7654321: unknown scope "unknown". Add it to release.config.json scopeMap.']);
+    expect(parsed.errors).toEqual([
+      '7654321: unknown scope "unknown". Add it to release.config.json scopeMap.',
+    ]);
   });
 
   it("applies release-level precedence major > minor > patch", () => {
-    const patch = parseCommit({ hash: "a", subject: "fix(api): x", body: "" }, config);
-    const minor = parseCommit({ hash: "b", subject: "feat(api): x", body: "" }, config);
-    const major = parseCommit({ hash: "c", subject: "feat(api)!: x", body: "" }, config);
+    const patch = parseCommit(
+      { hash: "a", subject: "fix(api): x", body: "" },
+      config,
+    );
+    const minor = parseCommit(
+      { hash: "b", subject: "feat(api): x", body: "" },
+      config,
+    );
+    const major = parseCommit(
+      { hash: "c", subject: "feat(api)!: x", body: "" },
+      config,
+    );
 
-    expect(determineReleaseLevel(patch.entries, patch.breakingNotes)).toBe("patch");
-    expect(determineReleaseLevel(minor.entries, minor.breakingNotes)).toBe("minor");
-    expect(determineReleaseLevel(major.entries, major.breakingNotes)).toBe("major");
+    expect(determineReleaseLevel(patch.entries, patch.breakingNotes)).toBe(
+      "patch",
+    );
+    expect(determineReleaseLevel(minor.entries, minor.breakingNotes)).toBe(
+      "minor",
+    );
+    expect(determineReleaseLevel(major.entries, major.breakingNotes)).toBe(
+      "major",
+    );
   });
 });

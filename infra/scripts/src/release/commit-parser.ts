@@ -36,28 +36,44 @@ export type ParsedCommit = {
   errors: string[];
 };
 
-const HEADER_REGEX = /^(?<type>[a-z]+)\((?<scope>[A-Za-z0-9._-]+)\)(?<breaking>!)?:\s+(?<description>.+)$/u;
+const HEADER_REGEX =
+  /^(?<type>[a-z]+)\((?<scope>[A-Za-z0-9._-]+)\)(?<breaking>!)?:\s+(?<description>.+)$/u;
 const BREAKING_NOTE_REGEX = /^BREAKING CHANGES?:\s*(.+)$/iu;
 
-export function parseCommits(commits: GitCommit[], config: ParsedReleaseConfig): ParsedCommit[] {
+export function parseCommits(
+  commits: GitCommit[],
+  config: ParsedReleaseConfig,
+): ParsedCommit[] {
   return commits.map((commit) => parseCommit(commit, config));
 }
 
-export function parseCommit(commit: GitCommit, config: ParsedReleaseConfig): ParsedCommit {
+export function parseCommit(
+  commit: GitCommit,
+  config: ParsedReleaseConfig,
+): ParsedCommit {
   const entries: ParsedEntry[] = [];
   const errors: string[] = [];
   const breakingNotes: string[] = [];
   const allowedTypes = Object.keys(config.types);
   const typePattern = allowedTypes.join("|");
+  const listPrefix = String.raw`(?:[*-]|\d+\.)\s*(?:\[[ xX]\]\s*)?`;
   const bodyRegex = new RegExp(
-    `^(?:[*-]\\s*)?(?<type>${typePattern})\\((?<scope>[A-Za-z0-9._-]+)\\)(?<breaking>!)?:\\s*(?<description>.+)$`,
+    `^(?:${listPrefix})?(?<type>${typePattern})\\((?<scope>[A-Za-z0-9._-]+)\\)(?<breaking>!)?:\\s*(?<description>.+)$`,
     "iu",
   );
-  const missingScopeRegex = new RegExp(`^(?:[*-]\\s*)?(?<type>${typePattern})(?<breaking>!)?:\\s+.+$`, "iu");
+  const missingScopeRegex = new RegExp(
+    `^(?:${listPrefix})?(?<type>${typePattern})(?<breaking>!)?:\\s+.+$`,
+    "iu",
+  );
 
   const headerMatch = commit.subject.trim().match(HEADER_REGEX);
   if (headerMatch?.groups) {
-    const headerEntry = buildEntryFromMatch(headerMatch.groups, config, commit.hash, "header");
+    const headerEntry = buildEntryFromMatch(
+      headerMatch.groups,
+      config,
+      commit.hash,
+      "header",
+    );
     if (typeof headerEntry === "string") {
       errors.push(headerEntry);
     } else {
@@ -80,7 +96,12 @@ export function parseCommit(commit: GitCommit, config: ParsedReleaseConfig): Par
 
     const match = line.match(bodyRegex);
     if (match?.groups) {
-      const bodyEntry = buildEntryFromMatch(match.groups, config, commit.hash, "body");
+      const bodyEntry = buildEntryFromMatch(
+        match.groups,
+        config,
+        commit.hash,
+        "body",
+      );
       if (typeof bodyEntry === "string") {
         errors.push(bodyEntry);
       } else {
@@ -90,7 +111,9 @@ export function parseCommit(commit: GitCommit, config: ParsedReleaseConfig): Par
     }
 
     if (line.match(missingScopeRegex)) {
-      errors.push(`${commit.hash}: invalid conventional line without scope: \"${line}\"`);
+      errors.push(
+        `${commit.hash}: invalid conventional line without scope: \"${line}\"`,
+      );
     }
   }
 
@@ -158,7 +181,10 @@ function buildEntryFromMatch(
   };
 }
 
-export function determineReleaseLevel(entries: ParsedEntry[], breakingNotes: string[]): ReleaseLevel {
+export function determineReleaseLevel(
+  entries: ParsedEntry[],
+  breakingNotes: string[],
+): ReleaseLevel {
   if (breakingNotes.length > 0 || entries.some((entry) => entry.breaking)) {
     return "major";
   }
