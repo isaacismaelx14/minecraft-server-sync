@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const UpdateSummarySchema = z.object({
   add: z.number().int().nonnegative(),
@@ -17,14 +17,23 @@ export const UpdatesResponseSchema = z.object({
 export type UpdatesResponse = z.infer<typeof UpdatesResponseSchema>;
 
 export const SyncOperationSchema = z.object({
-  op: z.enum(['add', 'remove', 'update', 'keep']),
+  op: z.enum(["add", "remove", "update", "keep"]),
   path: z.string().min(1),
   name: z.string().min(1),
-  sha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
-  fromSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
-  toSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
+  sha256: z
+    .string()
+    .regex(/^[A-Fa-f0-9]{64}$/)
+    .optional(),
+  fromSha256: z
+    .string()
+    .regex(/^[A-Fa-f0-9]{64}$/)
+    .optional(),
+  toSha256: z
+    .string()
+    .regex(/^[A-Fa-f0-9]{64}$/)
+    .optional(),
   url: z.url().optional(),
-  kind: z.enum(['mod', 'resourcepack', 'shaderpack', 'config']),
+  kind: z.enum(["mod", "resourcepack", "shaderpack", "config"]),
 });
 export type SyncOperation = z.infer<typeof SyncOperationSchema>;
 

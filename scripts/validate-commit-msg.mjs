@@ -32,11 +32,15 @@ const allowedTypes = Object.keys(config.types ?? {});
 const allowedScopes = Object.keys(config.scopeMap ?? {});
 
 if (allowedTypes.length === 0 || allowedScopes.length === 0) {
-  console.error("[commit-msg] release.config.json must define non-empty types and scopeMap.");
+  console.error(
+    "[commit-msg] release.config.json must define non-empty types and scopeMap.",
+  );
   process.exit(1);
 }
 
-const headerMatch = firstLine.match(/^(?<type>[a-z]+)\((?<scope>[A-Za-z0-9._-]+)\)(?<breaking>!)?:\s+.+$/u);
+const headerMatch = firstLine.match(
+  /^(?<type>[a-z]+)\((?<scope>[A-Za-z0-9._-]+)\)(?<breaking>!)?:\s+.+$/u,
+);
 if (!headerMatch?.groups) {
   printError(
     firstLine,
@@ -51,12 +55,22 @@ const type = headerMatch.groups.type;
 const scope = headerMatch.groups.scope;
 
 if (!allowedTypes.includes(type)) {
-  printError(firstLine, allowedTypes, allowedScopes, `Unsupported type: ${type}`);
+  printError(
+    firstLine,
+    allowedTypes,
+    allowedScopes,
+    `Unsupported type: ${type}`,
+  );
   process.exit(1);
 }
 
 if (!allowedScopes.includes(scope)) {
-  printError(firstLine, allowedTypes, allowedScopes, `Unsupported scope: ${scope}`);
+  printError(
+    firstLine,
+    allowedTypes,
+    allowedScopes,
+    `Unsupported scope: ${scope}`,
+  );
   process.exit(1);
 }
 

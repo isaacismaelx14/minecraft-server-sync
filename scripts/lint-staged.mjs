@@ -48,7 +48,7 @@ console.log(`Linting ${filesToLint.length} staged API file(s)...`);
 
 const result = spawnSync(
   "pnpm",
-  ["exec", "eslint", "--max-warnings=0", ...filesToLint],
+  ["exec", "eslint", "--max-warnings=0", "--no-warn-ignored", ...filesToLint],
   { stdio: "inherit", cwd: "apps/api" },
 );
 
