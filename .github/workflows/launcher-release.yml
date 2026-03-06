@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_from_main:
-        description: Build the current main branch for workflow/YAML validation only
+        description: Build from the current main branch instead of checking out the tag
         required: false
         default: false
         type: boolean
@@ -20,7 +20,8 @@ jobs:
   build-launcher:
     env:
       RUN_FROM_MAIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' }}
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && '' || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      VALIDATION_ONLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && github.event.inputs.tag == '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +51,7 @@ jobs:
           fi
 
       - name: Warn for main validation runs
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true'
+        if: env.VALIDATION_ONLY == 'true'
         shell: bash
         run: |
           echo "::warning::This 'run from main' mode is for launcher-release workflow/YAML validation only. It skips publish/verify jobs and should not be used to diagnose launcher code issues."
@@ -70,7 +71,7 @@ jobs:
 
       - name: Compute release version from tag
         id: version
-        if: env.RUN_FROM_MAIN != 'true'
+        if: env.RUN_FROM_MAIN != 'true' || env.RELEASE_TAG != ''
         shell: bash
         run: |
           VERSION="${RELEASE_TAG#@mss/launcher/v}"
@@ -92,7 +93,7 @@ jobs:
 
       - name: Compute release version from main
         id: version_main
-        if: env.RUN_FROM_MAIN == 'true'
+        if: env.RUN_FROM_MAIN == 'true' && env.RELEASE_TAG == ''
         shell: bash
         run: |
           VERSION="$(node -p "require('./apps/launcher/package.json').version")"
@@ -263,7 +264,7 @@ jobs:
             apps/launcher/src-tauri/target/release/bundle/**/*.tar.gz
 
   publish-launcher-assets:
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true' || github.event.inputs.tag != ''
     needs: build-launcher
     runs-on: ubuntu-latest
     permissions:
@@ -290,10 +291,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
+      - name: Encode release tag for GitHub API
+        id: release_tag
+        shell: bash
+        run: |
+          ENCODED_TAG="$(node -p "encodeURIComponent(process.env.RELEASE_TAG)")"
+          if [ -z "$ENCODED_TAG" ]; then
+            echo "Failed to encode release tag ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+          echo "encoded=${ENCODED_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Ensure release already exists for this tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api "repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }}" >/dev/null
+        run: gh api "repos/${{ github.repository }}/releases/tags/${{ steps.release_tag.outputs.encoded }}" >/dev/null
 
       - name: Download all launcher artifacts
         uses: actions/download-artifact@v4
@@ -328,7 +340,7 @@ jobs:
             release-artifacts/generated/latest.json
 
   verify-release-updater:
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true' || github.event.inputs.tag != ''
     needs: publish-launcher-assets
     runs-on: ubuntu-latest
     permissions:
