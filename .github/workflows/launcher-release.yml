@@ -279,6 +279,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
           fail_on_unmatched_files: true
           files: |
             release-artifacts/launcher-windows-nsis/*.exe
