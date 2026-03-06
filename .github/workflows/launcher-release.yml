@@ -291,21 +291,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
-      - name: Encode release tag for GitHub API
-        id: release_tag
-        shell: bash
-        run: |
-          ENCODED_TAG="$(node -p "encodeURIComponent(process.env.RELEASE_TAG)")"
-          if [ -z "$ENCODED_TAG" ]; then
-            echo "Failed to encode release tag ${RELEASE_TAG}" >&2
-            exit 1
-          fi
-          echo "encoded=${ENCODED_TAG}" >> "$GITHUB_OUTPUT"
-
       - name: Ensure release already exists for this tag
+        id: release_lookup
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api "repos/${{ github.repository }}/releases/tags/${{ steps.release_tag.outputs.encoded }}" >/dev/null
+        shell: bash
+        run: |
+          RELEASE_ID="$(
+            gh api "repos/${{ github.repository }}/releases?per_page=100" \
+              | node -e '
+                const fs = require("fs");
+                const releases = JSON.parse(fs.readFileSync(0, "utf8"));
+                const match = releases.find((release) => release.tag_name === process.env.RELEASE_TAG);
+                if (match) {
+                  process.stdout.write(String(match.id));
+                }
+              '
+          )"
+          if [ -z "$RELEASE_ID" ]; then
+            echo "No GitHub release exists for tag ${RELEASE_TAG} in ${{ github.repository }}." >&2
+            echo "If the release is a draft, ensure it was created in this repository with the exact same tag." >&2
+            exit 1
+          fi
+          echo "id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Download all launcher artifacts
         uses: actions/download-artifact@v4
