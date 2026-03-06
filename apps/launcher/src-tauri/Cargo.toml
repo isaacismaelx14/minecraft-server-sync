@@ -1,6 +1,6 @@
 [package]
 name = "mvl-syncer"
-version = "0.3.0"
+version = "0.3.1"
 description = "MSS+ Client"
 authors = ["MSS+ Client Team"]
 edition = "2021"

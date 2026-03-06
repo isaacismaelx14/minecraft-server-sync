@@ -1,5 +1,18 @@
 # Changelog
 
+## [@mss/launcher/v0.3.1](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.3.1) (2026-03-06)
+
+[Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Flauncher%2Fv0.3.0...%40mss%2Flauncher%2Fv0.3.1)
+
+## Bug Fixes
+
+- **launcher:** gate devtools behind explicit feature ([9c60d73](https://github.com/isaacismaelx14/minecraft-server-sync/commit/9c60d73cddc7ce97ea27d8ecfba4f162396b1f5c))
+- **launcher:** avoid cfg-only launcher detection warning ([5a653eb](https://github.com/isaacismaelx14/minecraft-server-sync/commit/5a653eb1c37dacb32506391bea993eae37348d79))
+
+## CI
+
+- **launcher:** support main workflow validation runs ([dc022eb](https://github.com/isaacismaelx14/minecraft-server-sync/commit/dc022eb4bc1e91f29110f82387908a0d51baa3dc))
+
 ## [@mss/launcher/v0.3.0](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.3.0) (2026-03-06)
 
 [Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Flauncher%2Fv0.2.1...%40mss%2Flauncher%2Fv0.3.0)
