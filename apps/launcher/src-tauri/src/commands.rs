@@ -264,6 +264,14 @@ pub fn app_open_devtools_secret(
   state: State<'_, Arc<AppState>>,
   secret_command: String,
 ) -> Result<(), String> {
+  #[cfg(not(feature = "devtools"))]
+  {
+    let _ = (app, state, secret_command);
+    return Err("Devtools are disabled in this build".to_string());
+  }
+
+  #[cfg(feature = "devtools")]
+  {
   let Some(expected) = state.config.devtools_secret_command.as_deref() else {
     return Err("Devtools secret command is not configured".to_string());
   };
@@ -294,6 +302,7 @@ pub fn app_open_devtools_secret(
     Some("secret command accepted"),
   );
   Ok(())
+  }
 }
 
 #[tauri::command]
