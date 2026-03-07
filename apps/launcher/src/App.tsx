@@ -1,8 +1,17 @@
+import { lazy, Suspense } from "react";
 import { ToastContainer } from "./components/ToastContainer";
+import { CloseModal } from "./components/CloseModal";
 import { CompactWindow } from "./components/CompactWindow";
-import { SetupWizard } from "./components/SetupWizard";
-import { DesktopWorkspace } from "./components/DesktopWorkspace";
 import { useAppCore } from "./hooks/useAppCore";
+
+const SetupWizard = lazy(() =>
+  import("./components/SetupWizard").then((m) => ({ default: m.SetupWizard })),
+);
+const DesktopWorkspace = lazy(() =>
+  import("./components/DesktopWorkspace").then((m) => ({
+    default: m.DesktopWorkspace,
+  })),
+);
 
 export default function App() {
   const core = useAppCore();
@@ -17,6 +26,11 @@ export default function App() {
     launcherStreamRetryCount,
     launcherStreamRetryCountdownSec,
     retryLauncherServerStreamNow,
+    closeModalOpen,
+    closeModalVariant,
+    handleCloseModalQuit,
+    handleCloseModalKeepInBackground,
+    handleCloseModalCancel,
   } = core;
 
   const showLauncherStreamBadge =
@@ -52,6 +66,14 @@ export default function App() {
           </div>
         ) : null}
         <ToastContainer toasts={toasts} />
+        {closeModalOpen ? (
+          <CloseModal
+            variant={closeModalVariant}
+            onQuit={handleCloseModalQuit}
+            onKeepInBackground={handleCloseModalKeepInBackground}
+            onCancel={handleCloseModalCancel}
+          />
+        ) : null}
       </>
     );
   }
@@ -65,7 +87,9 @@ export default function App() {
           <p className="small-dark">Complete onboarding to continue.</p>
         </header>
 
-        <SetupWizard core={core} />
+        <Suspense>
+          <SetupWizard core={core} />
+        </Suspense>
 
         {showLauncherStreamBadge ? (
           <div
@@ -93,13 +117,23 @@ export default function App() {
           </div>
         ) : null}
         <ToastContainer toasts={toasts} />
+        {closeModalOpen ? (
+          <CloseModal
+            variant={closeModalVariant}
+            onQuit={handleCloseModalQuit}
+            onKeepInBackground={handleCloseModalKeepInBackground}
+            onCancel={handleCloseModalCancel}
+          />
+        ) : null}
       </main>
     );
   }
 
   return (
     <>
-      <DesktopWorkspace core={core} />
+      <Suspense>
+        <DesktopWorkspace core={core} />
+      </Suspense>
       {showLauncherStreamBadge ? (
         <div
           className="launcher-stream-indicator"
@@ -123,6 +157,14 @@ export default function App() {
         </div>
       ) : null}
       <ToastContainer toasts={toasts} />
+      {closeModalOpen ? (
+        <CloseModal
+          variant={closeModalVariant}
+          onQuit={handleCloseModalQuit}
+          onKeepInBackground={handleCloseModalKeepInBackground}
+          onCancel={handleCloseModalCancel}
+        />
+      ) : null}
     </>
   );
 }

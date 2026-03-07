@@ -30,8 +30,6 @@ use objc2::AllocAnyThread;
 use objc2_app_kit::{NSApplication, NSImage, NSWindow, NSWindowTitleVisibility};
 #[cfg(target_os = "macos")]
 use objc2_foundation::{MainThreadMarker, NSData};
-use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
-
 use tauri::{
   Emitter,
   menu::{Menu, MenuItem},
@@ -40,7 +38,7 @@ use tauri::{
 };
 use tauri_plugin_deep_link::DeepLinkExt;
 
-use crate::types::{AppSettings, GameSessionPhase};
+use crate::types::AppSettings;
 
 const REQUIRED_ONBOARDING_VERSION: i32 = 2;
 
@@ -225,7 +223,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         show_primary_window(app);
       }
       "quit" => {
-        app.exit(0);
+        request_quit_via_frontend(app);
       }
       _ => {}
     })
@@ -284,57 +282,17 @@ fn show_primary_window(app: &tauri::AppHandle) {
   }
 }
 
+fn request_quit_via_frontend(app: &tauri::AppHandle) {
+  show_primary_window(app);
+  events::emit_quit_requested(app);
+}
+
 fn handle_quit_request(app: &tauri::AppHandle, app_state: Arc<state::AppState>) {
   if app_state.is_exiting.load(Ordering::SeqCst) {
     return;
   }
 
-  if session::get_status(&app_state).phase == GameSessionPhase::Playing {
-    keep_running_in_background(app);
-    let _ = MessageDialog::new()
-      .set_level(MessageLevel::Warning)
-      .set_title("Minecraft is currently playing")
-      .set_description(
-        "The app will keep running in the background while your play session is active.",
-      )
-      .set_buttons(MessageButtons::Ok)
-      .show();
-    return;
-  }
-
-  let result = MessageDialog::new()
-    .set_level(MessageLevel::Info)
-    .set_title("Quit MineRelay?")
-    .set_description(
-      "Select Yes to quit the app. Select No to keep it running in the background.",
-    )
-    .set_buttons(MessageButtons::YesNo)
-    .show();
-
-  if result == MessageDialogResult::Yes {
-    if app_state.is_exiting.swap(true, Ordering::SeqCst) {
-      return;
-    }
-    app_state.allow_exit_once.store(true, Ordering::SeqCst);
-
-    let app_handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-      let _ = session::restore_active_session(&app_handle, app_state).await;
-      app_handle.exit(0);
-    });
-    return;
-  }
-
-  keep_running_in_background(app);
-}
-
-fn keep_running_in_background(app: &tauri::AppHandle) {
-  if let Some(main) = app.get_webview_window("main") {
-    let _ = main.hide();
-  }
-  if let Some(setup) = app.get_webview_window("setup") {
-    let _ = setup.hide();
-  }
+  request_quit_via_frontend(app);
 }
 
 fn onboarding_required(settings: &AppSettings) -> bool {

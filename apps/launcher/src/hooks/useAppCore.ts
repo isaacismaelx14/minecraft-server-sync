@@ -46,6 +46,8 @@ import {
   type LauncherServerStatus,
 } from "../types";
 
+import type { CloseModalVariant } from "../components/CloseModal";
+
 import {
   bytesToHuman,
   formatEta,
@@ -170,13 +172,15 @@ export function useAppCore() {
   const [brokenLogoUrls, setBrokenLogoUrls] = useState<Record<string, true>>(
     {},
   );
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [closeModalVariant, setCloseModalVariant] =
+    useState<CloseModalVariant>("normal");
 
   const cycleInFlight = useRef(false);
   const checkingLauncherUpdateRef = useRef(false);
   const installingLauncherUpdateRef = useRef(false);
   const isPlayingRef = useRef(false);
   const toastCounterRef = useRef(0);
-  const closePromptBusyRef = useRef(false);
   const launcherStreamRetryCountRef = useRef(0);
   const launcherStreamRetryTimerRef = useRef<number | null>(null);
   const launcherStreamRetryCountdownRef = useRef<number | null>(null);
@@ -1006,90 +1010,72 @@ export function useAppCore() {
   }, [bootstrap]);
 
   useEffect(() => {
-    let stopSyncListener: UnlistenFn | undefined;
-    let stopErrorListener: UnlistenFn | undefined;
-    let stopSessionListener: UnlistenFn | undefined;
+    const listeners: UnlistenFn[] = [];
 
-    void listen<SyncProgressEvent>("sync://progress", (event) => {
-      setSync(event.payload);
-    }).then((off) => {
-      stopSyncListener = off;
-    });
+    const setup = async () => {
+      listeners.push(
+        await listen<SyncProgressEvent>("sync://progress", (event) => {
+          setSync(event.payload);
+        }),
+        await listen<{ message: string; actionHint?: string }>(
+          "sync://error",
+          (event) => {
+            setError(event.payload.message);
+            setHint(event.payload.actionHint ?? null);
+            setScreen("ready");
+          },
+        ),
+        await listen<GameSessionStatus>("session://status", (event) => {
+          setSessionStatus(event.payload);
+        }),
+        await listen<AppSettings>("settings://updated", (event) => {
+          setSettings(event.payload);
+          setProfileSourceDraft({
+            apiBaseUrl: event.payload.apiBaseUrl ?? "",
+            profileLockUrl: event.payload.profileLockUrl ?? "",
+            pairingCode: event.payload.pairingCode ?? "",
+          });
+          void refreshDashboardState();
+          void refreshVersionReadiness().catch((cause) => {
+            const message =
+              cause instanceof Error ? cause.message : String(cause);
+            setVersionReadiness(fallbackVersionReadiness(message));
+            setError(message);
+          });
+        }),
+        await listen<LauncherServerStatus>(
+          "launcher-server://status",
+          (event) => {
+            launcherPermissionRemovedNotifiedRef.current = false;
+            resetLauncherStreamConnectionState();
+            setLauncherServerControls((current) => {
+              if (!current) {
+                return current;
+              }
+              return {
+                ...current,
+                enabled: true,
+                reason: null,
+                selectedServer: event.payload,
+              };
+            });
+          },
+        ),
+        await listen<string>("launcher-server://error", (event) => {
+          handleLauncherStreamDisconnected(event.payload);
+        }),
+      );
+    };
 
-    void listen<{ message: string; actionHint?: string }>(
-      "sync://error",
-      (event) => {
-        setError(event.payload.message);
-        setHint(event.payload.actionHint ?? null);
-        setScreen("ready");
-      },
-    ).then((off) => {
-      stopErrorListener = off;
-    });
-
-    void listen<GameSessionStatus>("session://status", (event) => {
-      setSessionStatus(event.payload);
-    }).then((off) => {
-      stopSessionListener = off;
-    });
-
-    let stopSettingsListener: UnlistenFn | undefined;
-    void listen<AppSettings>("settings://updated", (event) => {
-      setSettings(event.payload);
-      setProfileSourceDraft({
-        apiBaseUrl: event.payload.apiBaseUrl ?? "",
-        profileLockUrl: event.payload.profileLockUrl ?? "",
-        pairingCode: event.payload.pairingCode ?? "",
-      });
-      // Important cross-window sync: refresh state when settings change
-      void refreshDashboardState();
-      void refreshVersionReadiness().catch((cause) => {
-        const message = cause instanceof Error ? cause.message : String(cause);
-        setVersionReadiness(fallbackVersionReadiness(message));
-        setError(message);
-      });
-    }).then((off) => {
-      stopSettingsListener = off;
-    });
-
-    let stopLauncherStatusListener: UnlistenFn | undefined;
-    let stopLauncherErrorListener: UnlistenFn | undefined;
-
-    void listen<LauncherServerStatus>("launcher-server://status", (event) => {
-      launcherPermissionRemovedNotifiedRef.current = false;
-      resetLauncherStreamConnectionState();
-      setLauncherServerControls((current) => {
-        if (!current) {
-          return current;
-        }
-        return {
-          ...current,
-          enabled: true,
-          reason: null,
-          selectedServer: event.payload,
-        };
-      });
-    }).then((off) => {
-      stopLauncherStatusListener = off;
-    });
-
-    void listen<string>("launcher-server://error", (event) => {
-      handleLauncherStreamDisconnected(event.payload);
-    }).then((off) => {
-      stopLauncherErrorListener = off;
-    });
+    void setup();
 
     return () => {
-      stopSyncListener?.();
-      stopErrorListener?.();
-      stopSessionListener?.();
-      stopSettingsListener?.();
-      stopLauncherStatusListener?.();
-      stopLauncherErrorListener?.();
+      listeners.forEach((off) => off());
       clearLauncherStreamRetryTimers();
     };
   }, [
     clearLauncherStreamRetryTimers,
+    fallbackVersionReadiness,
     handleLauncherStreamDisconnected,
     refreshDashboardState,
     refreshVersionReadiness,
@@ -1129,47 +1115,55 @@ export function useAppCore() {
     resetLauncherStreamConnectionState,
   ]);
 
-  const requestSystemCloseModal = useCallback(async () => {
-    if (closePromptBusyRef.current) {
-      return;
-    }
-    closePromptBusyRef.current = true;
+  const isMacOS = /Mac|iPhone|iPad/.test(navigator.userAgent);
 
+  const showCloseModal = useCallback((variant: CloseModalVariant) => {
+    setCloseModalVariant(variant);
+    setCloseModalOpen(true);
+  }, []);
+
+  const handleCloseModalQuit = useCallback(async () => {
+    setCloseModalOpen(false);
     try {
-      if (isPlayingRef.current) {
-        await invoke("app_keep_running_in_background");
+      const result = await invoke<AppCloseResponse>("app_request_close");
+      if (!result.closed) {
         pushToast(
-          "hint",
-          "Minecraft is running. App was kept in the background.",
+          "error",
+          result.reason ?? "Close request was blocked by an active session.",
         );
-        return;
       }
-
-      const shouldClose = window.confirm(
-        "Close MineRelay?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
+    } catch (cause) {
+      pushToast(
+        "error",
+        cause instanceof Error ? cause.message : String(cause),
       );
+    }
+  }, [pushToast]);
 
-      if (shouldClose) {
-        const result = await invoke<AppCloseResponse>("app_request_close");
-        if (!result.closed) {
-          pushToast(
-            "error",
-            result.reason ?? "Close request was blocked by an active session.",
-          );
-        }
-        return;
-      }
-
+  const handleCloseModalKeepInBackground = useCallback(async () => {
+    setCloseModalOpen(false);
+    try {
       await invoke("app_keep_running_in_background");
     } catch (cause) {
       pushToast(
         "error",
         cause instanceof Error ? cause.message : String(cause),
       );
-    } finally {
-      closePromptBusyRef.current = false;
     }
   }, [pushToast]);
+
+  const handleCloseModalCancel = useCallback(() => {
+    setCloseModalOpen(false);
+  }, []);
+
+  const requestSystemCloseModal = useCallback(async () => {
+    if (isMacOS) {
+      await invoke("app_keep_running_in_background");
+      return;
+    }
+
+    showCloseModal(isPlayingRef.current ? "playing" : "normal");
+  }, [isMacOS, showCloseModal]);
 
   useEffect(() => {
     let unlistenCloseRequested: UnlistenFn | undefined;
@@ -1193,6 +1187,20 @@ export function useAppCore() {
       unlistenCloseRequested?.();
     };
   }, [currentWindow, isSetupWindow, requestSystemCloseModal, wizardActive]);
+
+  useEffect(() => {
+    let unlistenQuitRequested: UnlistenFn | undefined;
+
+    void listen("app://quit-requested", () => {
+      showCloseModal(isPlayingRef.current ? "playing" : "normal");
+    }).then((off) => {
+      unlistenQuitRequested = off;
+    });
+
+    return () => {
+      unlistenQuitRequested?.();
+    };
+  }, [showCloseModal]);
 
   useEffect(() => {
     if (!isCompactWindow || wizardActive || !settings || sessionActive) {
@@ -1795,6 +1803,11 @@ export function useAppCore() {
     currentWindow,
     isSetupWindow,
     isCompactWindow,
+    closeModalOpen,
+    closeModalVariant,
+    handleCloseModalQuit,
+    handleCloseModalKeepInBackground,
+    handleCloseModalCancel,
     APP_NAME,
     SERVER_ID,
   };
