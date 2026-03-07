@@ -297,23 +297,39 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          RELEASE_ID="$(
+          RELEASE_LOOKUP="$(
             gh api "repos/${{ github.repository }}/releases?per_page=100" \
               | node -e '
                 const fs = require("fs");
                 const releases = JSON.parse(fs.readFileSync(0, "utf8"));
-                const match = releases.find((release) => release.tag_name === process.env.RELEASE_TAG);
+                const inputTag = process.env.RELEASE_TAG || "";
+                const swaps = [
+                  ["@minerelay/launcher/v", "@mss/launcher/v"],
+                  ["@mss/launcher/v", "@minerelay/launcher/v"],
+                ];
+
+                const candidateTags = [inputTag];
+                for (const [from, to] of swaps) {
+                  if (inputTag.startsWith(from)) {
+                    candidateTags.push(inputTag.replace(from, to));
+                  }
+                }
+
+                const match = releases.find((release) => candidateTags.includes(release.tag_name));
                 if (match) {
-                  process.stdout.write(String(match.id));
+                  process.stdout.write(`${match.id}\t${match.tag_name}`);
                 }
               '
           )"
+          RELEASE_ID="${RELEASE_LOOKUP%%$'\t'*}"
+          RESOLVED_RELEASE_TAG="${RELEASE_LOOKUP#*$'\t'}"
           if [ -z "$RELEASE_ID" ]; then
             echo "No GitHub release exists for tag ${RELEASE_TAG} in ${{ github.repository }}." >&2
             echo "If the release is a draft, ensure it was created in this repository with the exact same tag." >&2
             exit 1
           fi
           echo "id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+          echo "resolved_tag=${RESOLVED_RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Download all launcher artifacts
         uses: actions/download-artifact@v4
@@ -326,7 +342,7 @@ jobs:
           pnpm --filter @minerelay/infra-scripts manifest:generate -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
-            --tag "${{ env.RELEASE_TAG }}" \
+            --tag "${{ steps.release_lookup.outputs.resolved_tag }}" \
             --artifacts-dir "${GITHUB_WORKSPACE}/release-artifacts" \
             --output "${GITHUB_WORKSPACE}/release-artifacts/generated/latest.json" \
             --required windows,macos
@@ -334,7 +350,7 @@ jobs:
       - name: Upload launcher assets to existing release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ steps.release_lookup.outputs.resolved_tag }}
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
