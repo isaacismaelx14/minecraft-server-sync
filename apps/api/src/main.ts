@@ -19,11 +19,17 @@ async function bootstrap() {
   app.setGlobalPrefix('v1');
 
   // Correlation ID and structured logging support
-  app.use((req: express.Request, next: express.NextFunction) => {
-    req.headers['x-correlation-id'] =
-      req.headers['x-correlation-id'] || randomUUID();
-    next();
-  });
+  app.use(
+    (
+      req: express.Request,
+      _res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      req.headers['x-correlation-id'] =
+        req.headers['x-correlation-id'] || randomUUID();
+      next();
+    },
+  );
 
   app.use(
     helmet({
