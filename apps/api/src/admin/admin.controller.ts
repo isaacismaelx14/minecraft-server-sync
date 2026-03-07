@@ -25,6 +25,7 @@ import {
   UpdateExarotonSettingsDto,
   SelectExarotonServerDto,
   GenerateLockfileDto,
+  InstallAssetDto,
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
@@ -216,9 +217,10 @@ export class AdminController {
     @Query('minecraftVersion') minecraftVersion = '',
     @Query('versionId') versionId = '',
   ) {
-    return this.adminService.resolveCompatibleMod(
+    return this.adminService.resolveCompatibleAsset(
       projectId,
       minecraftVersion,
+      'mod',
       versionId || undefined,
     );
   }
@@ -239,12 +241,77 @@ export class AdminController {
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
   ) {
-    return this.adminService.getModVersions(projectId, minecraftVersion);
+    return this.adminService.getAssetVersions(
+      projectId,
+      minecraftVersion,
+      'mod',
+    );
   }
 
   @Post('/v1/admin/mods/install')
   installMod(@Body() payload: InstallModDto) {
-    return this.adminService.installMod(payload);
+    return this.adminService.installAsset({ ...payload, type: 'mod' });
+  }
+
+  @Get('/v1/admin/assets/search')
+  searchAssets(
+    @Query('query') query = '',
+    @Query('minecraftVersion') minecraftVersion = '',
+    @Query('type') type: 'mod' | 'resourcepack' | 'shaderpack' = 'mod',
+    @Query('limit') limit = '12',
+  ) {
+    return this.adminService.searchAssets(
+      query,
+      minecraftVersion,
+      type,
+      Number(limit),
+    );
+  }
+
+  @Get('/v1/admin/assets/popular')
+  popularAssets(
+    @Query('minecraftVersion') minecraftVersion = '',
+    @Query('type') type: 'mod' | 'resourcepack' | 'shaderpack' = 'mod',
+    @Query('limit') limit = '10',
+  ) {
+    return this.adminService.popularAssets(
+      minecraftVersion,
+      type,
+      Number(limit),
+    );
+  }
+
+  @Get('/v1/admin/assets/resolve')
+  resolveAsset(
+    @Query('projectId') projectId = '',
+    @Query('minecraftVersion') minecraftVersion = '',
+    @Query('type') type: 'mod' | 'resourcepack' | 'shaderpack' = 'mod',
+    @Query('versionId') versionId = '',
+  ) {
+    return this.adminService.resolveCompatibleAsset(
+      projectId,
+      minecraftVersion,
+      type,
+      versionId || undefined,
+    );
+  }
+
+  @Get('/v1/admin/assets/versions')
+  getAssetVersions(
+    @Query('projectId') projectId = '',
+    @Query('minecraftVersion') minecraftVersion = '',
+    @Query('type') type: 'mod' | 'resourcepack' | 'shaderpack' = 'mod',
+  ) {
+    return this.adminService.getAssetVersions(
+      projectId,
+      minecraftVersion,
+      type,
+    );
+  }
+
+  @Post('/v1/admin/assets/install')
+  installAsset(@Body() payload: InstallAssetDto) {
+    return this.adminService.installAsset(payload);
   }
 
   @Post('/v1/admin/lockfile/generate')

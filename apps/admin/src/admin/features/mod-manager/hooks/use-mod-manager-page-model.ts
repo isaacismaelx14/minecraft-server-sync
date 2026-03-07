@@ -25,6 +25,9 @@ function isClientRequiredMod(
   if (projectId === coreModPolicy.fancyMenuProjectId) {
     return true;
   }
+  if (projectId === coreModPolicy.modMenuProjectId) {
+    return true;
+  }
 
   for (const mod of mods) {
     if (!mod.projectId || mod.side === "server") {
@@ -54,6 +57,13 @@ function normalizeInstallTarget(
     return {
       target: "client",
       reason: "FancyMenu is user-side only.",
+    };
+  }
+
+  if (projectId === coreModPolicy.modMenuProjectId) {
+    return {
+      target: "client",
+      reason: "Mod Menu is user-side only.",
     };
   }
 
@@ -426,6 +436,15 @@ export function useModManagerPageModel() {
   };
 
   const loadModVersions = async (projectId: string) => {
+    const cleanProjectId = projectId?.trim();
+    if (!cleanProjectId) {
+      store.setStatus(
+        "mods",
+        "Cannot load versions for unknown project.",
+        "error",
+      );
+      return;
+    }
     const minecraftVersion = store.form.minecraftVersion.trim();
     if (!minecraftVersion) {
       store.setStatus("mods", "Set Minecraft version first.", "error");
@@ -434,12 +453,12 @@ export function useModManagerPageModel() {
 
     try {
       const payload = await requestJson<ModVersionsPayload>(
-        `/v1/admin/mods/versions?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}`,
+        `/v1/admin/mods/versions?projectId=${encodeURIComponent(cleanProjectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}`,
         "GET",
       );
       store.setModVersionOptions((current) => ({
         ...current,
-        [projectId]: payload.versions ?? [],
+        [cleanProjectId]: payload.versions ?? [],
       }));
       store.setStatus(
         "mods",
@@ -456,6 +475,15 @@ export function useModManagerPageModel() {
   };
 
   const applyModVersion = async (projectId: string, versionId: string) => {
+    const cleanProjectId = projectId?.trim();
+    if (!cleanProjectId) {
+      store.setStatus(
+        "mods",
+        "Cannot update version for unknown project.",
+        "error",
+      );
+      return;
+    }
     const minecraftVersion = store.form.minecraftVersion.trim();
     if (!minecraftVersion) {
       store.setStatus("mods", "Set Minecraft version first.", "error");
@@ -467,12 +495,12 @@ export function useModManagerPageModel() {
 
     try {
       const resolved = await requestJson<AdminMod>(
-        `/v1/admin/mods/resolve?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}&versionId=${encodeURIComponent(versionId)}`,
+        `/v1/admin/mods/resolve?projectId=${encodeURIComponent(cleanProjectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}&versionId=${encodeURIComponent(versionId)}`,
         "GET",
       );
       store.setSelectedMods((current) =>
         current.map((entry) =>
-          entry.projectId === projectId ? resolved : entry,
+          entry.projectId === cleanProjectId ? resolved : entry,
         ),
       );
       store.setStatus(

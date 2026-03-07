@@ -49,12 +49,14 @@ describe("useModManagerPageModel", () => {
       coreModPolicy: {
         fabricApiProjectId: "fabric-api",
         fancyMenuProjectId: "fancy-menu",
-        lockedProjectIds: ["fabric-api"],
-        nonRemovableProjectIds: ["fabric-api"],
+        modMenuProjectId: "mod-menu",
+        lockedProjectIds: ["fabric-api", "mod-menu"],
+        nonRemovableProjectIds: ["fabric-api", "mod-menu"],
         rules: {
           fabricApiRequired: true,
           fabricApiVersionEditable: true,
           fancyMenuRequiredWhenEnabled: true,
+          modMenuRequired: true,
           fancyMenuEnabled: false,
         },
       },

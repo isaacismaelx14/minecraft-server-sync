@@ -1,5 +1,7 @@
 import type {
   AdminMod,
+  AdminResourcePack,
+  AdminShaderPack,
   BootstrapPayload,
   BrandingPayload,
   CoreModPolicy,
@@ -90,6 +92,8 @@ export type PublishSnapshot = {
   fancyMenu: FancyMenuPayload;
   branding: BrandingPayload;
   mods: AdminMod[];
+  resources: AdminResourcePack[];
+  shaders: AdminShaderPack[];
 };
 
 export const DEFAULT_STATUS: StatusState = {
@@ -151,12 +155,14 @@ export const DEFAULT_FORM: FormState = {
 export const DEFAULT_POLICY: CoreModPolicy = {
   fabricApiProjectId: "P7dR8mSH",
   fancyMenuProjectId: "Wq5SjeWM",
-  lockedProjectIds: ["P7dR8mSH"],
-  nonRemovableProjectIds: ["P7dR8mSH"],
+  modMenuProjectId: "mOgUt4GM",
+  lockedProjectIds: ["P7dR8mSH", "mOgUt4GM"],
+  nonRemovableProjectIds: ["P7dR8mSH", "mOgUt4GM"],
   rules: {
     fabricApiRequired: true,
     fabricApiVersionEditable: true,
     fancyMenuRequiredWhenEnabled: true,
+    modMenuRequired: true,
     fancyMenuEnabled: false,
   },
 };
@@ -273,6 +279,8 @@ export function normalizeBrandingForCompare(
 export function buildPublishSnapshot(
   formState: FormState,
   mods: AdminMod[],
+  resources: AdminResourcePack[],
+  shaders: AdminShaderPack[],
 ): PublishSnapshot {
   return {
     profileId: formState.profileId.trim(),
@@ -283,6 +291,8 @@ export function buildPublishSnapshot(
     fancyMenu: collectFancyMenuPayload(formState),
     branding: normalizeBrandingForCompare(collectBrandingPayload(formState)),
     mods: [...mods],
+    resources: [...resources],
+    shaders: [...shaders],
   };
 }
 
@@ -305,6 +315,12 @@ export function samePublishSnapshot(
   if (
     JSON.stringify(left.fancyMenu) !== JSON.stringify(right.fancyMenu) ||
     JSON.stringify(left.branding) !== JSON.stringify(right.branding)
+  ) {
+    return false;
+  }
+  if (
+    JSON.stringify(left.resources) !== JSON.stringify(right.resources) ||
+    JSON.stringify(left.shaders) !== JSON.stringify(right.shaders)
   ) {
     return false;
   }

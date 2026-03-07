@@ -2,6 +2,7 @@ import {
   CoreModPolicyService,
   FABRIC_API_PROJECT_ID,
   FANCY_MENU_PROJECT_ID,
+  MOD_MENU_PROJECT_ID,
   type ManagedMod,
 } from './core-mod-policy.service';
 
@@ -19,7 +20,12 @@ describe('CoreModPolicyService', () => {
   ): Promise<ManagedMod> =>
     Promise.resolve({
       kind: 'mod',
-      name: projectId === FABRIC_API_PROJECT_ID ? 'Fabric API' : 'FancyMenu',
+      name:
+        projectId === FABRIC_API_PROJECT_ID
+          ? 'Fabric API'
+          : projectId === FANCY_MENU_PROJECT_ID
+            ? 'FancyMenu'
+            : 'Mod Menu',
       provider: 'modrinth',
       side: 'client',
       projectId,
@@ -107,6 +113,10 @@ describe('CoreModPolicyService', () => {
     expect(
       metadata.nonRemovableProjectIds.includes(FABRIC_API_PROJECT_ID),
     ).toBe(true);
+    expect(metadata.lockedProjectIds.includes(MOD_MENU_PROJECT_ID)).toBe(true);
+    expect(metadata.nonRemovableProjectIds.includes(MOD_MENU_PROJECT_ID)).toBe(
+      true,
+    );
   });
 
   it('preserves Fabric API side from incoming mods', async () => {
@@ -130,5 +140,17 @@ describe('CoreModPolicyService', () => {
 
     const fabric = mods.find((mod) => mod.projectId === FABRIC_API_PROJECT_ID);
     expect(fabric?.side).toBe('server');
+  });
+
+  it('always injects Mod Menu as client-side', async () => {
+    const mods = await service.normalizeMods({
+      mods: [],
+      minecraftVersion: '1.20.1',
+      fancyMenuEnabled: false,
+      resolveMod: resolver,
+    });
+    const modMenu = mods.find((mod) => mod.projectId === MOD_MENU_PROJECT_ID);
+    expect(modMenu).toBeDefined();
+    expect(modMenu?.side).toBe('client');
   });
 });

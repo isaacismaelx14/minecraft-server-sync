@@ -19,6 +19,8 @@ import { useRouter } from "next/navigation";
 import { authFetch, clearAdminSession, requestJson } from "@/admin/client/http";
 import type {
   AdminMod,
+  AdminResourcePack,
+  AdminShaderPack,
   CoreModPolicy,
   DependencyAnalysis,
   ExarotonServersPayload,
@@ -49,7 +51,9 @@ import {
 } from "@/admin/shared/domain/admin-view";
 import {
   computeServerModDiffSummary,
+  mergeAssets,
   mergeMods,
+  sameAssets,
   sameMods,
 } from "@/admin/shared/domain/mods";
 import { bumpSemver, normalizeSemver } from "@/admin/shared/domain/release";
@@ -78,6 +82,10 @@ type AdminStoreValue = {
   setSearchQuery: (query: string) => void;
   selectedMods: AdminMod[];
   setSelectedMods: Dispatch<SetStateAction<AdminMod[]>>;
+  selectedResources: AdminResourcePack[];
+  setSelectedResources: Dispatch<SetStateAction<AdminResourcePack[]>>;
+  selectedShaders: AdminShaderPack[];
+  setSelectedShaders: Dispatch<SetStateAction<AdminShaderPack[]>>;
   coreModPolicy: CoreModPolicy;
   setCoreModPolicy: Dispatch<SetStateAction<CoreModPolicy>>;
   effectiveCorePolicy: CoreModPolicy;
@@ -125,6 +133,10 @@ type AdminStoreValue = {
   setBusy: (name: keyof BusyState, value: boolean) => void;
   baselineMods: AdminMod[];
   setBaselineMods: Dispatch<SetStateAction<AdminMod[]>>;
+  baselineResources: AdminResourcePack[];
+  setBaselineResources: Dispatch<SetStateAction<AdminResourcePack[]>>;
+  baselineShaders: AdminShaderPack[];
+  setBaselineShaders: Dispatch<SetStateAction<AdminShaderPack[]>>;
   baselineRuntime: {
     minecraftVersion: string;
     loaderVersion: string;
@@ -162,6 +174,36 @@ type AdminStoreValue = {
 
 const AdminStoreContext = createContext<AdminStoreValue | null>(null);
 
+function normalizeCoreModPolicy(
+  value: Partial<CoreModPolicy> | null | undefined,
+): CoreModPolicy {
+  const merged = {
+    ...DEFAULT_POLICY,
+    ...(value ?? {}),
+    rules: {
+      ...DEFAULT_POLICY.rules,
+      ...(value?.rules ?? {}),
+    },
+  } as CoreModPolicy;
+
+  const nonRemovable = new Set([
+    ...(merged.nonRemovableProjectIds ?? []),
+    merged.fabricApiProjectId,
+    merged.modMenuProjectId,
+  ]);
+  const locked = new Set([
+    ...(merged.lockedProjectIds ?? []),
+    merged.fabricApiProjectId,
+    merged.modMenuProjectId,
+  ]);
+
+  return {
+    ...merged,
+    nonRemovableProjectIds: Array.from(nonRemovable).filter(Boolean),
+    lockedProjectIds: Array.from(locked).filter(Boolean),
+  };
+}
+
 export function AdminStoreProvider({
   children,
   initialView = "overview",
@@ -170,6 +212,10 @@ export function AdminStoreProvider({
   const [view, setCurrentView] = useState<AdminView>(initialView);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [selectedMods, setSelectedMods] = useState<AdminMod[]>([]);
+  const [selectedResources, setSelectedResources] = useState<
+    AdminResourcePack[]
+  >([]);
+  const [selectedShaders, setSelectedShaders] = useState<AdminShaderPack[]>([]);
   const [coreModPolicy, setCoreModPolicy] =
     useState<CoreModPolicy>(DEFAULT_POLICY);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -204,6 +250,10 @@ export function AdminStoreProvider({
     install: false,
   });
   const [baselineMods, setBaselineMods] = useState<AdminMod[]>([]);
+  const [baselineResources, setBaselineResources] = useState<
+    AdminResourcePack[]
+  >([]);
+  const [baselineShaders, setBaselineShaders] = useState<AdminShaderPack[]>([]);
   const [baselineRuntime, setBaselineRuntime] = useState({
     minecraftVersion: "",
     loaderVersion: "",
@@ -337,12 +387,19 @@ export function AdminStoreProvider({
           "GET",
         );
 
-      const hasFabric = next.some(
-        (mod) => mod.projectId === coreModPolicy.fabricApiProjectId,
-      );
+      const fabricProjectId = coreModPolicy.fabricApiProjectId?.trim();
+      const fancyProjectId = coreModPolicy.fancyMenuProjectId?.trim();
+      const modMenuProjectId = coreModPolicy.modMenuProjectId?.trim();
+
+      const hasFabric = fabricProjectId
+        ? next.some((mod) => mod.projectId === fabricProjectId)
+        : true;
       if (!hasFabric) {
         try {
-          const fabric = await resolveProject(coreModPolicy.fabricApiProjectId);
+          if (!fabricProjectId) {
+            throw new Error("Missing Fabric API projectId in core policy");
+          }
+          const fabric = await resolveProject(fabricProjectId);
           next = mergeMods(next, [fabric]);
         } catch {
           setStatus("mods", "Could not auto-sync Fabric API.", "error");
@@ -350,18 +407,38 @@ export function AdminStoreProvider({
       }
 
       if (fancyEnabled) {
-        const hasFancy = next.some(
-          (mod) => mod.projectId === coreModPolicy.fancyMenuProjectId,
-        );
+        const hasFancy = fancyProjectId
+          ? next.some((mod) => mod.projectId === fancyProjectId)
+          : true;
         if (!hasFancy) {
           try {
-            const fancy = await resolveProject(
-              coreModPolicy.fancyMenuProjectId,
-            );
+            if (!fancyProjectId) {
+              throw new Error("Missing FancyMenu projectId in core policy");
+            }
+            const fancy = await resolveProject(fancyProjectId);
             next = mergeMods(next, [fancy]);
           } catch {
             setStatus("mods", "Could not auto-sync FancyMenu mod.", "error");
           }
+        }
+      }
+
+      const hasModMenu = modMenuProjectId
+        ? next.some((mod) => mod.projectId === modMenuProjectId)
+        : true;
+      if (!hasModMenu) {
+        try {
+          if (!modMenuProjectId) {
+            throw new Error("Missing Mod Menu projectId in core policy");
+          }
+          const modMenu = await resolveProject(modMenuProjectId);
+          next = mergeMods(next, [modMenu]);
+        } catch (error) {
+          console.warn("[admin] failed to auto-sync Mod Menu", {
+            minecraftVersion: cleanVersion,
+            projectId: modMenuProjectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
 
@@ -370,6 +447,7 @@ export function AdminStoreProvider({
     [
       coreModPolicy.fabricApiProjectId,
       coreModPolicy.fancyMenuProjectId,
+      coreModPolicy.modMenuProjectId,
       setStatus,
     ],
   );
@@ -386,9 +464,15 @@ export function AdminStoreProvider({
         setExaroton((current) =>
           mapStatusToExarotonState(payload.exaroton, current),
         );
-        setCoreModPolicy(payload.latestProfile.coreModPolicy ?? DEFAULT_POLICY);
+        setCoreModPolicy(
+          normalizeCoreModPolicy(payload.latestProfile.coreModPolicy),
+        );
         setSelectedMods(payload.latestProfile.mods ?? []);
+        setSelectedResources(payload.latestProfile.resources ?? []);
+        setSelectedShaders(payload.latestProfile.shaders ?? []);
         setBaselineMods(payload.latestProfile.mods ?? []);
+        setBaselineResources(payload.latestProfile.resources ?? []);
+        setBaselineShaders(payload.latestProfile.shaders ?? []);
         setBaselineRuntime({
           minecraftVersion: payload.latestProfile.minecraftVersion ?? "",
           loaderVersion: payload.latestProfile.loaderVersion ?? "",
@@ -415,7 +499,14 @@ export function AdminStoreProvider({
             }));
           }
         }
-        setLastPublishedSnapshot(buildPublishSnapshot(nextForm, syncedMods));
+        setLastPublishedSnapshot(
+          buildPublishSnapshot(
+            nextForm,
+            syncedMods,
+            payload.latestProfile.resources ?? [],
+            payload.latestProfile.shaders ?? [],
+          ),
+        );
       } catch (error) {
         setStatus(
           "bootstrap",
@@ -574,12 +665,24 @@ export function AdminStoreProvider({
     if (sessionState !== "active") {
       return false;
     }
-    const nextSnapshot = buildPublishSnapshot(form, selectedMods);
+    const nextSnapshot = buildPublishSnapshot(
+      form,
+      selectedMods,
+      selectedResources,
+      selectedShaders,
+    );
     return (
       !samePublishSnapshot(lastPublishedSnapshot, nextSnapshot) ||
       !sameMods(nextSnapshot.mods, lastPublishedSnapshot?.mods ?? [])
     );
-  }, [form, lastPublishedSnapshot, selectedMods, sessionState]);
+  }, [
+    form,
+    lastPublishedSnapshot,
+    selectedMods,
+    selectedResources,
+    selectedShaders,
+    sessionState,
+  ]);
 
   const logout = useCallback(async () => {
     try {
@@ -600,6 +703,10 @@ export function AdminStoreProvider({
       setSearchQuery,
       selectedMods,
       setSelectedMods,
+      selectedResources,
+      setSelectedResources,
+      selectedShaders,
+      setSelectedShaders,
       coreModPolicy,
       setCoreModPolicy,
       effectiveCorePolicy,
@@ -625,6 +732,10 @@ export function AdminStoreProvider({
       setBusy,
       baselineMods,
       setBaselineMods,
+      baselineResources,
+      setBaselineResources,
+      baselineShaders,
+      setBaselineShaders,
       baselineRuntime,
       setBaselineRuntime,
       lastPublishedSnapshot,
@@ -641,6 +752,8 @@ export function AdminStoreProvider({
     }),
     [
       baselineMods,
+      baselineResources,
+      baselineShaders,
       baselineRuntime,
       coreModPolicy,
       dependencyMap,
@@ -662,6 +775,8 @@ export function AdminStoreProvider({
       rail,
       searchResults,
       selectedMods,
+      selectedResources,
+      selectedShaders,
       sessionState,
       setBusy,
       setSearchQuery,

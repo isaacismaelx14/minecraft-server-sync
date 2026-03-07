@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { useAdminStore } from "@/admin/shared/store/admin-store";
 
 export function useOverviewPageModel() {
+  const router = useRouter();
   const store = useAdminStore();
 
   return {
@@ -11,7 +14,7 @@ export function useOverviewPageModel() {
     summaryStats: store.summaryStats,
     rail: store.rail,
     goToIdentity: () => store.setView("identity"),
-    goToMods: () => store.setView("mods"),
+    goToMods: () => router.push("/assets/mods"),
     goToFancy: () => store.setView("fancy"),
   };
 }

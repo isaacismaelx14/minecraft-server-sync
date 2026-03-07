@@ -6,14 +6,22 @@ import { useOverviewPageModel } from "./use-overview-page-model";
 const { useAdminStoreMock } = vi.hoisted(() => ({
   useAdminStoreMock: vi.fn(),
 }));
+const { pushMock, useRouterMock } = vi.hoisted(() => ({
+  pushMock: vi.fn(),
+  useRouterMock: vi.fn(),
+}));
 
 vi.mock("@/admin/shared/store/admin-store", () => ({
   useAdminStore: useAdminStoreMock,
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: useRouterMock,
 }));
 
 describe("useOverviewPageModel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useRouterMock.mockReturnValue({ push: pushMock });
     useAdminStoreMock.mockReturnValue({
       form: { serverName: "MC Server" },
       selectedMods: [{ name: "Alpha" }],
@@ -34,7 +42,7 @@ describe("useOverviewPageModel", () => {
       setView: ReturnType<typeof vi.fn>;
     };
     expect(setView).toHaveBeenNthCalledWith(1, "identity");
-    expect(setView).toHaveBeenNthCalledWith(2, "mods");
-    expect(setView).toHaveBeenNthCalledWith(3, "fancy");
+    expect(setView).toHaveBeenNthCalledWith(2, "fancy");
+    expect(pushMock).toHaveBeenCalledWith("/assets/mods");
   });
 });

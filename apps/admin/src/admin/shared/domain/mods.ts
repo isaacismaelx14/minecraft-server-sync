@@ -1,4 +1,20 @@
-import type { AdminMod } from "@/admin/client/types";
+import type {
+  AdminMod,
+  AdminResourcePack,
+  AdminShaderPack,
+} from "@/admin/client/types";
+
+type AssetLike =
+  | AdminMod
+  | AdminResourcePack
+  | AdminShaderPack
+  | {
+      name: string;
+      projectId?: string;
+      versionId?: string;
+      sha256?: string;
+      url?: string;
+    };
 
 export function modFingerprint(mod: AdminMod): string {
   return [
@@ -88,6 +104,42 @@ export function mergeMods(
   for (const mod of incoming) {
     const key = mod.projectId?.trim() || mod.name;
     map.set(key, mod);
+  }
+  return Array.from(map.values());
+}
+
+export function assetFingerprint(asset: AssetLike): string {
+  return [
+    asset.projectId ?? "",
+    asset.versionId ?? "",
+    asset.sha256 ?? "",
+    asset.url ?? "",
+  ].join("|");
+}
+
+export function sameAssets(left: AssetLike[], right: AssetLike[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const normalizedLeft = left.map(assetFingerprint).slice().sort();
+  const normalizedRight = right.map(assetFingerprint).slice().sort();
+  return normalizedLeft.every(
+    (value, index) => value === normalizedRight[index],
+  );
+}
+
+export function mergeAssets<T extends AssetLike>(
+  current: T[],
+  incoming: T[],
+): T[] {
+  const map = new Map<string, T>();
+  for (const item of current) {
+    const key = item.projectId?.trim() || item.name;
+    map.set(key, item);
+  }
+  for (const item of incoming) {
+    const key = item.projectId?.trim() || item.name;
+    map.set(key, item);
   }
   return Array.from(map.values());
 }

@@ -42,6 +42,76 @@ export class ResolvedModDto {
   sha256!: string;
 }
 
+export class ResolvedResourcePackDto {
+  @IsString()
+  kind!: 'resourcepack';
+
+  @IsString()
+  name!: string;
+
+  @IsString()
+  @IsIn(['modrinth', 'direct'])
+  provider!: 'modrinth' | 'direct';
+
+  @IsString()
+  @IsOptional()
+  projectId?: string;
+
+  @IsString()
+  @IsOptional()
+  versionId?: string;
+
+  @IsString()
+  url!: string;
+
+  @IsString()
+  @Matches(/^[A-Fa-f0-9]{64}$/)
+  sha256!: string;
+
+  @IsString()
+  @IsOptional()
+  iconUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  slug?: string;
+}
+
+export class ResolvedShaderPackDto {
+  @IsString()
+  kind!: 'shaderpack';
+
+  @IsString()
+  name!: string;
+
+  @IsString()
+  @IsIn(['modrinth', 'direct'])
+  provider!: 'modrinth' | 'direct';
+
+  @IsString()
+  @IsOptional()
+  projectId?: string;
+
+  @IsString()
+  @IsOptional()
+  versionId?: string;
+
+  @IsString()
+  url!: string;
+
+  @IsString()
+  @Matches(/^[A-Fa-f0-9]{64}$/)
+  sha256!: string;
+
+  @IsString()
+  @IsOptional()
+  iconUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  slug?: string;
+}
+
 export class FancyMenuDto {
   @Type(() => Boolean)
   @IsBoolean()
@@ -124,6 +194,18 @@ export class GenerateLockfileDto {
   @Type(() => ResolvedModDto)
   mods!: ResolvedModDto[];
 
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedResourcePackDto)
+  @IsOptional()
+  resources?: ResolvedResourcePackDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedShaderPackDto)
+  @IsOptional()
+  shaders?: ResolvedShaderPackDto[];
+
   @ValidateNested()
   @Type(() => FancyMenuDto)
   @IsOptional()
@@ -152,6 +234,28 @@ export class InstallModDto {
 
   @IsString()
   minecraftVersion!: string;
+
+  @IsString()
+  @IsOptional()
+  versionId?: string;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  includeDependencies?: boolean;
+}
+
+export class InstallAssetDto {
+  @IsString()
+  projectId!: string;
+
+  @IsString()
+  minecraftVersion!: string;
+
+  @IsString()
+  @IsIn(['mod', 'resourcepack', 'shaderpack'])
+  @IsOptional()
+  type?: 'mod' | 'resourcepack' | 'shaderpack';
 
   @IsString()
   @IsOptional()
@@ -201,6 +305,18 @@ export class PublishProfileDto {
   @Type(() => ResolvedModDto)
   mods!: ResolvedModDto[];
 
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedResourcePackDto)
+  @IsOptional()
+  resources?: ResolvedResourcePackDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedShaderPackDto)
+  @IsOptional()
+  shaders?: ResolvedShaderPackDto[];
+
   @ValidateNested()
   @Type(() => FancyMenuDto)
   @IsOptional()
@@ -246,6 +362,18 @@ export class SaveDraftDto {
   @ValidateNested({ each: true })
   @Type(() => ResolvedModDto)
   mods?: ResolvedModDto[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedResourcePackDto)
+  resources?: ResolvedResourcePackDto[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ResolvedShaderPackDto)
+  shaders?: ResolvedShaderPackDto[];
 }
 
 export class ConnectExarotonDto {

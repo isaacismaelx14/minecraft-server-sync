@@ -2,6 +2,8 @@
 
 import { buildEventSourceUrl, requestJson } from "@/admin/client/http";
 import type {
+  AdminResourcePack,
+  AdminShaderPack,
   ExarotonActionPayload,
   PublishPayload,
   PublishProgressPayload,
@@ -18,6 +20,30 @@ import { useAdminStore } from "@/admin/shared/store/admin-store";
 
 export function useTopBarModel() {
   const store = useAdminStore();
+
+  const normalizeProvider = (
+    provider: unknown,
+    projectId?: string,
+  ): "modrinth" | "direct" => {
+    if (provider === "modrinth" || provider === "direct") {
+      return provider;
+    }
+    return projectId?.trim() ? "modrinth" : "direct";
+  };
+
+  const sanitizeResources = (items: AdminResourcePack[]): AdminResourcePack[] =>
+    items.map((entry) => ({
+      ...entry,
+      kind: "resourcepack",
+      provider: normalizeProvider(entry.provider, entry.projectId),
+    }));
+
+  const sanitizeShaders = (items: AdminShaderPack[]): AdminShaderPack[] =>
+    items.map((entry) => ({
+      ...entry,
+      kind: "shaderpack",
+      provider: normalizeProvider(entry.provider, entry.projectId),
+    }));
 
   const validateFormFields = (): boolean => {
     let validationError = "";
@@ -80,6 +106,10 @@ export function useTopBarModel() {
 
   const saveDraft = async () => {
     if (!validateFormFields()) return;
+    const resources = sanitizeResources(store.selectedResources);
+    const shaders = sanitizeShaders(store.selectedShaders);
+    store.setSelectedResources(resources);
+    store.setSelectedShaders(shaders);
     store.setStatus("draft", "Saving draft...");
     try {
       const payload = await requestJson<SaveDraftPayload>(
@@ -92,6 +122,8 @@ export function useTopBarModel() {
           minecraftVersion: store.form.minecraftVersion.trim() || undefined,
           loaderVersion: store.form.loaderVersion.trim() || undefined,
           mods: store.selectedMods,
+          resources,
+          shaders,
           fancyMenu: collectFancyMenuPayload(store.form),
           branding: collectBrandingPayload(store.form),
         },
@@ -181,6 +213,10 @@ export function useTopBarModel() {
         minecraftVersion,
       );
       store.setSelectedMods(synced);
+      const resources = sanitizeResources(store.selectedResources);
+      const shaders = sanitizeShaders(store.selectedShaders);
+      store.setSelectedResources(resources);
+      store.setSelectedShaders(shaders);
 
       const payload = {
         profileId: store.form.profileId.trim(),
@@ -189,6 +225,8 @@ export function useTopBarModel() {
         minecraftVersion,
         loaderVersion,
         mods: synced,
+        resources,
+        shaders,
         fancyMenu: collectFancyMenuPayload(store.form),
         branding: collectBrandingPayload(store.form),
       };
@@ -198,6 +236,11 @@ export function useTopBarModel() {
         "POST",
         payload,
       );
+      console.info("[admin] publish job started", {
+        jobId: started.jobId,
+        minecraftVersion,
+        loaderVersion,
+      });
 
       const published = await new Promise<PublishPayload>((resolve, reject) => {
         const stream = new EventSource(
@@ -213,8 +256,16 @@ export function useTopBarModel() {
             const parsed = JSON.parse(
               (event as MessageEvent<string>).data,
             ) as PublishProgressPayload;
+            console.info("[admin] publish progress", {
+              jobId: started.jobId,
+              stage: parsed.stage,
+              message: parsed.message,
+            });
             store.setStatus("publish", parsed.message, "idle");
           } catch {
+            console.warn("[admin] publish progress parse failed", {
+              jobId: started.jobId,
+            });
             store.setStatus("publish", "Publishing next release...", "idle");
           }
         };
@@ -222,20 +273,29 @@ export function useTopBarModel() {
         const onDone = (event: Event) => {
           cleanup();
           try {
+            console.info("[admin] publish done", { jobId: started.jobId });
             resolve(
               JSON.parse(
                 (event as MessageEvent<string>).data,
               ) as PublishPayload,
             );
           } catch {
+            console.error("[admin] publish done payload invalid", {
+              jobId: started.jobId,
+            });
             reject(new Error("Publish stream returned an invalid payload"));
           }
         };
 
         const onError = (event: Event) => {
           cleanup();
+          const rawData = (event as MessageEvent<string>).data;
+          console.error("[admin] publish stream error event", {
+            jobId: started.jobId,
+            rawData,
+          });
           try {
-            const parsed = JSON.parse((event as MessageEvent<string>).data) as {
+            const parsed = JSON.parse(rawData) as {
               message?: string;
             };
             reject(new Error(parsed.message || "Publish failed."));
@@ -256,6 +316,8 @@ export function useTopBarModel() {
           published.releaseVersion || current.currentReleaseVersion,
       }));
       store.setBaselineMods([...synced]);
+      store.setBaselineResources([...store.selectedResources]);
+      store.setBaselineShaders([...store.selectedShaders]);
       store.setBaselineRuntime({ minecraftVersion, loaderVersion });
       store.setLastPublishedSnapshot(
         buildPublishSnapshot(
@@ -266,6 +328,8 @@ export function useTopBarModel() {
               published.releaseVersion || store.form.currentReleaseVersion,
           },
           synced,
+          store.selectedResources,
+          store.selectedShaders,
         ),
       );
       store.setHasSavedDraft(false);

@@ -6,7 +6,7 @@ describe("admin view mapping", () => {
   it("maps views to standalone routes", () => {
     expect(getAdminPathForView("overview")).toBe("/");
     expect(getAdminPathForView("identity")).toBe("/identity");
-    expect(getAdminPathForView("mods")).toBe("/mod-manager");
+    expect(getAdminPathForView("assets")).toBe("/assets");
     expect(getAdminPathForView("fancy")).toBe("/fancy-menu");
     expect(getAdminPathForView("servers")).toBe("/servers");
     expect(getAdminPathForView("launcher")).toBe("/launcher");
@@ -15,7 +15,10 @@ describe("admin view mapping", () => {
   it("resolves routes back to the correct admin views", () => {
     expect(getAdminViewForPath("/")).toBe("overview");
     expect(getAdminViewForPath("/identity")).toBe("identity");
-    expect(getAdminViewForPath("/mod-manager")).toBe("mods");
+    expect(getAdminViewForPath("/assets")).toBe("assets");
+    expect(getAdminViewForPath("/assets/mods")).toBe("assets");
+    expect(getAdminViewForPath("/assets/resourcepacks")).toBe("assets");
+    expect(getAdminViewForPath("/assets/shaderpacks")).toBe("assets");
     expect(getAdminViewForPath("/fancy-menu")).toBe("fancy");
     expect(getAdminViewForPath("/servers")).toBe("servers");
     expect(getAdminViewForPath("/launcher")).toBe("launcher");

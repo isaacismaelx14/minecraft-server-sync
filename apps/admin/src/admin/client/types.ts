@@ -11,15 +11,41 @@ export type AdminMod = {
   slug?: string;
 };
 
+export type AdminResourcePack = {
+  kind: "resourcepack";
+  name: string;
+  provider: "modrinth" | "direct";
+  projectId?: string;
+  versionId?: string;
+  url: string;
+  sha256: string;
+  iconUrl?: string;
+  slug?: string;
+};
+
+export type AdminShaderPack = {
+  kind: "shaderpack";
+  name: string;
+  provider: "modrinth" | "direct";
+  projectId?: string;
+  versionId?: string;
+  url: string;
+  sha256: string;
+  iconUrl?: string;
+  slug?: string;
+};
+
 export type CoreModPolicy = {
   fabricApiProjectId: string;
   fancyMenuProjectId: string;
+  modMenuProjectId: string;
   lockedProjectIds: string[];
   nonRemovableProjectIds: string[];
   rules: {
     fabricApiRequired: true;
     fabricApiVersionEditable: true;
     fancyMenuRequiredWhenEnabled: true;
+    modMenuRequired: true;
     fancyMenuEnabled: boolean;
   };
 };
@@ -96,6 +122,8 @@ export type BootstrapPayload = {
     loader: string;
     loaderVersion: string;
     mods: AdminMod[];
+    resources: AdminResourcePack[];
+    shaders: AdminShaderPack[];
     coreModPolicy: CoreModPolicy;
     fancyMenu?: Partial<FancyMenuPayload>;
     branding?: BrandingPayload;
@@ -112,6 +140,8 @@ export type BootstrapPayload = {
     minecraftVersion?: string | null;
     loaderVersion?: string | null;
     mods?: AdminMod[] | null;
+    resources?: AdminResourcePack[] | null;
+    shaders?: AdminShaderPack[] | null;
     fancyMenu?: Partial<FancyMenuPayload> | null;
     branding?: BrandingPayload | null;
   } | null;
@@ -148,6 +178,18 @@ export type InstallModsPayload = {
   primary: AdminMod;
   dependencies: AdminMod[];
   mods: AdminMod[];
+};
+
+export type InstallResourcePacksPayload = {
+  primary: AdminResourcePack;
+  dependencies: AdminResourcePack[];
+  resources: AdminResourcePack[];
+};
+
+export type InstallShaderPacksPayload = {
+  primary: AdminShaderPack;
+  dependencies: AdminShaderPack[];
+  shaders: AdminShaderPack[];
 };
 
 export type ModVersionsPayload = {

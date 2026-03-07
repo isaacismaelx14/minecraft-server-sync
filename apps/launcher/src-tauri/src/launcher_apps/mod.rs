@@ -15,6 +15,7 @@ use std::os::windows::process::CommandExt;
 
 use serde::Deserialize;
 use serde_json::json;
+use sysinfo::System;
 use tokio::time::{Duration, timeout};
 
 use crate::{
@@ -24,6 +25,8 @@ use crate::{
     OpenLauncherResponse, ProfileLock,
   },
 };
+
+const FALLBACK_PRISM_ICON_BYTES: &[u8] = include_bytes!("../../icons/icon.png");
 
 #[cfg(target_os = "windows")]
 use winreg::{
@@ -317,8 +320,18 @@ pub async fn bootstrap_prism_instance(
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize mmc-pack.json: {error}")))?,
   )?;
 
-  let cfg =
-    format!("InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n");
+  let mut cfg = format!(
+    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
+  );
+
+  let mut system = System::new_all();
+  system.refresh_memory();
+  let total_memory = system.total_memory();
+  let has_more_than_16gb = total_memory >= 16 * 1024 * 1024 * 1024
+    || total_memory >= 16 * 1024 * 1024;
+  if has_more_than_16gb {
+    cfg.push_str("OverrideMemory=true\nMinMemAlloc=1024\nMaxMemAlloc=4096\n");
+  }
   fs::write(instance_dir.join("instance.cfg"), cfg)?;
 
   #[cfg(target_os = "macos")]
@@ -328,17 +341,27 @@ pub async fn bootstrap_prism_instance(
 
   let minecraft_dir = instance_dir.join(minecraft_folder);
   let icon_path = minecraft_dir.join("icon.png");
+  let instance_icon_path = instance_dir.join("icon.png");
 
+  let mut icon_written = false;
   if let Some(logo_url) = lock.branding.logo_url.as_deref() {
     let client = state.http.clone();
     if let Ok(response) = client.get(logo_url).send().await {
       if response.status().is_success() {
         if let Ok(bytes) = response.bytes().await {
           let _ = fs::create_dir_all(&minecraft_dir);
-          let _ = fs::write(&icon_path, bytes);
+          let _ = fs::write(&icon_path, &bytes);
+          let _ = fs::write(&instance_icon_path, &bytes);
+          icon_written = true;
         }
       }
     }
+  }
+
+  if !icon_written {
+    let _ = fs::create_dir_all(&minecraft_dir);
+    let _ = fs::write(&icon_path, FALLBACK_PRISM_ICON_BYTES);
+    let _ = fs::write(&instance_icon_path, FALLBACK_PRISM_ICON_BYTES);
   }
 
   Ok(LauncherBootstrapResult {
@@ -448,7 +471,7 @@ fn to_public_candidates(candidates: &[DetectedLauncher]) -> Vec<LauncherCandidat
 }
 
 pub fn preferred_detected_launcher_id(candidates: &[LauncherCandidate]) -> Option<String> {
-  preferred_detected_launcher_id_with_strategy(candidates, cfg!(target_os = "windows"))
+  preferred_detected_launcher_id_with_strategy(candidates, true)
 }
 
 fn preferred_detected_launcher_id_with_strategy(
@@ -472,7 +495,7 @@ fn preferred_detected_launcher_id_with_strategy(
 }
 
 pub fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
-  selected_launcher_id_with_strategy(settings, detected, cfg!(target_os = "windows"))
+  selected_launcher_id_with_strategy(settings, detected, true)
 }
 
 fn selected_launcher_id_with_strategy(

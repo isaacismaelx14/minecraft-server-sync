@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleInit,
   UnauthorizedException,
@@ -11,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { extname } from 'node:path';
+import { inspect } from 'node:util';
 import {
   BrandingSchema,
   FancyMenuSettingsSchema,
@@ -28,6 +30,7 @@ import {
 } from './crypto/exaroton-crypto';
 import {
   GenerateLockfileDto,
+  InstallAssetDto,
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
@@ -142,6 +145,7 @@ interface ModrinthProject {
   slug: string;
   title: string;
   icon_url?: string;
+  project_type?: string;
 }
 
 interface ModrinthDependency {
@@ -168,6 +172,32 @@ interface ResolvedModWithDeps {
   mod: ManagedMod;
   requiredDependencies: string[];
 }
+
+type ManagedResourcePack = {
+  kind: 'resourcepack';
+  name: string;
+  provider: 'modrinth' | 'direct';
+  projectId?: string;
+  versionId?: string;
+  url: string;
+  sha256: string;
+  iconUrl?: string;
+  slug?: string;
+};
+
+type ManagedShaderPack = {
+  kind: 'shaderpack';
+  name: string;
+  provider: 'modrinth' | 'direct';
+  projectId?: string;
+  versionId?: string;
+  url: string;
+  sha256: string;
+  iconUrl?: string;
+  slug?: string;
+};
+
+type AssetType = 'mod' | 'resourcepack' | 'shaderpack';
 
 interface FabricLoaderRow {
   version: string;
@@ -199,6 +229,7 @@ function toAdminAuthPayload(session: AdminSessionResult) {
 
 @Injectable()
 export class AdminService implements OnModuleInit {
+  private readonly logger = new Logger(AdminService.name);
   private readonly modrinthApiBase = 'https://api.modrinth.com/v2';
   private readonly fabricMetaBase = 'https://meta.fabricmc.net';
   private readonly publishSessionTtlMs = 15 * 60 * 1000;
@@ -337,6 +368,8 @@ export class AdminService implements OnModuleInit {
     const minecraftVersion = draft?.minecraftVersion || latest.minecraftVersion;
     const loaderVersion = draft?.loaderVersion || latest.loaderVersion;
     const mods = draft?.mods || normalizedMods;
+    const resources = draft?.resources || lock.resources || [];
+    const shaders = draft?.shaders || lock.shaders || [];
     const fancyMenu = draft?.fancyMenu || activeFancyMenu;
     const branding = draft?.branding || lockBranding;
 
@@ -360,6 +393,8 @@ export class AdminService implements OnModuleInit {
         loader: latest.loader,
         loaderVersion,
         mods,
+        resources,
+        shaders,
         fancyMenu,
         coreModPolicy: this.coreModPolicy.buildMetadata(
           fancyMenu?.enabled === true,
@@ -448,6 +483,8 @@ export class AdminService implements OnModuleInit {
     const minecraftVersion = input.minecraftVersion?.trim() || undefined;
     const loaderVersion = input.loaderVersion?.trim() || undefined;
     const mods = input.mods || undefined;
+    const resources = input.resources || undefined;
+    const shaders = input.shaders || undefined;
 
     const rawBranding = {
       serverName,
@@ -480,6 +517,8 @@ export class AdminService implements OnModuleInit {
           minecraftVersion,
           loaderVersion,
           mods,
+          resources,
+          shaders,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -492,6 +531,8 @@ export class AdminService implements OnModuleInit {
           minecraftVersion,
           loaderVersion,
           mods,
+          resources,
+          shaders,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -1005,6 +1046,15 @@ export class AdminService implements OnModuleInit {
   }
 
   async searchMods(query: string, minecraftVersion: string) {
+    return this.searchAssets(query, minecraftVersion, 'mod');
+  }
+
+  async searchAssets(
+    query: string,
+    minecraftVersion: string,
+    type: AssetType = 'mod',
+    limit = 12,
+  ) {
     const cleanQuery = query.trim();
     const cleanVersion = minecraftVersion.trim();
 
@@ -1013,7 +1063,9 @@ export class AdminService implements OnModuleInit {
     const searchIndex = cleanQuery ? 'relevance' : 'follows';
 
     // Build facets array - only filter by project type for popular mods
-    const facetsArray = [['project_type:mod']];
+    const facetsArray = [
+      [`project_type:${this.modrinthProjectTypeForAsset(type)}`],
+    ];
 
     // Only add version filter if we have both a query and version
     if (cleanVersion && cleanQuery) {
@@ -1022,7 +1074,10 @@ export class AdminService implements OnModuleInit {
 
     const facets = JSON.stringify(facetsArray);
 
-    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(searchQuery)}&index=${searchIndex}&limit=12&facets=${encodeURIComponent(facets)}`;
+    const safeLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(Math.trunc(limit), 1), 50)
+      : 12;
+    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(searchQuery)}&index=${searchIndex}&limit=${safeLimit}&facets=${encodeURIComponent(facets)}`;
 
     console.log(`Modrinth API request: ${url}`);
 
@@ -1059,6 +1114,14 @@ export class AdminService implements OnModuleInit {
       categories: hit.categories,
       latestVersion: hit.latest_version,
     }));
+  }
+
+  async popularAssets(
+    minecraftVersion: string,
+    type: AssetType = 'mod',
+    limit = 10,
+  ) {
+    return this.searchAssets('', minecraftVersion, type, limit);
   }
 
   async analyzeModDependencies(projectId: string, minecraftVersion: string) {
@@ -1133,6 +1196,34 @@ export class AdminService implements OnModuleInit {
     };
   }
 
+  async installAsset(input: InstallAssetDto) {
+    const assetType = this.normalizeAssetType(input.type);
+    if (assetType === 'mod') {
+      return this.installMod(input);
+    }
+
+    const resolved = await this.resolveCompatiblePack(
+      input.projectId,
+      input.minecraftVersion,
+      assetType,
+      input.versionId?.trim() || undefined,
+    );
+
+    if (assetType === 'resourcepack') {
+      return {
+        primary: resolved,
+        dependencies: [],
+        resources: [resolved],
+      };
+    }
+
+    return {
+      primary: resolved,
+      dependencies: [],
+      shaders: [resolved],
+    };
+  }
+
   async resolveCompatibleMod(
     projectId: string,
     minecraftVersion: string,
@@ -1147,7 +1238,33 @@ export class AdminService implements OnModuleInit {
     return resolved.mod;
   }
 
+  async resolveCompatibleAsset(
+    projectId: string,
+    minecraftVersion: string,
+    type: AssetType = 'mod',
+    versionId?: string,
+  ) {
+    const assetType = this.normalizeAssetType(type);
+    if (assetType === 'mod') {
+      return this.resolveCompatibleMod(projectId, minecraftVersion, versionId);
+    }
+    return this.resolveCompatiblePack(
+      projectId,
+      minecraftVersion,
+      assetType,
+      versionId,
+    );
+  }
+
   async getModVersions(projectId: string, minecraftVersion: string) {
+    return this.getAssetVersions(projectId, minecraftVersion, 'mod');
+  }
+
+  async getAssetVersions(
+    projectId: string,
+    minecraftVersion: string,
+    type: AssetType = 'mod',
+  ) {
     const cleanProjectId = projectId.trim();
     const cleanMinecraftVersion = minecraftVersion.trim();
     if (!cleanProjectId || !cleanMinecraftVersion) {
@@ -1160,10 +1277,11 @@ export class AdminService implements OnModuleInit {
 
     const project = await this.fetchProject(cleanProjectId, {});
     const versions = await this.fetchProjectVersions(cleanProjectId);
+    const requireFabricLoader = this.normalizeAssetType(type) === 'mod';
     const compatible = versions
       .filter(
         (entry) =>
-          entry.loaders.includes('fabric') &&
+          (!requireFabricLoader || entry.loaders.includes('fabric')) &&
           entry.game_versions.includes(cleanMinecraftVersion),
       )
       .sort((left, right) => {
@@ -1201,6 +1319,8 @@ export class AdminService implements OnModuleInit {
       minecraftVersion: input.minecraftVersion,
       loaderVersion: input.loaderVersion,
       mods: input.mods,
+      resources: input.resources ?? [],
+      shaders: input.shaders ?? [],
       fancyMenu: input.fancyMenu ?? {},
     });
   }
@@ -1227,10 +1347,12 @@ export class AdminService implements OnModuleInit {
         this.finishPublishSession(jobId, result);
       })
       .catch((error) => {
-        this.failPublishSession(
-          jobId,
-          (error as Error).message || 'Publish failed',
+        const detail = this.formatErrorDetails(error);
+        this.logger.error(
+          `[publish:${jobId}] failed (${input.minecraftVersion}/${input.loaderVersion}) ${detail}`,
+          error instanceof Error ? error.stack : undefined,
         );
+        this.failPublishSession(jobId, detail || 'Publish failed');
       });
 
     return { jobId };
@@ -1329,6 +1451,8 @@ export class AdminService implements OnModuleInit {
           minecraftVersion: input.minecraftVersion,
           loaderVersion: input.loaderVersion,
           mods: input.mods,
+          resources: input.resources ?? [],
+          shaders: input.shaders ?? [],
           fancyMenu,
           branding: {
             logoUrl: input.branding?.logoUrl?.trim() || undefined,
@@ -1442,6 +1566,10 @@ export class AdminService implements OnModuleInit {
           serverModSummary,
           generatedLock: generated,
         };
+      },
+      {
+        maxWait: 10_000,
+        timeout: 60_000,
       },
     );
 
@@ -2000,6 +2128,31 @@ export class AdminService implements OnModuleInit {
     }
   }
 
+  private formatErrorDetails(error: unknown): string {
+    if (!error) {
+      return 'Unknown error';
+    }
+
+    if (error instanceof Error) {
+      const causeCode = (error as Error & { cause?: { code?: string } }).cause
+        ?.code;
+      if (typeof causeCode === 'string' && causeCode.trim().length > 0) {
+        return `${error.message} [${causeCode}]`;
+      }
+      return error.message || error.name;
+    }
+
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return inspect(error);
+    }
+  }
+
   private cleanupPublishSessions() {
     const now = Date.now();
     for (const [jobId, session] of this.publishSessions.entries()) {
@@ -2343,6 +2496,23 @@ export class AdminService implements OnModuleInit {
     }
   }
 
+  private normalizeAssetType(type?: string): AssetType {
+    if (type === 'resourcepack' || type === 'shaderpack') {
+      return type;
+    }
+    return 'mod';
+  }
+
+  private modrinthProjectTypeForAsset(type: AssetType): string {
+    if (type === 'resourcepack') {
+      return 'resourcepack';
+    }
+    if (type === 'shaderpack') {
+      return 'shader';
+    }
+    return 'mod';
+  }
+
   private async resolveCompatibleModWithDependencies(
     projectId: string,
     minecraftVersion: string,
@@ -2400,6 +2570,51 @@ export class AdminService implements OnModuleInit {
     };
   }
 
+  private async resolveCompatiblePack(
+    projectId: string,
+    minecraftVersion: string,
+    type: 'resourcepack' | 'shaderpack',
+    versionId?: string,
+  ): Promise<ManagedResourcePack | ManagedShaderPack> {
+    const cleanProjectId = projectId.trim();
+    const cleanMinecraftVersion = minecraftVersion.trim();
+    const cleanVersionId = versionId?.trim();
+
+    const [project, versions] = await Promise.all([
+      this.fetchProject(cleanProjectId, {}),
+      this.fetchProjectVersions(cleanProjectId),
+    ]);
+
+    const selected = this.selectBestCompatibleVersion(
+      project.title,
+      cleanMinecraftVersion,
+      versions,
+      cleanVersionId,
+      false,
+    );
+    const file =
+      selected.files.find((entry) => entry.primary) ?? selected.files[0];
+
+    if (!file) {
+      throw new BadGatewayException(
+        `No downloadable file found for '${project.title}'`,
+      );
+    }
+
+    const sha256 = await this.computeSha256FromUrl(file.url);
+    return {
+      kind: type,
+      name: project.title,
+      provider: 'modrinth',
+      projectId: project.id,
+      versionId: selected.id,
+      url: file.url,
+      sha256,
+      iconUrl: project.icon_url,
+      slug: project.slug,
+    };
+  }
+
   private async fetchProject(
     projectId: string,
     cache?: Record<string, ModrinthProject>,
@@ -2408,16 +2623,30 @@ export class AdminService implements OnModuleInit {
       return cache[projectId];
     }
 
-    const response = await fetch(
-      `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}`,
-      {
-        headers: {
-          'User-Agent': 'mvl-admin-mvp/0.2.0',
+    let response: globalThis.Response;
+    try {
+      response = await fetch(
+        `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}`,
+        {
+          headers: {
+            'User-Agent': 'mvl-admin-mvp/0.2.0',
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      const detail = this.formatErrorDetails(error);
+      this.logger.error(
+        `[modrinth] project fetch failed projectId=${projectId} detail=${detail}`,
+      );
+      throw new BadGatewayException(
+        `Failed to fetch Modrinth project '${projectId}' (${detail})`,
+      );
+    }
 
     if (!response.ok) {
+      this.logger.warn(
+        `[modrinth] project fetch non-ok projectId=${projectId} status=${response.status}`,
+      );
       throw new BadGatewayException(
         `Failed to fetch Modrinth project '${projectId}' (${response.status})`,
       );
@@ -2434,16 +2663,30 @@ export class AdminService implements OnModuleInit {
   private async fetchProjectVersions(
     projectId: string,
   ): Promise<ModrinthVersion[]> {
-    const response = await fetch(
-      `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}/version`,
-      {
-        headers: {
-          'User-Agent': 'mvl-admin-mvp/0.2.0',
+    let response: globalThis.Response;
+    try {
+      response = await fetch(
+        `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}/version`,
+        {
+          headers: {
+            'User-Agent': 'mvl-admin-mvp/0.2.0',
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      const detail = this.formatErrorDetails(error);
+      this.logger.error(
+        `[modrinth] versions fetch failed projectId=${projectId} detail=${detail}`,
+      );
+      throw new BadGatewayException(
+        `Failed to fetch Modrinth versions for '${projectId}' (${detail})`,
+      );
+    }
 
     if (!response.ok) {
+      this.logger.warn(
+        `[modrinth] versions fetch non-ok projectId=${projectId} status=${response.status}`,
+      );
       throw new BadGatewayException(
         `Failed to fetch Modrinth versions for '${projectId}' (${response.status})`,
       );
@@ -2457,16 +2700,17 @@ export class AdminService implements OnModuleInit {
     minecraftVersion: string,
     versions: ModrinthVersion[],
     preferredVersionId?: string,
+    requireFabricLoader = true,
   ): ModrinthVersion {
     const compatible = versions.filter(
       (entry) =>
-        entry.loaders.includes('fabric') &&
+        (!requireFabricLoader || entry.loaders.includes('fabric')) &&
         entry.game_versions.includes(minecraftVersion),
     );
 
     if (compatible.length === 0) {
       throw new BadGatewayException(
-        `No compatible Fabric version found for '${projectName}' on Minecraft ${minecraftVersion}`,
+        `No compatible version found for '${projectName}' on Minecraft ${minecraftVersion}`,
       );
     }
 
@@ -2676,6 +2920,8 @@ export class AdminService implements OnModuleInit {
       iconUrl?: string;
       slug?: string;
     }>;
+    resources: ManagedResourcePack[];
+    shaders: ManagedShaderPack[];
     fancyMenu: {
       enabled?: boolean;
       mode?: 'simple' | 'custom';
@@ -2759,8 +3005,8 @@ export class AdminService implements OnModuleInit {
         address: cleanServerAddress,
       },
       items: mods,
-      resources: [],
-      shaders: [],
+      resources: input.resources,
+      shaders: input.shaders,
       configs,
       runtimeHints: previousRuntime ?? {
         javaMajor: 17,
@@ -2856,7 +3102,29 @@ export class AdminService implements OnModuleInit {
       );
     }
 
-    return this.sandboxClient.validateBundle(payload);
+    try {
+      return await this.sandboxClient.validateBundle(payload);
+    } catch (error) {
+      const detail = this.formatErrorDetails(error).toLowerCase();
+      const isConnectivityError =
+        detail.includes('fetch failed') ||
+        detail.includes('timeout') ||
+        detail.includes('econn') ||
+        detail.includes('enotfound') ||
+        detail.includes('sandbox request failed');
+
+      if (!isConnectivityError) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `[fancymenu] sandbox validation unavailable; continuing with checksum-only validation for publish. detail=${detail}`,
+      );
+      return {
+        entryCount: 0,
+        totalUncompressedBytes: payload.length,
+      };
+    }
   }
 
   private tryResolveArtifactKeyFromUrl(url: string): string | null {
@@ -2921,6 +3189,8 @@ export class AdminService implements OnModuleInit {
       minecraftVersion?: unknown;
       loaderVersion?: unknown;
       mods?: unknown;
+      resources?: unknown;
+      shaders?: unknown;
       fancyMenu?: unknown;
       branding?: unknown;
     };
@@ -2955,6 +3225,12 @@ export class AdminService implements OnModuleInit {
           ? draft.loaderVersion.trim()
           : null,
       mods: Array.isArray(draft.mods) ? (draft.mods as ManagedMod[]) : null,
+      resources: Array.isArray(draft.resources)
+        ? (draft.resources as ManagedResourcePack[])
+        : null,
+      shaders: Array.isArray(draft.shaders)
+        ? (draft.shaders as ManagedShaderPack[])
+        : null,
       fancyMenu,
       branding,
     };

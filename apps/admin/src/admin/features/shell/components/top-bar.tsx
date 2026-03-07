@@ -3,11 +3,9 @@
 import { memo, useState } from "react";
 
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
-import { ExarotonLogo } from "@/admin/shared/ui/exaroton-logo";
 import {
   exarotonStatusClass,
   getExarotonStatusTone,
-  statusClass,
 } from "@/admin/shared/ui/status";
 
 import { useTopBarModel } from "../hooks/use-top-bar-model";
@@ -119,9 +117,9 @@ export const TopBar = memo(function TopBar() {
     hasSavedDraft,
     isBusy,
     logout,
-    statuses,
     saveDraft,
     publishProfile,
+    statuses,
   } = useTopBarModel();
   const [showExarotonPublishWarning, setShowExarotonPublishWarning] =
     useState(false);
@@ -158,20 +156,9 @@ export const TopBar = memo(function TopBar() {
   return (
     <section className="topbar">
       <div className="topbar-meta">
-        {exaroton.connected ? (
-          <ExarotonWidget />
-        ) : (
-          <ExarotonLogo style={{ height: 28 }} />
-        )}
+        {exaroton.connected ? <ExarotonWidget /> : null}
       </div>
       <div className="topbar-actions">
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => void saveDraft()}
-        >
-          Save Draft
-        </button>
         {hasPendingPublish || hasSavedDraft ? (
           <div className="publish-reminder">
             {hasPendingPublish ? (
@@ -199,6 +186,13 @@ export const TopBar = memo(function TopBar() {
           <span className="publish-clean">All changes published</span>
         )}
         <button
+          className="btn ghost"
+          type="button"
+          onClick={() => void saveDraft()}
+        >
+          Save Draft
+        </button>
+        <button
           className="btn danger ghost"
           type="button"
           style={{ padding: "8px 12px" }}
@@ -206,9 +200,6 @@ export const TopBar = memo(function TopBar() {
         >
           Logout
         </button>
-      </div>
-      <div className={statusClass(statuses.draft.tone)}>
-        {statuses.draft.text}
       </div>
 
       {showExarotonPublishWarning ? (

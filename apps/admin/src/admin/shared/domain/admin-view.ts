@@ -1,7 +1,7 @@
 export type AdminView =
   | "overview"
   | "identity"
-  | "mods"
+  | "assets"
   | "fancy"
   | "servers"
   | "launcher";
@@ -9,7 +9,7 @@ export type AdminView =
 const ADMIN_VIEW_PATHS: Record<AdminView, string> = {
   overview: "/",
   identity: "/identity",
-  mods: "/mod-manager",
+  assets: "/assets",
   fancy: "/fancy-menu",
   servers: "/servers",
   launcher: "/launcher",
@@ -26,8 +26,13 @@ export function getAdminViewForPath(
   if (normalized === "/identity") {
     return "identity";
   }
-  if (normalized === "/mod-manager") {
-    return "mods";
+  if (
+    normalized === "/assets" ||
+    normalized === "/assets/mods" ||
+    normalized === "/assets/resourcepacks" ||
+    normalized === "/assets/shaderpacks"
+  ) {
+    return "assets";
   }
   if (normalized === "/fancy-menu") {
     return "fancy";

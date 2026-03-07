@@ -7,7 +7,7 @@ import { useAdminStore } from "@/admin/shared/store/admin-store";
 function NavIcon({
   view,
 }: {
-  view: "overview" | "identity" | "mods" | "fancy" | "servers" | "launcher";
+  view: "overview" | "identity" | "assets" | "fancy" | "servers" | "launcher";
 }) {
   if (view === "overview") {
     return (
@@ -42,7 +42,7 @@ function NavIcon({
       </svg>
     );
   }
-  if (view === "mods") {
+  if (view === "assets") {
     return (
       <svg
         className="nav-icon"
@@ -112,15 +112,23 @@ function NavIcon({
 const NAV_ITEMS = [
   { view: "overview", label: "Overview" },
   { view: "identity", label: "Identity" },
-  { view: "mods", label: "Mod Manager" },
+  { view: "assets", label: "Assets" },
   { view: "fancy", label: "Fancy Menu" },
   { view: "servers", label: "Servers" },
   { view: "launcher", label: "Launcher Pairing" },
 ] as const;
 
 export const Sidebar = memo(function Sidebar() {
-  const { view, setView, rail, selectedMods, hasPendingPublish, isBusy } =
-    useAdminStore();
+  const {
+    view,
+    setView,
+    rail,
+    selectedMods,
+    selectedResources,
+    selectedShaders,
+    hasPendingPublish,
+    isBusy,
+  } = useAdminStore();
 
   return (
     <aside className="nav">
@@ -161,6 +169,12 @@ export const Sidebar = memo(function Sidebar() {
               <b>Loader</b> {rail.fabric}
             </div>
             <div className="rail-chip">{selectedMods.length} mods</div>
+            <div className="rail-chip">
+              {selectedResources.length} resourcepacks
+            </div>
+            <div className="rail-chip">
+              {selectedShaders.length} shaderpacks
+            </div>
             {hasPendingPublish ? (
               <div
                 className="rail-chip"
