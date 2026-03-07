@@ -1,5 +1,10 @@
-import { BadGatewayException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { WebSocket } from 'ws';
+import { AdminHttpClientService } from '../common/admin-http-client.service';
 
 const EXAROTON_API_BASE = 'https://api.exaroton.com/v1';
 const EXAROTON_WS_BASE = 'wss://api.exaroton.com/v1';
@@ -45,7 +50,10 @@ type ExarotonWebSocketMessage = {
   data?: unknown;
 };
 
+@Injectable()
 export class ExarotonApiClient {
+  constructor(private readonly http: AdminHttpClientService) {}
+
   async getAccount(token: string): Promise<ExarotonAccount> {
     return this.request<ExarotonAccount>(token, '/account/');
   }
@@ -88,12 +96,8 @@ export class ExarotonApiClient {
     serverId: string,
     filePath: string,
   ): Promise<Buffer | null> {
-    const authToken = token.trim();
-    if (!authToken) {
-      throw new UnauthorizedException('Exaroton API key is missing');
-    }
-
-    const response = await fetch(
+    const authToken = this.requireAuthToken(token);
+    const response = await this.http.request(
       `${EXAROTON_API_BASE}${this.buildFileDataPath(serverId, filePath)}`,
       {
         method: 'GET',
@@ -101,17 +105,13 @@ export class ExarotonApiClient {
           Authorization: `Bearer ${authToken}`,
           'User-Agent': EXAROTON_USER_AGENT,
         },
+        upstreamName: 'exaroton',
       },
-    ).catch(() => null);
-
-    if (!response) {
-      throw new BadGatewayException('Could not reach Exaroton API');
-    }
+    );
 
     if (response.status === 404) {
       return null;
     }
-
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
         throw new UnauthorizedException('Invalid Exaroton API key');
@@ -121,8 +121,7 @@ export class ExarotonApiClient {
       );
     }
 
-    const payload = Buffer.from(await response.arrayBuffer());
-    return payload;
+    return Buffer.from(await response.arrayBuffer());
   }
 
   async putFileData(
@@ -238,31 +237,22 @@ export class ExarotonApiClient {
     return close;
   }
 
-  /** For action endpoints (start/stop/restart) that return data: null on success */
-  private async requestAction(token: string, path: string): Promise<void> {
+  private requireAuthToken(token: string) {
     const authToken = token.trim();
     if (!authToken) {
       throw new UnauthorizedException('Exaroton API key is missing');
     }
+    return authToken;
+  }
 
-    const response = await fetch(`${EXAROTON_API_BASE}${path}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'User-Agent': EXAROTON_USER_AGENT,
+  private async requestAction(token: string, path: string): Promise<void> {
+    const { response, body } = await this.requestEnvelope<unknown>(
+      token,
+      path,
+      {
+        method: 'GET',
       },
-    }).catch(() => null);
-
-    if (!response) {
-      throw new BadGatewayException('Could not reach Exaroton API');
-    }
-
-    let body: ExarotonEnvelope<unknown> | null = null;
-    try {
-      body = (await response.json()) as ExarotonEnvelope<unknown>;
-    } catch {
-      body = null;
-    }
+    );
 
     if (!response.ok || !body || body.success !== true) {
       const apiError = body?.error?.trim() || '';
@@ -284,31 +274,18 @@ export class ExarotonApiClient {
       body?: Uint8Array | string;
     },
   ): Promise<void> {
-    const authToken = token.trim();
-    if (!authToken) {
-      throw new UnauthorizedException('Exaroton API key is missing');
-    }
-
-    const response = await fetch(`${EXAROTON_API_BASE}${path}`, {
-      method: input.method,
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        'User-Agent': EXAROTON_USER_AGENT,
-        ...(input.headers ?? {}),
+    const { response, body } = await this.requestEnvelope<unknown>(
+      token,
+      path,
+      {
+        method: input.method,
+        headers: input.headers,
+        body:
+          input.body instanceof Uint8Array
+            ? Buffer.from(input.body)
+            : (input.body ?? null),
       },
-      body: (input.body ?? null) as unknown as BodyInit,
-    }).catch(() => null);
-
-    if (!response) {
-      throw new BadGatewayException('Could not reach Exaroton API');
-    }
-
-    let body: ExarotonEnvelope<unknown> | null = null;
-    try {
-      body = (await response.json()) as ExarotonEnvelope<unknown>;
-    } catch {
-      body = null;
-    }
+    );
 
     if (!response.ok || !body || body.success !== true) {
       const apiError = body?.error?.trim() || '';
@@ -343,23 +320,26 @@ export class ExarotonApiClient {
     return `/servers/${encodeURIComponent(cleanServerId)}/files/data/${encodedPath}/`;
   }
 
-  private async request<T>(token: string, path: string): Promise<T> {
-    const authToken = token.trim();
-    if (!authToken) {
-      throw new UnauthorizedException('Exaroton API key is missing');
-    }
-
-    const response = await fetch(`${EXAROTON_API_BASE}${path}`, {
-      method: 'GET',
+  private async requestEnvelope<T>(
+    token: string,
+    path: string,
+    input?: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: BodyInit | null;
+    },
+  ): Promise<{ response: Response; body: ExarotonEnvelope<T> | null }> {
+    const authToken = this.requireAuthToken(token);
+    const response = await this.http.request(`${EXAROTON_API_BASE}${path}`, {
+      method: input?.method ?? 'GET',
       headers: {
         Authorization: `Bearer ${authToken}`,
         'User-Agent': EXAROTON_USER_AGENT,
+        ...(input?.headers ?? {}),
       },
-    }).catch(() => null);
-
-    if (!response) {
-      throw new BadGatewayException('Could not reach Exaroton API');
-    }
+      body: input?.body ?? null,
+      upstreamName: 'exaroton',
+    });
 
     let body: ExarotonEnvelope<T> | null = null;
     try {
@@ -367,6 +347,14 @@ export class ExarotonApiClient {
     } catch {
       body = null;
     }
+
+    return { response, body };
+  }
+
+  private async request<T>(token: string, path: string): Promise<T> {
+    const { response, body } = await this.requestEnvelope<T>(token, path, {
+      method: 'GET',
+    });
 
     if (!response.ok || !body || body.success !== true || body.data == null) {
       const apiError = body?.error?.trim() || '';
