@@ -199,7 +199,7 @@ type ManagedShaderPack = {
 
 type AssetType = 'mod' | 'resourcepack' | 'shaderpack';
 
-interface FabricLoaderRow {
+export interface FabricLoaderRow {
   version: string;
   stable: boolean;
 }
@@ -321,7 +321,7 @@ export class AdminService implements OnModuleInit {
     return true;
   }
 
-  async getBootstrap() {
+  async getBootstrap(includeLoaders = false) {
     const serverId = this.getServerId();
     const [server, latest, settings, exaroton] = await Promise.all([
       this.prisma.server.findUnique({ where: { id: serverId } }),
@@ -373,7 +373,7 @@ export class AdminService implements OnModuleInit {
     const fancyMenu = draft?.fancyMenu || activeFancyMenu;
     const branding = draft?.branding || lockBranding;
 
-    return {
+    const payload = {
       server: {
         id: server.id,
         name: server.name,
@@ -405,6 +405,18 @@ export class AdminService implements OnModuleInit {
       draft,
       hasSavedDraft: settings.publishDraft !== null,
       exaroton,
+    };
+
+    if (!includeLoaders || !minecraftVersion.trim()) {
+      return payload;
+    }
+
+    const fabricVersions = await this.getFabricVersions(minecraftVersion).catch(
+      () => null,
+    );
+    return {
+      ...payload,
+      fabricVersions,
     };
   }
 
@@ -1198,6 +1210,41 @@ export class AdminService implements OnModuleInit {
       requiredDependencies: resolved.requiredDependencies,
       dependencyDetails,
     };
+  }
+
+  async analyzeModDependenciesBatch(
+    projectIds: string[],
+    minecraftVersion: string,
+  ) {
+    const entries = await Promise.all(
+      projectIds
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map(async (projectId) => {
+          try {
+            const result = await this.analyzeModDependencies(
+              projectId,
+              minecraftVersion,
+            );
+            return [projectId, result] as const;
+          } catch {
+            return null;
+          }
+        }),
+    );
+
+    const analysis: Record<
+      string,
+      Awaited<ReturnType<AdminService['analyzeModDependencies']>>
+    > = {};
+    for (const entry of entries) {
+      if (!entry) {
+        continue;
+      }
+      analysis[entry[0]] = entry[1];
+    }
+
+    return { analysis };
   }
 
   async installMod(input: InstallModDto) {

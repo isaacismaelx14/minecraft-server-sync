@@ -18,6 +18,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
+  AnalyzeModsBatchDto,
   AdminLoginDto,
   CreateLauncherPairingClaimDto,
   ConnectExarotonDto,
@@ -74,8 +75,8 @@ export class AdminController {
   }
 
   @Get('/v1/admin/bootstrap')
-  getBootstrap() {
-    return this.adminService.getBootstrap();
+  getBootstrap(@Query('includeLoaders') includeLoaders = '') {
+    return this.adminService.getBootstrap(includeLoaders === 'true');
   }
 
   @Patch('/v1/admin/settings')
@@ -238,6 +239,14 @@ export class AdminController {
     return this.adminService.analyzeModDependencies(
       projectId,
       minecraftVersion,
+    );
+  }
+
+  @Post('/v1/admin/mods/analyze/batch')
+  analyzeModsBatch(@Body() payload: AnalyzeModsBatchDto) {
+    return this.adminService.analyzeModDependenciesBatch(
+      payload.projectIds,
+      payload.minecraftVersion,
     );
   }
 

@@ -246,6 +246,16 @@ export class InstallModDto {
   includeDependencies?: boolean;
 }
 
+export class AnalyzeModsBatchDto {
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  projectIds!: string[];
+
+  @IsString()
+  minecraftVersion!: string;
+}
+
 export class InstallAssetDto {
   @IsString()
   projectId!: string;
