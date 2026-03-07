@@ -1,5 +1,19 @@
 # Changelog
 
+## [@minerelay/api/v0.2.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.0) (2026-03-07)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.1.1...%40minerelay%2Fapi%2Fv0.2.0)
+
+## Features
+
+- **api:** resolve lock URL from request origin or configured base URL ([9cbe6b7](https://github.com/isaacismaelx14/minerelay/commit/9cbe6b790e921c3fe8e9cbb6413967d1a8272822))
+
+## Bug Fixes
+
+- **api:** backfill stale lock URL hosts to canonical domain ([a1bad0f](https://github.com/isaacismaelx14/minerelay/commit/a1bad0f50215e332e7f6e3e44e950faa0e843eea))
+- **api:** correct middleware next handler signature ([17fde01](https://github.com/isaacismaelx14/minerelay/commit/17fde018798c2ad9be80e23c2326215d5e57db53))
+- **api:** use correct api production entrypoint ([8113fb3](https://github.com/isaacismaelx14/minerelay/commit/8113fb33d6fc642ffd25a6dffec4a15512b02a26))
+
 ## [@minerelay/api/v0.1.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40mss%2Fapi%2Fv0.1.1) (2026-03-06)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40mss%2Fapi%2Fv0.1.0-beta.32...%40mss%2Fapi%2Fv0.1.1)
