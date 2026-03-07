@@ -106,6 +106,33 @@ function runFixtures(): void {
       () => generateManifest(buildArgs(incompleteDir, new Set(["windows"]))),
       /No signature found/u,
     );
+
+    const preferUploadDirRoot = join(tempRoot, "prefer-upload-dir");
+    const nsisDir = join(preferUploadDirRoot, "launcher-windows-nsis");
+    const updaterDir = join(preferUploadDirRoot, "launcher-updater-Windows");
+    mkdirSync(nsisDir, { recursive: true });
+    mkdirSync(updaterDir, { recursive: true });
+    writeFileSync(join(nsisDir, "MSS+.Client_0.1.0_x64-setup.exe"), "bin");
+    writeFileSync(
+      join(nsisDir, "MSS+.Client_0.1.0_x64-setup.exe.sig"),
+      "sig-upload",
+    );
+    writeFileSync(join(updaterDir, "MSS+ Client_0.1.0_x64-setup.exe"), "bin");
+    writeFileSync(
+      join(updaterDir, "MSS+ Client_0.1.0_x64-setup.exe.sig"),
+      "sig-updater",
+    );
+    const preferUploadDir = generateManifest(
+      buildArgs(preferUploadDirRoot, new Set(["windows"])),
+    );
+    assert.match(
+      preferUploadDir.platforms["windows-x86_64"]?.url ?? "",
+      /MSS%2B\.Client_0\.1\.0_x64-setup\.exe$/u,
+    );
+    assert.equal(
+      preferUploadDir.platforms["windows-x86_64"]?.signature,
+      "sig-upload",
+    );
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

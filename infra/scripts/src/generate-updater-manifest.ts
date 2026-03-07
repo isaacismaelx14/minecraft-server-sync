@@ -250,6 +250,14 @@ function pickWindowsUpdater(files: string[]): MatchResult {
     basename(path).toLowerCase().endsWith(".sig"),
   );
 
+  const preferredByFolder = [...windowsAssets]
+    .sort((left, right) => {
+      const leftScore = windowsAssetPathScore(left);
+      const rightScore = windowsAssetPathScore(right);
+      return rightScore - leftScore;
+    })
+    .find((path) => windowsAssetPathScore(path) > 0);
+
   const nsisAsset =
     windowsAssets.find((path) =>
       basename(path).toLowerCase().includes("setup.exe"),
@@ -258,7 +266,7 @@ function pickWindowsUpdater(files: string[]): MatchResult {
   const fallbackMsi = windowsAssets.find((path) =>
     basename(path).toLowerCase().endsWith(".msi"),
   );
-  const selectedAsset = nsisAsset ?? fallbackMsi;
+  const selectedAsset = preferredByFolder ?? nsisAsset ?? fallbackMsi;
 
   if (!selectedAsset) {
     throw new Error("No Windows updater asset found (.exe or .msi).");
@@ -272,6 +280,27 @@ function pickWindowsUpdater(files: string[]): MatchResult {
   }
 
   return { assetPath: selectedAsset, sigPath: matchedSig };
+}
+
+function windowsAssetPathScore(path: string): number {
+  const normalized = path.replace(/\\/gu, "/").toLowerCase();
+  const isExe = normalized.endsWith(".exe");
+  const isMsi = normalized.endsWith(".msi");
+
+  if (normalized.includes("/launcher-windows-nsis/") && isExe) {
+    return 40;
+  }
+  if (normalized.includes("/launcher-windows-msi/") && isMsi) {
+    return 30;
+  }
+  if (normalized.includes("/launcher-updater-windows/") && isExe) {
+    return 20;
+  }
+  if (normalized.includes("/launcher-updater-windows/") && isMsi) {
+    return 10;
+  }
+
+  return 0;
 }
 
 function pickMacUpdater(files: string[]): MatchResult {

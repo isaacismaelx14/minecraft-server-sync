@@ -146,6 +146,49 @@ function filenameFromAssetUrl(assetUrl: string): string | null {
   }
 }
 
+type ParsedReleaseAssetUrl = {
+  owner: string;
+  repo: string;
+  tag: string;
+  assetName: string;
+};
+
+function parseGithubReleaseAssetUrl(
+  assetUrl: string,
+): ParsedReleaseAssetUrl | null {
+  try {
+    const parsed = new URL(assetUrl);
+    if (parsed.hostname !== "github.com") {
+      return null;
+    }
+
+    const segments = parsed.pathname
+      .split("/")
+      .filter((segment) => segment.length > 0);
+    if (segments.length < 6) {
+      return null;
+    }
+
+    const [owner, repo, releases, download, rawTag, ...assetSegments] =
+      segments;
+    if (releases !== "releases" || download !== "download") {
+      return null;
+    }
+    if (!owner || !repo || !rawTag || assetSegments.length === 0) {
+      return null;
+    }
+
+    return {
+      owner,
+      repo,
+      tag: decodeURIComponent(rawTag),
+      assetName: decodeURIComponent(assetSegments.join("/")),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const release = await fetchJson<GithubRelease>(
@@ -168,6 +211,7 @@ async function main(): Promise<void> {
   if (platformKeys.length === 0) {
     throw new Error("latest.json has no platforms entries.");
   }
+  const releaseAssetNames = new Set(release.assets.map((asset) => asset.name));
 
   for (const [platform, info] of Object.entries(latest.platforms ?? {})) {
     if (!info?.signature || !info?.url) {
@@ -181,6 +225,30 @@ async function main(): Promise<void> {
     if (!signedFile || !urlFile) {
       throw new Error(
         `Could not decode signed/url filename for platform '${platform}'.`,
+      );
+    }
+    const parsedAssetUrl = parseGithubReleaseAssetUrl(info.url);
+    if (!parsedAssetUrl) {
+      throw new Error(
+        `latest.json platform '${platform}' url is not a valid GitHub release asset URL: '${info.url}'.`,
+      );
+    }
+    if (
+      parsedAssetUrl.owner !== args.owner ||
+      parsedAssetUrl.repo !== args.repo
+    ) {
+      throw new Error(
+        `latest.json platform '${platform}' points to ${parsedAssetUrl.owner}/${parsedAssetUrl.repo}, expected ${args.owner}/${args.repo}.`,
+      );
+    }
+    if (parsedAssetUrl.tag !== args.tag) {
+      throw new Error(
+        `latest.json platform '${platform}' points to tag '${parsedAssetUrl.tag}', expected '${args.tag}'.`,
+      );
+    }
+    if (!releaseAssetNames.has(parsedAssetUrl.assetName)) {
+      throw new Error(
+        `latest.json platform '${platform}' points to '${parsedAssetUrl.assetName}', but that asset is not attached to release ${release.tag_name}.`,
       );
     }
     if (signedFile !== urlFile) {
