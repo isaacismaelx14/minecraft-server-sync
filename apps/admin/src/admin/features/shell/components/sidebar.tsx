@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 
+import { MineRelayLogo } from "@/admin/shared/ui/minerelay-logo";
 import { useAdminStore } from "@/admin/shared/store/admin-store";
 
 const NAV_ITEMS = [
@@ -41,13 +42,12 @@ export const Sidebar = memo(function Sidebar() {
     <aside className="border border-[var(--color-line)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface)] backdrop-blur-[var(--blur-glass)] p-5 grid grid-rows-[auto_1fr_auto] gap-6 animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)]">
       {/* ── Brand ── */}
       <div className="flex items-center gap-3 pb-4 border-b border-[var(--color-line)]">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] grid place-items-center shrink-0">
-          <span className="material-symbols-outlined text-white text-[18px]">
-            sports_esports
-          </span>
+        <div className="relative shrink-0">
+          <div className="absolute -inset-1.5 rounded-xl bg-[#51C878]/15 blur-lg" />
+          <MineRelayLogo size={34} className="relative" />
         </div>
         <div className="grid gap-0.5 min-w-0">
-          <h1 className="m-0 text-sm font-bold bg-gradient-to-br from-white to-[#a5b4fc] text-transparent bg-clip-text leading-tight truncate">
+          <h1 className="m-0 text-sm font-bold bg-gradient-to-br from-white via-white to-emerald-300 text-transparent bg-clip-text leading-tight truncate">
             MineRelay
           </h1>
           <span className="font-mono text-[0.65rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] font-medium leading-tight">
