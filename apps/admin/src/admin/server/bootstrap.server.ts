@@ -5,6 +5,7 @@ import type { BootstrapPayload } from "@/admin/client/types";
 
 const DEFAULT_API_ORIGIN = "http://localhost:3000";
 const BOOTSTRAP_CACHE_TTL_MS = 15_000;
+const BOOTSTRAP_FAILURE_CACHE_TTL_MS = 5_000;
 
 const bootstrapCache = new Map<
   string,
@@ -74,32 +75,48 @@ export async function readServerBootstrapPayload(): Promise<BootstrapPayload | n
     return cached.payload;
   }
 
-  const response = await fetch(
-    buildAdminApiUrl("/v1/admin/bootstrap?includeLoaders=true"),
-    {
-      method: "GET",
-      headers: cookie ? { cookie } : undefined,
-      cache: "no-store",
-    },
-  );
+  try {
+    const response = await fetch(
+      buildAdminApiUrl("/v1/admin/bootstrap?includeLoaders=true"),
+      {
+        method: "GET",
+        headers: cookie ? { cookie } : undefined,
+        cache: "no-store",
+      },
+    );
 
-  if (response.status === 401) {
+    if (response.status === 401) {
+      bootstrapCache.set(cacheKey, {
+        payload: null,
+        expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
+      });
+      return null;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(
+        `[admin] bootstrap request failed (${response.status}): ${text || "empty response"}`,
+      );
+      bootstrapCache.set(cacheKey, {
+        payload: null,
+        expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
+      });
+      return null;
+    }
+
+    const payload = (await response.json()) as BootstrapPayload;
+    bootstrapCache.set(cacheKey, {
+      payload,
+      expiresAt: now + BOOTSTRAP_CACHE_TTL_MS,
+    });
+    return payload;
+  } catch (error) {
+    console.error("[admin] bootstrap request threw:", error);
     bootstrapCache.set(cacheKey, {
       payload: null,
-      expiresAt: now + 5_000,
+      expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
     });
     return null;
   }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Failed to load admin bootstrap payload.");
-  }
-
-  const payload = (await response.json()) as BootstrapPayload;
-  bootstrapCache.set(cacheKey, {
-    payload,
-    expiresAt: now + BOOTSTRAP_CACHE_TTL_MS,
-  });
-  return payload;
 }
