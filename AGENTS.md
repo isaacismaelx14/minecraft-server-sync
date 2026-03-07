@@ -104,3 +104,18 @@ Prefer user-impact wording for release-facing commits.
 
 This repository enforces commit titles via Husky `commit-msg` hook using `release.config.json`.
 If commit formatting fails locally, rewrite the commit message to comply with this file.
+
+## 10) Scope Separation Rule (Required)
+
+When staged changes span multiple scopes, create separate commits per scope.
+
+Rules:
+
+- Do not combine files from different scopes in one commit.
+- Split commits by the allowed scope names (for example: `admin` and `api`).
+- Stage and commit each scope independently, even if part of one feature/refactor.
+
+Example:
+
+- Commit 1: `perf(admin): ...` with only `apps/admin/**` changes
+- Commit 2: `feat(api): ...` with only `apps/api/**` changes
