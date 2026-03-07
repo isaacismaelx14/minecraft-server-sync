@@ -4,76 +4,12 @@ import { useRef } from "react";
 
 import { Button } from "@/admin/shared/ui/button";
 import { SelectInput, TextInput } from "@/admin/shared/ui/form-controls";
+import { SectionHeader } from "@/admin/shared/ui/section-header";
 import { statusClass } from "@/admin/shared/ui/status";
 import { ui } from "@/admin/shared/ui/styles";
+import { ToggleSwitch } from "@/admin/shared/ui/toggle-switch";
 
 import { useFancyMenuPageModel } from "../hooks/use-fancy-menu-page-model";
-
-/* ------------------------------------------------------------------ */
-/*  Reusable section header (matches identity-page pattern)           */
-/* ------------------------------------------------------------------ */
-
-function SectionHeader({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="shrink-0 mt-0.5 w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--color-brand-primary)]/10 border border-[var(--color-brand-primary)]/20 grid place-items-center text-[var(--color-brand-primary)]">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <h3 className="text-base font-semibold leading-tight tracking-tight m-0">
-          {title}
-        </h3>
-        <p className="m-0 mt-1 text-sm text-[var(--color-text-muted)] leading-snug">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Toggle switch                                                     */
-/* ------------------------------------------------------------------ */
-
-function ToggleSwitch({
-  enabled,
-  onChange,
-}: {
-  enabled: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      onClick={() => onChange(!enabled)}
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-all duration-200 ${
-        enabled
-          ? "bg-[var(--color-brand-primary)] border-[var(--color-brand-primary)]/60 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
-          : "bg-white/10 border-white/[0.08]"
-      }`}
-    >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          enabled ? "translate-x-[22px]" : "translate-x-[3px]"
-        }`}
-      />
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Page                                                              */
-/* ------------------------------------------------------------------ */
 
 export function FancyMenuPage() {
   const {

@@ -77,7 +77,11 @@ export function useIdentityPageModel() {
     store.loadFabricVersions(store.form.minecraftVersion, true);
 
   return {
-    ...store,
+    form: store.form,
+    baselineRuntime: store.baselineRuntime,
+    loaderOptions: store.loaderOptions,
+    statuses: store.statuses,
+    setTextFieldFromEvent: store.setTextFieldFromEvent,
     saveSettings,
     refreshLoaders,
     uploadBrandingImage,

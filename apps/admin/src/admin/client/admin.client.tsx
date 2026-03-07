@@ -8,6 +8,7 @@ import {
   type ReactElement,
 } from "react";
 
+import type { BootstrapPayload } from "@/admin/client/types";
 import { AdminShell } from "@/admin/features/shell/components/admin-shell";
 import {
   AdminProvider,
@@ -17,7 +18,10 @@ import {
 
 export function AdminConsolePage({
   children,
-}: PropsWithChildren): ReactElement {
+  initialBootstrap,
+}: PropsWithChildren<{
+  initialBootstrap?: BootstrapPayload | null;
+}>): ReactElement {
   const pathname = usePathname();
   const [initialView, setInitialView] = useState<AdminView>("overview");
 
@@ -26,7 +30,10 @@ export function AdminConsolePage({
   }, [pathname]);
 
   return (
-    <AdminProvider initialView={initialView}>
+    <AdminProvider
+      initialView={initialView}
+      initialBootstrap={initialBootstrap}
+    >
       <AdminShell>{children}</AdminShell>
     </AdminProvider>
   );

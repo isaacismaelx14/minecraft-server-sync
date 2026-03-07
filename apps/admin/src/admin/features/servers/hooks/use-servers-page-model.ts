@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { buildEventSourceUrl, requestJson } from "@/admin/client/http";
 import type {
   ConnectExarotonPayload,
-  ExarotonActionPayload,
   ExarotonSelectPayload,
   ExarotonServersPayload,
   ExarotonSettingsUpdatePayload,
@@ -14,6 +13,7 @@ import type {
   ExarotonSyncModsPayload,
 } from "@/admin/client/types";
 import { useAdminStore } from "@/admin/shared/store/admin-store";
+import { executeExarotonServerAction } from "./exaroton-actions";
 
 export function useServersPageModel() {
   const store = useAdminStore();
@@ -213,32 +213,11 @@ export function useServersPageModel() {
   };
 
   const exarotonAction = async (action: "start" | "stop" | "restart") => {
-    store.setExaroton((current) => ({ ...current, busy: true }));
-    store.setStatus("exaroton", `Sending ${action} action...`);
-    try {
-      const payload = await requestJson<ExarotonActionPayload>(
-        "/v1/admin/exaroton/server/action",
-        "POST",
-        { action },
-      );
-      store.setExaroton((current) => ({
-        ...current,
-        busy: false,
-        selectedServer: payload.selectedServer,
-      }));
-      store.setStatus("exaroton", `Server ${action} action sent.`, "ok");
-    } catch (error) {
-      store.setExaroton((current) => ({
-        ...current,
-        busy: false,
-        error: (error as Error).message || `Failed to ${action} server.`,
-      }));
-      store.setStatus(
-        "exaroton",
-        (error as Error).message || `Failed to ${action} server.`,
-        "error",
-      );
-    }
+    await executeExarotonServerAction(
+      action,
+      store.setExaroton,
+      store.setStatus,
+    );
   };
 
   const updateExarotonSettings = async (payload: {
@@ -366,7 +345,8 @@ export function useServersPageModel() {
   }, [connected, selectedServerId, setExaroton, setStatus]);
 
   return {
-    ...store,
+    exaroton: store.exaroton,
+    statuses: store.statuses,
     refreshExarotonStatus,
     listExarotonServers,
     connectExaroton,

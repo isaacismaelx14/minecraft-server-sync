@@ -8,6 +8,8 @@ const DEFAULT_API_ORIGIN = "http://localhost:3000";
 const GET_CACHE_TTL_MS = 15_000;
 const PREVIEW_POST_CACHE_TTL_MS = 15_000;
 const ACCESS_TOKEN_QUERY = "accessToken";
+const CSRF_COOKIE = "mvl_admin_csrf";
+const CSRF_HEADER = "x-csrf-token";
 export const ADMIN_SESSION_STORAGE_KEY = "mss.admin.session.v1";
 
 const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
@@ -86,6 +88,22 @@ function canUseStorage(): boolean {
   return (
     typeof window !== "undefined" && typeof window.localStorage !== "undefined"
   );
+}
+
+function readCookieValue(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+  if (!match || !match[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 export function readAdminSession(): AdminSessionSnapshot | null {
@@ -170,6 +188,7 @@ async function refreshAdminSession(): Promise<void> {
       headers: {
         "x-admin-refresh-token": session.refreshToken,
       },
+      credentials: "include",
     });
 
     if (!response.ok) {
@@ -194,11 +213,21 @@ export async function authFetch(
   const session = readAdminSession();
   if (session?.accessToken) {
     headers.set("authorization", `Bearer ${session.accessToken}`);
+  } else if (
+    (init.method ?? "GET").toUpperCase() !== "GET" &&
+    (init.method ?? "GET").toUpperCase() !== "HEAD" &&
+    (init.method ?? "GET").toUpperCase() !== "OPTIONS"
+  ) {
+    const csrfToken = readCookieValue(CSRF_COOKIE);
+    if (csrfToken) {
+      headers.set(CSRF_HEADER, csrfToken);
+    }
   }
 
   const response = await fetch(resolveRequestTarget(input), {
     ...init,
     headers,
+    credentials: "include",
   });
 
   if (response.status !== 401 || retried) {

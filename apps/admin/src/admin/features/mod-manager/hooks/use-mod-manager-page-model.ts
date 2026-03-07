@@ -4,6 +4,7 @@ import { requestJson } from "@/admin/client/http";
 import type {
   AdminMod,
   CoreModPolicy,
+  DependencyAnalysisBatchPayload,
   DependencyAnalysis,
   ExarotonSyncModsPayload,
   InstallModsPayload,
@@ -109,24 +110,22 @@ export function useModManagerPageModel() {
       const normalizedResults = Array.isArray(results) ? results : [];
       store.setSearchResults(normalizedResults);
 
-      const dependencyEntries = await Promise.all(
-        normalizedResults.map(async (entry) => {
-          try {
-            const analysis = await requestJson<DependencyAnalysis>(
-              `/v1/admin/mods/analyze?projectId=${encodeURIComponent(entry.projectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}`,
-              "GET",
-            );
-            return [entry.projectId, analysis] as const;
-          } catch {
-            return null;
-          }
-        }),
-      );
-
       const dependencyRecord: Record<string, DependencyAnalysis> = {};
-      for (const result of dependencyEntries) {
-        if (result) {
-          dependencyRecord[result[0]] = result[1];
+      if (normalizedResults.length > 0) {
+        const batch = await requestJson<DependencyAnalysisBatchPayload>(
+          "/v1/admin/mods/analyze/batch",
+          "POST",
+          {
+            projectIds: normalizedResults.map((entry) => entry.projectId),
+            minecraftVersion,
+          },
+        );
+        for (const [projectId, analysis] of Object.entries(
+          batch.analysis ?? {},
+        )) {
+          if (analysis) {
+            dependencyRecord[projectId] = analysis;
+          }
         }
       }
 

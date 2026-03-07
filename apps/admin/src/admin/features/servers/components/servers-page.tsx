@@ -7,75 +7,12 @@ import { Button } from "@/admin/shared/ui/button";
 import { ExarotonLogo } from "@/admin/shared/ui/exaroton-logo";
 import { TextInput } from "@/admin/shared/ui/form-controls";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
+import { SectionHeader } from "@/admin/shared/ui/section-header";
 import { exarotonStatusClass, statusClass } from "@/admin/shared/ui/status";
 import { ui } from "@/admin/shared/ui/styles";
+import { ToggleSwitch } from "@/admin/shared/ui/toggle-switch";
 
 import { useServersPageModel } from "../hooks/use-servers-page-model";
-
-/* ------------------------------------------------------------------ */
-/*  Shared section header (matches identity / fancy-menu pattern)     */
-/* ------------------------------------------------------------------ */
-
-function SectionHeader({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="shrink-0 mt-0.5 w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--color-brand-primary)]/10 border border-[var(--color-brand-primary)]/20 grid place-items-center text-[var(--color-brand-primary)]">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <h3 className="text-base font-semibold leading-tight tracking-tight m-0">
-          {title}
-        </h3>
-        <p className="m-0 mt-1 text-sm text-[var(--color-text-muted)] leading-snug">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Toggle switch (reused from fancy-menu)                            */
-/* ------------------------------------------------------------------ */
-
-function ToggleSwitch({
-  enabled,
-  onChange,
-  disabled,
-}: {
-  enabled: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      disabled={disabled}
-      onClick={() => onChange(!enabled)}
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
-        enabled
-          ? "bg-[var(--color-brand-primary)] border-[var(--color-brand-primary)]/60 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
-          : "bg-white/10 border-white/[0.08]"
-      }`}
-    >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          enabled ? "translate-x-[22px]" : "translate-x-[3px]"
-        }`}
-      />
-    </button>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /*  Setting toggle row                                                */
@@ -209,7 +146,7 @@ function ExarotonSetupFlow({
   exaroton: ReturnType<typeof useServersPageModel>["exaroton"];
   setExarotonApiKey: (key: string) => void;
   connectExaroton: () => Promise<void>;
-  setExarotonStep: (step: string) => void;
+  setExarotonStep: (step: "idle" | "key" | "servers" | "success") => void;
   listExarotonServers: () => Promise<void>;
   selectExarotonServer: (id: string) => Promise<void>;
   onBack: () => void;
@@ -448,7 +385,7 @@ function ConnectedDashboard({
   exarotonAction: (action: "start" | "stop" | "restart") => Promise<void>;
   updateExarotonSettings: (payload: Record<string, boolean>) => Promise<void>;
   listExarotonServers: () => Promise<void>;
-  setExarotonStep: (step: string) => void;
+  setExarotonStep: (step: "idle" | "key" | "servers" | "success") => void;
   onDisconnect: () => void;
 }) {
   return (

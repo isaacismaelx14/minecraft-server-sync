@@ -8,142 +8,11 @@ import type {
   AdminShaderPack,
   SearchResult,
 } from "@/admin/client/types";
+import { requestJson } from "@/admin/client/http";
 import { mergeAssets } from "@/admin/shared/domain/mods";
 import { useAdminStore } from "@/admin/shared/store/admin-store";
 
 type AssetType = "resourcepack" | "shaderpack";
-type ModrinthSearchResponse = {
-  hits: Array<{
-    project_id: string;
-    slug: string;
-    title: string;
-    description: string;
-    author: string;
-    icon_url?: string;
-    categories?: string[];
-    latest_version?: string;
-  }>;
-};
-type ModrinthProject = {
-  id: string;
-  slug: string;
-  title: string;
-  icon_url?: string;
-};
-type ModrinthVersion = {
-  id: string;
-  version_type: "release" | "beta" | "alpha";
-  date_published: string;
-  game_versions: string[];
-  files: Array<{ url: string; primary?: boolean }>;
-};
-
-function shaTypeRank(value: ModrinthVersion["version_type"]) {
-  if (value === "release") return 0;
-  if (value === "beta") return 1;
-  return 2;
-}
-
-async function sha256HexFromUrl(url: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download asset for hash (${response.status})`);
-  }
-  const buffer = await response.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  const bytes = Array.from(new Uint8Array(digest));
-  return bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function resolvePackFromModrinth(
-  projectId: string,
-  minecraftVersion: string,
-  type: AssetType,
-): Promise<AdminResourcePack | AdminShaderPack> {
-  const [projectResponse, versionsResponse] = await Promise.all([
-    fetch(
-      `https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}`,
-    ),
-    fetch(
-      `https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`,
-    ),
-  ]);
-
-  if (!projectResponse.ok) {
-    throw new Error(`Failed to fetch project (${projectResponse.status})`);
-  }
-  if (!versionsResponse.ok) {
-    throw new Error(
-      `Failed to fetch project versions (${versionsResponse.status})`,
-    );
-  }
-
-  const project = (await projectResponse.json()) as ModrinthProject;
-  const versions = (await versionsResponse.json()) as ModrinthVersion[];
-  const compatible = versions
-    .filter((entry) => entry.game_versions.includes(minecraftVersion))
-    .sort((left, right) => {
-      const rank =
-        shaTypeRank(left.version_type) - shaTypeRank(right.version_type);
-      if (rank !== 0) {
-        return rank;
-      }
-      return Date.parse(right.date_published) - Date.parse(left.date_published);
-    });
-
-  const selected = compatible[0];
-  if (!selected) {
-    throw new Error(
-      `No compatible ${type} version found for Minecraft ${minecraftVersion}`,
-    );
-  }
-  const file =
-    selected.files.find((entry) => entry.primary) ?? selected.files[0];
-  if (!file) {
-    throw new Error("No downloadable file found for selected version");
-  }
-  const sha256 = await sha256HexFromUrl(file.url);
-
-  return {
-    kind: type,
-    name: project.title,
-    provider: "modrinth",
-    projectId: project.id,
-    versionId: selected.id,
-    url: file.url,
-    sha256,
-    iconUrl: project.icon_url,
-    slug: project.slug,
-  };
-}
-
-async function fetchPopularFromModrinth(
-  type: AssetType,
-  minecraftVersion: string,
-  query: string = "",
-): Promise<SearchResult[]> {
-  const facets = JSON.stringify([
-    [`project_type:${type === "resourcepack" ? "resourcepack" : "shader"}`],
-    [`versions:${minecraftVersion}`],
-  ]);
-  const modrinthUrl = `https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&index=${query ? "relevance" : "follows"}&limit=12&facets=${encodeURIComponent(facets)}`;
-  const response = await fetch(modrinthUrl);
-  if (!response.ok) {
-    throw new Error(`Failed loading ${type}s (${response.status})`);
-  }
-
-  const json = (await response.json()) as ModrinthSearchResponse;
-  return (json.hits ?? []).map((hit) => ({
-    projectId: hit.project_id,
-    title: hit.title,
-    description: hit.description,
-    iconUrl: hit.icon_url,
-    slug: hit.slug,
-    author: hit.author,
-    categories: hit.categories,
-    latestVersion: hit.latest_version,
-  }));
-}
 
 export function useAssetsPageModel() {
   const router = useRouter();
@@ -174,11 +43,15 @@ export function useAssetsPageModel() {
 
       setLoadingPopular(true);
       try {
-        const payload = await fetchPopularFromModrinth(
-          type,
-          minecraftVersion,
-          normalizedQuery,
-        );
+        const payload = normalizedQuery
+          ? await requestJson<SearchResult[]>(
+              `/v1/admin/assets/search?query=${encodeURIComponent(normalizedQuery)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}&type=${type}&limit=12`,
+              "GET",
+            )
+          : await requestJson<SearchResult[]>(
+              `/v1/admin/assets/popular?minecraftVersion=${encodeURIComponent(minecraftVersion)}&type=${type}&limit=12`,
+              "GET",
+            );
         setPopular(payload ?? []);
         const action = normalizedQuery ? "searched" : "loaded popular";
         store.setStatus(
@@ -242,18 +115,16 @@ export function useAssetsPageModel() {
     setInstallingId(projectId);
     try {
       if (modalType === "resourcepack") {
-        const resolved = (await resolvePackFromModrinth(
-          projectId,
-          minecraftVersion,
-          "resourcepack",
+        const resolved = (await requestJson<AdminResourcePack>(
+          `/v1/admin/assets/resolve?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}&type=resourcepack`,
+          "GET",
         )) as AdminResourcePack;
         const next = mergeAssets(store.selectedResources, [resolved]);
         store.setSelectedResources(next);
       } else {
-        const resolved = (await resolvePackFromModrinth(
-          projectId,
-          minecraftVersion,
-          "shaderpack",
+        const resolved = (await requestJson<AdminShaderPack>(
+          `/v1/admin/assets/resolve?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(minecraftVersion)}&type=shaderpack`,
+          "GET",
         )) as AdminShaderPack;
         const next = mergeAssets(store.selectedShaders, [resolved]);
         store.setSelectedShaders(next);

@@ -147,6 +147,7 @@ export type BootstrapPayload = {
   } | null;
   hasSavedDraft: boolean;
   exaroton: ExarotonStatusPayload;
+  fabricVersions?: FabricVersionsPayload | null;
 };
 
 export type FabricVersionsPayload = {
@@ -172,6 +173,10 @@ export type DependencyAnalysis = {
   requiresDependencies: boolean;
   requiredDependencies: string[];
   dependencyDetails: Array<{ projectId: string; title: string }>;
+};
+
+export type DependencyAnalysisBatchPayload = {
+  analysis: Record<string, DependencyAnalysis>;
 };
 
 export type InstallModsPayload = {

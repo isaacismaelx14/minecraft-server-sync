@@ -41,7 +41,9 @@ export function useFancyMenuPageModel() {
   };
 
   return {
-    ...store,
+    form: store.form,
+    setTextFieldFromEvent: store.setTextFieldFromEvent,
+    statuses: store.statuses,
     uploadFancyBundle,
     setFancyMenuMode: (mode: "simple" | "custom") =>
       store.setForm((prev) => ({ ...prev, fancyMenuMode: mode })),

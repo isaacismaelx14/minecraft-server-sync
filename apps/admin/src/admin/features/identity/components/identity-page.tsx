@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Button } from "@/admin/shared/ui/button";
 import { DataItem, DataList } from "@/admin/shared/ui/data-list";
 import { TextInput } from "@/admin/shared/ui/form-controls";
+import { ModalHeader } from "@/admin/shared/ui/modal-header";
+import { SectionHeader } from "@/admin/shared/ui/section-header";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import { statusClass } from "@/admin/shared/ui/status";
 import { ui } from "@/admin/shared/ui/styles";
@@ -29,32 +31,11 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
 
   return (
     <ModalShell onClose={onClose}>
-      <button
-        className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
-        type="button"
-        onClick={onClose}
-        title="Close"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ width: 18, height: 18 }}
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-
-      <div className="flex items-center justify-between border-b border-[var(--color-line)] pb-[16px] mb-[8px] shrink-0">
-        <div className={ui.modalBrand}>
-          <h3>Support Matrix</h3>
-          <p className={ui.modalMeta}>Internal Runtime Settings</p>
-        </div>
-      </div>
+      <ModalHeader
+        title="Support Matrix"
+        subtitle="Internal Runtime Settings"
+        onClose={onClose}
+      />
       <div className="p-[16px_20px] rounded-[var(--radius-md)] text-[0.9rem] leading-[1.5] border flex flex-col gap-[4px] bg-[#ef4444]/5 border-[#ef4444]/20 text-[#fca5a5] [&>strong]:text-[#ef4444] [&>strong]:uppercase [&>strong]:text-[0.75rem] [&>strong]:tracking-[0.05em]">
         <strong>Risk Warning</strong>
         <p>
@@ -144,32 +125,6 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
         {statuses.settings.text}
       </div>
     </ModalShell>
-  );
-}
-
-function SectionHeader({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="shrink-0 mt-0.5 w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--color-brand-primary)]/10 border border-[var(--color-brand-primary)]/20 grid place-items-center text-[var(--color-brand-primary)]">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <h3 className="text-base font-semibold leading-tight tracking-tight m-0">
-          {title}
-        </h3>
-        <p className="m-0 mt-1 text-sm text-[var(--color-text-muted)] leading-snug">
-          {description}
-        </p>
-      </div>
-    </div>
   );
 }
 

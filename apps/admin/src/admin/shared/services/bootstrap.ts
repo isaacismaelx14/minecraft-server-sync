@@ -24,9 +24,15 @@ export async function readBootstrapPayload(
     return bootstrapCache.payload;
   }
   const payload = await requestJson<BootstrapPayload>(
-    "/v1/admin/bootstrap",
+    "/v1/admin/bootstrap?includeLoaders=true",
     "GET",
   );
+  if (payload.fabricVersions?.minecraftVersion) {
+    fabricVersionsCache.set(payload.fabricVersions.minecraftVersion, {
+      payload: payload.fabricVersions,
+      expiresAt: Date.now() + FABRIC_VERSIONS_CACHE_TTL_MS,
+    });
+  }
   bootstrapCache = {
     payload,
     expiresAt: Date.now() + BOOTSTRAP_CACHE_TTL_MS,

@@ -43,6 +43,7 @@ export function AdminLoginPage(): ReactElement {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password: trimmed }),
+        credentials: "include",
       });
 
       if (!response.ok) {

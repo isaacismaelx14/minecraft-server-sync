@@ -4,7 +4,6 @@ import { buildEventSourceUrl, requestJson } from "@/admin/client/http";
 import type {
   AdminResourcePack,
   AdminShaderPack,
-  ExarotonActionPayload,
   PublishPayload,
   PublishProgressPayload,
   PublishStartPayload,
@@ -17,6 +16,7 @@ import {
   isValidUrl,
 } from "@/admin/shared/domain/admin-form";
 import { useAdminStore } from "@/admin/shared/store/admin-store";
+import { executeExarotonServerAction } from "@/admin/features/servers/hooks/exaroton-actions";
 
 export function useTopBarModel() {
   const store = useAdminStore();
@@ -149,32 +149,11 @@ export function useTopBarModel() {
   };
 
   const exarotonAction = async (action: "start" | "stop" | "restart") => {
-    store.setExaroton((current) => ({ ...current, busy: true }));
-    store.setStatus("exaroton", `Sending ${action} action...`);
-    try {
-      const payload = await requestJson<ExarotonActionPayload>(
-        "/v1/admin/exaroton/server/action",
-        "POST",
-        { action },
-      );
-      store.setExaroton((current) => ({
-        ...current,
-        busy: false,
-        selectedServer: payload.selectedServer,
-      }));
-      store.setStatus("exaroton", `Server ${action} action sent.`, "ok");
-    } catch (error) {
-      store.setExaroton((current) => ({
-        ...current,
-        busy: false,
-        error: (error as Error).message || `Failed to ${action} server.`,
-      }));
-      store.setStatus(
-        "exaroton",
-        (error as Error).message || `Failed to ${action} server.`,
-        "error",
-      );
-    }
+    await executeExarotonServerAction(
+      action,
+      store.setExaroton,
+      store.setStatus,
+    );
   };
 
   const publishProfile = async () => {
@@ -387,7 +366,13 @@ export function useTopBarModel() {
   };
 
   return {
-    ...store,
+    exaroton: store.exaroton,
+    hasPendingPublish: store.hasPendingPublish,
+    publishBlockReason: store.publishBlockReason,
+    hasSavedDraft: store.hasSavedDraft,
+    isBusy: store.isBusy,
+    logout: store.logout,
+    statuses: store.statuses,
     saveDraft,
     discardDraft,
     exarotonAction,

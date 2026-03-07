@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type Dispatch,
@@ -18,12 +19,12 @@ import { useRouter } from "next/navigation";
 
 import { authFetch, clearAdminSession, requestJson } from "@/admin/client/http";
 import type {
+  BootstrapPayload,
   AdminMod,
   AdminResourcePack,
   AdminShaderPack,
   CoreModPolicy,
   DependencyAnalysis,
-  ExarotonServersPayload,
   FabricVersionsPayload,
   SearchResult,
 } from "@/admin/client/types";
@@ -51,9 +52,7 @@ import {
 } from "@/admin/shared/domain/admin-view";
 import {
   computeServerModDiffSummary,
-  mergeAssets,
   mergeMods,
-  sameAssets,
   sameMods,
 } from "@/admin/shared/domain/mods";
 import { bumpSemver, normalizeSemver } from "@/admin/shared/domain/release";
@@ -204,20 +203,95 @@ function normalizeCoreModPolicy(
   };
 }
 
+function buildInitialState(initialBootstrap: BootstrapPayload | null) {
+  if (!initialBootstrap) {
+    return {
+      form: DEFAULT_FORM,
+      selectedMods: [] as AdminMod[],
+      selectedResources: [] as AdminResourcePack[],
+      selectedShaders: [] as AdminShaderPack[],
+      coreModPolicy: DEFAULT_POLICY,
+      exaroton: DEFAULT_EXAROTON,
+      baselineMods: [] as AdminMod[],
+      baselineResources: [] as AdminResourcePack[],
+      baselineShaders: [] as AdminShaderPack[],
+      baselineRuntime: {
+        minecraftVersion: "",
+        loaderVersion: "",
+      },
+      sessionState: "pending" as const,
+      hasSavedDraft: false,
+      loaderOptions: [] as LoaderOption[],
+      hasBootstrapped: false,
+      lastPublishedSnapshot: null as PublishSnapshot | null,
+    };
+  }
+
+  const form = mapBootstrapToForm(initialBootstrap);
+  const selectedMods = initialBootstrap.latestProfile.mods ?? [];
+  const selectedResources = initialBootstrap.latestProfile.resources ?? [];
+  const selectedShaders = initialBootstrap.latestProfile.shaders ?? [];
+
+  return {
+    form,
+    selectedMods,
+    selectedResources,
+    selectedShaders,
+    coreModPolicy: normalizeCoreModPolicy(
+      initialBootstrap.latestProfile.coreModPolicy,
+    ),
+    exaroton: mapStatusToExarotonState(
+      initialBootstrap.exaroton,
+      DEFAULT_EXAROTON,
+    ),
+    baselineMods: selectedMods,
+    baselineResources: selectedResources,
+    baselineShaders: selectedShaders,
+    baselineRuntime: {
+      minecraftVersion: initialBootstrap.latestProfile.minecraftVersion ?? "",
+      loaderVersion: initialBootstrap.latestProfile.loaderVersion ?? "",
+    },
+    sessionState: "active" as const,
+    hasSavedDraft:
+      initialBootstrap.hasSavedDraft ?? initialBootstrap.draft !== null,
+    loaderOptions: initialBootstrap.fabricVersions?.loaders ?? [],
+    hasBootstrapped: true,
+    lastPublishedSnapshot: buildPublishSnapshot(
+      form,
+      selectedMods,
+      selectedResources,
+      selectedShaders,
+    ),
+  };
+}
+
 export function AdminStoreProvider({
   children,
   initialView = "overview",
-}: PropsWithChildren<{ initialView?: AdminView }>): ReactElement {
+  initialBootstrap = null,
+}: PropsWithChildren<{
+  initialView?: AdminView;
+  initialBootstrap?: BootstrapPayload | null;
+}>): ReactElement {
+  const initialState = useMemo(
+    () => buildInitialState(initialBootstrap),
+    [initialBootstrap],
+  );
   const router = useRouter();
   const [view, setCurrentView] = useState<AdminView>(initialView);
-  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
-  const [selectedMods, setSelectedMods] = useState<AdminMod[]>([]);
+  const [form, setForm] = useState<FormState>(initialState.form);
+  const [selectedMods, setSelectedMods] = useState<AdminMod[]>(
+    initialState.selectedMods,
+  );
   const [selectedResources, setSelectedResources] = useState<
     AdminResourcePack[]
-  >([]);
-  const [selectedShaders, setSelectedShaders] = useState<AdminShaderPack[]>([]);
-  const [coreModPolicy, setCoreModPolicy] =
-    useState<CoreModPolicy>(DEFAULT_POLICY);
+  >(initialState.selectedResources);
+  const [selectedShaders, setSelectedShaders] = useState<AdminShaderPack[]>(
+    initialState.selectedShaders,
+  );
+  const [coreModPolicy, setCoreModPolicy] = useState<CoreModPolicy>(
+    initialState.coreModPolicy,
+  );
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [dependencyMap, setDependencyMap] = useState<
     Record<string, DependencyAnalysis>
@@ -236,31 +310,42 @@ export function AdminStoreProvider({
       }>
     >
   >({});
-  const [loaderOptions, setLoaderOptions] = useState<LoaderOption[]>([]);
+  const [loaderOptions, setLoaderOptions] = useState<LoaderOption[]>(
+    initialState.loaderOptions,
+  );
   const [sessionState, setSessionState] = useState<"pending" | "active">(
-    "pending",
+    initialState.sessionState,
   );
   const [statuses, setStatuses] = useState<StatusState>(DEFAULT_STATUS);
-  const [exaroton, setExaroton] = useState<ExarotonState>(DEFAULT_EXAROTON);
-  const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [exaroton, setExaroton] = useState<ExarotonState>(
+    initialState.exaroton,
+  );
+  const [hasSavedDraft, setHasSavedDraft] = useState(
+    initialState.hasSavedDraft,
+  );
   const [isBusy, setBusyState] = useState<BusyState>({
     bootstrap: false,
     search: false,
     publish: false,
     install: false,
   });
-  const [baselineMods, setBaselineMods] = useState<AdminMod[]>([]);
+  const [baselineMods, setBaselineMods] = useState<AdminMod[]>(
+    initialState.baselineMods,
+  );
   const [baselineResources, setBaselineResources] = useState<
     AdminResourcePack[]
-  >([]);
-  const [baselineShaders, setBaselineShaders] = useState<AdminShaderPack[]>([]);
-  const [baselineRuntime, setBaselineRuntime] = useState({
-    minecraftVersion: "",
-    loaderVersion: "",
-  });
+  >(initialState.baselineResources);
+  const [baselineShaders, setBaselineShaders] = useState<AdminShaderPack[]>(
+    initialState.baselineShaders,
+  );
+  const [baselineRuntime, setBaselineRuntime] = useState(
+    initialState.baselineRuntime,
+  );
   const [lastPublishedSnapshot, setLastPublishedSnapshot] =
-    useState<PublishSnapshot | null>(null);
-  const [hasBootstrapped, setHasBootstrapped] = useState(false);
+    useState<PublishSnapshot | null>(initialState.lastPublishedSnapshot);
+  const [hasBootstrapped, setHasBootstrapped] = useState(
+    initialState.hasBootstrapped,
+  );
 
   useEffect(() => {
     setCurrentView(initialView);
@@ -480,29 +565,33 @@ export function AdminStoreProvider({
         setSessionState("active");
         setHasSavedDraft(payload.hasSavedDraft ?? payload.draft !== null);
         setStatus("bootstrap", "Bootstrap loaded.", "ok");
-        await loadFabricVersions(nextForm.minecraftVersion);
-        const syncedMods = await ensureCoreMods(
-          payload.latestProfile.mods ?? [],
-          nextForm.fancyMenuEnabled === "true",
-          nextForm.minecraftVersion,
-        );
-        setSelectedMods(syncedMods);
-        if (payload.exaroton.connected) {
-          const serverPayload = await requestJson<ExarotonServersPayload>(
-            "/v1/admin/exaroton/servers",
-            "GET",
-          ).catch(() => null);
-          if (serverPayload) {
-            setExaroton((current) => ({
+        if (payload.fabricVersions) {
+          const options = payload.fabricVersions.loaders ?? [];
+          setLoaderOptions(options);
+          setForm((current) => {
+            const hasCurrent = options.some(
+              (entry) => entry.version === current.loaderVersion,
+            );
+            if (hasCurrent) {
+              return current;
+            }
+
+            const nextLoader =
+              payload.fabricVersions?.latestStable ??
+              options[0]?.version ??
+              current.loaderVersion;
+            return {
               ...current,
-              servers: serverPayload.servers ?? [],
-            }));
-          }
+              loaderVersion: nextLoader,
+            };
+          });
+        } else {
+          await loadFabricVersions(nextForm.minecraftVersion);
         }
         setLastPublishedSnapshot(
           buildPublishSnapshot(
             nextForm,
-            syncedMods,
+            payload.latestProfile.mods ?? [],
             payload.latestProfile.resources ?? [],
             payload.latestProfile.shaders ?? [],
           ),
@@ -517,7 +606,7 @@ export function AdminStoreProvider({
         setBusy("bootstrap", false);
       }
     },
-    [ensureCoreMods, loadFabricVersions, setBusy, setStatus],
+    [loadFabricVersions, setBusy, setStatus],
   );
 
   useEffect(() => {
@@ -528,17 +617,34 @@ export function AdminStoreProvider({
     void loadBootstrap();
   }, [hasBootstrapped, loadBootstrap]);
 
+  const selectedModsRef = useRef(selectedMods);
+  useEffect(() => {
+    selectedModsRef.current = selectedMods;
+  }, [selectedMods]);
+
+  const runtimeSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     if (sessionState !== "active") {
       return;
     }
+    const nextSignature = `${form.fancyMenuEnabled}:${form.minecraftVersion.trim()}`;
+    if (runtimeSignatureRef.current === null) {
+      runtimeSignatureRef.current = nextSignature;
+      return;
+    }
+    if (runtimeSignatureRef.current === nextSignature) {
+      return;
+    }
+    runtimeSignatureRef.current = nextSignature;
+
     void (async () => {
+      const currentMods = selectedModsRef.current;
       const synced = await ensureCoreMods(
-        selectedMods,
+        currentMods,
         form.fancyMenuEnabled === "true",
         form.minecraftVersion,
       );
-      if (!sameMods(synced, selectedMods)) {
+      if (!sameMods(synced, currentMods)) {
         setSelectedMods(synced);
       }
     })();
@@ -546,7 +652,6 @@ export function AdminStoreProvider({
     ensureCoreMods,
     form.fancyMenuEnabled,
     form.minecraftVersion,
-    selectedMods,
     sessionState,
   ]);
 

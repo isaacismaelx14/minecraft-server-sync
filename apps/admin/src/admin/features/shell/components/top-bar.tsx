@@ -3,6 +3,7 @@
 import { memo, useState } from "react";
 
 import { Button } from "@/admin/shared/ui/button";
+import { ModalHeader } from "@/admin/shared/ui/modal-header";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import {
   exarotonStatusClass,
@@ -226,17 +227,10 @@ export const TopBar = memo(function TopBar() {
       {/* Discard Draft Confirmation */}
       {showDiscardConfirm ? (
         <ModalShell onClose={() => setShowDiscardConfirm(false)}>
-          <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
-            <h3 className="m-0 text-lg">Discard Draft?</h3>
-            <button
-              className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
-              type="button"
-              aria-label="Close"
-              onClick={() => setShowDiscardConfirm(false)}
-            >
-              ✕
-            </button>
-          </div>
+          <ModalHeader
+            title="Discard Draft?"
+            onClose={() => setShowDiscardConfirm(false)}
+          />
           <div className="p-5 overflow-y-auto">
             <p className="border border-amber-500/30 bg-amber-500/10 text-amber-400 p-4 rounded-xl text-sm leading-relaxed m-0">
               All unsaved changes will be lost. The profile will be reloaded
@@ -269,17 +263,10 @@ export const TopBar = memo(function TopBar() {
       {/* Exaroton Publish Warning */}
       {showExarotonPublishWarning ? (
         <ModalShell onClose={() => setShowExarotonPublishWarning(false)}>
-          <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
-            <h3 className="m-0 text-lg">Before first Exaroton mod sync</h3>
-            <button
-              className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
-              type="button"
-              aria-label="Close"
-              onClick={() => setShowExarotonPublishWarning(false)}
-            >
-              ✕
-            </button>
-          </div>
+          <ModalHeader
+            title="Before first Exaroton mod sync"
+            onClose={() => setShowExarotonPublishWarning(false)}
+          />
           <div className="p-5 overflow-y-auto flex flex-col gap-3">
             <p className="text-sm text-[var(--color-text-muted)] leading-relaxed m-0">
               We recommend deleting existing mods from your Exaroton server

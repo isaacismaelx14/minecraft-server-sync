@@ -2,6 +2,7 @@
 
 import { DiscoverModal } from "@/admin/shared/ui/discover-modal";
 import React from "react";
+import { EmptyState } from "@/admin/shared/ui/empty-state";
 import { statusClass } from "@/admin/shared/ui/status";
 import { ui } from "@/admin/shared/ui/styles";
 
@@ -200,34 +201,6 @@ function PopularAssetModal({
   );
 }
 
-function EmptyAssetState({
-  title,
-  description,
-  icon = "inventory_2",
-}: {
-  title: string;
-  description: string;
-  icon?: string;
-}) {
-  return (
-    <div className="border border-[var(--color-line)] border-dashed bg-black/10 rounded-xl p-10 flex flex-col items-center justify-center gap-3 text-center transition-colors hover:bg-black/20 hover:border-[var(--color-brand-primary)]/30">
-      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-[var(--color-line)] mb-2 shadow-inner">
-        <span className="material-symbols-outlined text-[32px] text-[var(--color-text-muted)]">
-          {icon}
-        </span>
-      </div>
-      <div className="flex flex-col gap-1 items-center">
-        <h4 className="m-0 text-base font-bold text-[var(--color-text-primary)]">
-          {title}
-        </h4>
-        <p className="m-0 text-[13px] text-[var(--color-text-muted)] max-w-sm leading-relaxed">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function AssetsPage() {
   const {
     status,
@@ -290,7 +263,7 @@ export function AssetsPage() {
 
           <div className="grid grid-cols-1 gap-3">
             {modPreview.length === 0 ? (
-              <EmptyAssetState
+              <EmptyState
                 title="No mods loaded"
                 description="Your server is currently vanilla. Add mods to enhance your gameplay experience."
                 icon="package_2"
@@ -354,7 +327,7 @@ export function AssetsPage() {
 
           <div className="grid grid-cols-1 gap-3">
             {selectedResources.length === 0 ? (
-              <EmptyAssetState
+              <EmptyState
                 title="No resourcepacks found"
                 description="Resourcepacks can change the look of blocks, items, and UI. Add some to customize your world."
                 icon="texture"
@@ -406,7 +379,7 @@ export function AssetsPage() {
 
           <div className="grid grid-cols-1 gap-3">
             {selectedShaders.length === 0 ? (
-              <EmptyAssetState
+              <EmptyState
                 title="No shaderpacks installed"
                 description="Shaderpacks dramatically improve lighting, shadows, and water. Browse the gallery to find one."
                 icon="gradient"
