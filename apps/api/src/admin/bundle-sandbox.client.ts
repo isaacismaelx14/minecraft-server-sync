@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AdminHttpClientService } from './common/admin-http-client.service';
 
 export type SandboxPreviewModel = {
   titleText?: string;
@@ -24,7 +25,10 @@ export type SandboxPreviewResponse = {
 
 @Injectable()
 export class BundleSandboxClient {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly http: AdminHttpClientService,
+  ) {}
 
   private get baseUrl(): string {
     return (
@@ -103,17 +107,16 @@ export class BundleSandboxClient {
   ): Promise<Response> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= this.retryAttempts; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
-        const response = await fetch(`${this.baseUrl}${path}`, {
+        const response = await this.http.request(`${this.baseUrl}${path}`, {
           method,
           headers: {
             'x-api-key': this.apiKey,
             ...(payload ? { 'content-type': 'application/zip' } : {}),
           },
-          body: payload ? new Uint8Array(payload) : undefined,
-          signal: controller.signal,
+          body: payload ? new Uint8Array(payload) : null,
+          timeoutMs: this.timeoutMs,
+          upstreamName: 'fancymenu-sandbox',
         });
 
         if (response.status >= 500 && attempt < this.retryAttempts) {
@@ -133,8 +136,6 @@ export class BundleSandboxClient {
           continue;
         }
         throw error;
-      } finally {
-        clearTimeout(timeout);
       }
     }
 
