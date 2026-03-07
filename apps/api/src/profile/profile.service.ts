@@ -16,12 +16,17 @@ export class ProfileService {
     private readonly signing: SigningService,
   ) {}
 
-  async getDefaultProfile(): Promise<ProfileMetadataResponse> {
+  async getDefaultProfile(
+    requestOrigin?: string,
+  ): Promise<ProfileMetadataResponse> {
     const serverId = this.config.get<string>('SERVER_ID') ?? 'mvl';
-    return this.getProfile(serverId);
+    return this.getProfile(serverId, requestOrigin);
   }
 
-  async getProfile(serverId: string): Promise<ProfileMetadataResponse> {
+  async getProfile(
+    serverId: string,
+    requestOrigin?: string,
+  ): Promise<ProfileMetadataResponse> {
     const [server, latest] = await Promise.all([
       this.prisma.server.findUnique({
         where: { id: serverId },
@@ -57,7 +62,12 @@ export class ProfileService {
       minecraftVersion: latest.minecraftVersion,
       loader: latest.loader,
       loaderVersion: latest.loaderVersion,
-      lockUrl: this.normalizeLockUrl(latest.lockUrl),
+      lockUrl: this.resolveLockUrl({
+        lockUrl: latest.lockUrl,
+        profileId: latest.profileId,
+        version: latest.version,
+        requestOrigin,
+      }),
       serverName: latest.defaultServerName || server.name,
       serverAddress: latest.defaultServerAddress || server.address,
       allowedMinecraftVersions,
@@ -83,6 +93,57 @@ export class ProfileService {
   private extractFancyMenu(value: unknown) {
     const parsed = FancyMenuSettingsSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
+  }
+
+  private resolveLockUrl(input: {
+    lockUrl: string;
+    profileId: string;
+    version: number;
+    requestOrigin?: string;
+  }): string {
+    const publicBase = this.resolvePublicBaseUrl(input.requestOrigin);
+    if (publicBase) {
+      return `${publicBase}/v1/locks/${encodeURIComponent(input.profileId)}/${input.version}`;
+    }
+
+    return this.normalizeLockUrl(input.lockUrl);
+  }
+
+  private resolvePublicBaseUrl(requestOrigin?: string): string | null {
+    const configured = this.normalizeBaseUrl(
+      this.config.get<string>('PUBLIC_BASE_URL'),
+    );
+    if (configured) {
+      return configured;
+    }
+
+    return this.normalizeBaseUrl(requestOrigin);
+  }
+
+  private normalizeBaseUrl(value?: string | null): string | null {
+    const raw = value?.trim();
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+
+      parsed.pathname = '/';
+      parsed.search = '';
+      parsed.hash = '';
+
+      if (parsed.protocol === 'http:' && !this.isLoopback(parsed.hostname)) {
+        parsed.protocol = 'https:';
+      }
+
+      return parsed.toString().replace(/\/+$/, '');
+    } catch {
+      return null;
+    }
   }
 
   private normalizeLockUrl(lockUrl: string): string {
