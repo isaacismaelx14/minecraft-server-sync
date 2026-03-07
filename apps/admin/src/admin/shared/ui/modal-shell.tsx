@@ -57,7 +57,7 @@ export const ModalShell = memo(function ModalShell({
         ref={cardRef}
         className={`bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] flex flex-col shadow-[0_12px_40px_rgba(0,0,0,0.5)] animate-[scaleIn_0.2s_ease-out] relative ${
           wide || cardClassName?.includes("wide")
-            ? "w-[min(90vw,800px)] p-0 gap-0 overflow-hidden"
+            ? "w-[min(95vw,1150px)] max-h-[85vh] p-0 gap-0 overflow-hidden"
             : "min-w-[40vw] max-w-[90vw] max-h-[85vh] overflow-y-auto p-[24px] gap-[16px]"
         }`}
         role="dialog"

@@ -17,7 +17,7 @@ export function AdminShell({ children }: PropsWithChildren): ReactElement {
       <main className="border border-[var(--color-line)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface)] backdrop-blur-[var(--blur-glass)] py-[32px] px-[40px] h-full overflow-y-auto overflow-x-hidden grid grid-rows-[auto_1fr] gap-[32px] relative [scrollbar-width:thin] [scrollbar-color:var(--color-line-strong)_transparent] [&::-webkit-scrollbar]:w-[12px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-track]:my-[16px] [&::-webkit-scrollbar-thumb]:bg-[var(--color-line-strong)] [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb]:border-[4px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:rounded-[10px]">
         <TopBar />
         <section key={view} aria-live="polite">
-          {isBusy.bootstrap ? <MainLoadingState /> : children}
+          {isBusy.bootstrap ? <MainLoadingState view={view} /> : children}
         </section>
       </main>
     </div>

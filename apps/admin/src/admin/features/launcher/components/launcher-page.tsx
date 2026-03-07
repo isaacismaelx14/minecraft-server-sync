@@ -28,7 +28,7 @@ export function LauncherPage() {
   } = useLauncherPageModel();
 
   return (
-    <section className="grid gap-[32px] animate-[fadeIn_0.3s_ease-out]">
+    <section className="grid gap-[32px] animate-[fadeIn_0.3s_ease-out] max-w-7xl mx-auto w-full">
       <div className="grid gap-[8px]">
         <h2 className="m-0 text-[1.5rem] text-white">Launcher Pairing</h2>
         <p>

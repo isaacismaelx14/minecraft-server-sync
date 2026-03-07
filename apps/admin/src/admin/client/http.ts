@@ -10,7 +10,6 @@ const PREVIEW_POST_CACHE_TTL_MS = 15_000;
 const ACCESS_TOKEN_QUERY = "accessToken";
 export const ADMIN_SESSION_STORAGE_KEY = "mss.admin.session.v1";
 
-const inFlightRequests = new Map<string, Promise<unknown>>();
 const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
 let refreshInFlight: Promise<void> | null = null;
 
@@ -229,44 +228,27 @@ export async function requestJson<T>(
     if (cached && cached.expiresAt > now) {
       return cached.data as T;
     }
-    const pending = inFlightRequests.get(dedupeKey);
-    if (pending) {
-      return (await pending) as T;
-    }
   }
 
-  const request = (async () => {
-    const response = await authFetch(url, {
-      method,
-      headers: body ? { "content-type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+  const response = await authFetch(url, {
+    method,
+    headers: body ? { "content-type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-    if (!response.ok) {
-      throw new Error(await readError(response, `Request failed: ${url}`));
-    }
+  if (!response.ok) {
+    throw new Error(await readError(response, `Request failed: ${url}`));
+  }
 
-    const payload = (await response.json()) as T;
-    if (dedupeKey) {
-      responseCache.set(dedupeKey, {
-        data: payload,
-        expiresAt: Date.now() + dedupeTtlMs(url, method),
-      });
-    }
-    return payload;
-  })();
-
+  const payload = (await response.json()) as T;
   if (dedupeKey) {
-    inFlightRequests.set(dedupeKey, request as Promise<unknown>);
+    responseCache.set(dedupeKey, {
+      data: payload,
+      expiresAt: Date.now() + dedupeTtlMs(url, method),
+    });
   }
 
-  try {
-    return await request;
-  } finally {
-    if (dedupeKey) {
-      inFlightRequests.delete(dedupeKey);
-    }
-  }
+  return payload;
 }
 
 function buildDedupeKey(

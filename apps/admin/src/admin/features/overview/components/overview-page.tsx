@@ -1,7 +1,6 @@
 "use client";
 
-import { DataItem, DataList } from "@/admin/shared/ui/data-list";
-
+import { Button } from "@/admin/shared/ui/button";
 import { useOverviewPageModel } from "../hooks/use-overview-page-model";
 
 export function OverviewPage() {
@@ -15,150 +14,274 @@ export function OverviewPage() {
     goToFancy,
   } = useOverviewPageModel();
 
+  const statCards = [
+    {
+      label: "Add",
+      value: summaryStats.add,
+      color: "emerald",
+      icon: "add_circle",
+      bg: "from-emerald-500/10 to-emerald-500/0",
+      ring: "ring-emerald-500/20",
+      text: "text-emerald-400",
+      border: "border-emerald-500/30",
+      glow: "shadow-emerald-500/10",
+    },
+    {
+      label: "Remove",
+      value: summaryStats.remove,
+      color: "red",
+      icon: "remove_circle",
+      bg: "from-red-500/10 to-red-500/0",
+      ring: "ring-red-500/20",
+      text: "text-red-400",
+      border: "border-red-500/30",
+      glow: "shadow-red-500/10",
+    },
+    {
+      label: "Update",
+      value: summaryStats.update,
+      color: "amber",
+      icon: "update",
+      bg: "from-amber-500/10 to-amber-500/0",
+      ring: "ring-amber-500/20",
+      text: "text-amber-400",
+      border: "border-amber-500/30",
+      glow: "shadow-amber-500/10",
+    },
+    {
+      label: "Keep",
+      value: summaryStats.keep,
+      color: "indigo",
+      icon: "check_circle",
+      bg: "from-indigo-500/10 to-indigo-500/0",
+      ring: "ring-indigo-500/20",
+      text: "text-indigo-400",
+      border: "border-indigo-500/30",
+      glow: "shadow-indigo-500/10",
+    },
+  ] as const;
+
   return (
-    <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-[24px]">
-        <div className="border border-[var(--color-line)] rounded-[var(--radius-lg)] bg-[var(--color-bg-card)] p-[24px] flex flex-col justify-center items-center gap-[8px] relative overflow-hidden transition-all duration-300 border-l-[4px] border-l-[#10b981] bg-gradient-to-br from-[#10b981]/5 to-transparent">
-          <span className="text-[2.6rem] font-bold leading-none tracking-[-0.04em] text-white font-mono">
-            {summaryStats.add}
-          </span>
-          <span className="text-[0.85rem] font-bold uppercase tracking-[0.15em] text-[var(--color-text-secondary)]">
-            Add
-          </span>
-        </div>
-        <div className="border border-[var(--color-line)] rounded-[var(--radius-lg)] bg-[var(--color-bg-card)] p-[24px] flex flex-col justify-center items-center gap-[8px] relative overflow-hidden transition-all duration-300 border-l-[4px] border-l-[#ef4444] bg-gradient-to-br from-[#ef4444]/5 to-transparent">
-          <span className="text-[2.6rem] font-bold leading-none tracking-[-0.04em] text-white font-mono">
-            {summaryStats.remove}
-          </span>
-          <span className="text-[0.85rem] font-bold uppercase tracking-[0.15em] text-[var(--color-text-secondary)]">
-            Remove
-          </span>
-        </div>
-        <div className="border border-[var(--color-line)] rounded-[var(--radius-lg)] bg-[var(--color-bg-card)] p-[24px] flex flex-col justify-center items-center gap-[8px] relative overflow-hidden transition-all duration-300 border-l-[4px] border-l-[#f59e0b] bg-gradient-to-br from-[#f59e0b]/5 to-transparent">
-          <span className="text-[2.6rem] font-bold leading-none tracking-[-0.04em] text-white font-mono">
-            {summaryStats.update}
-          </span>
-          <span className="text-[0.85rem] font-bold uppercase tracking-[0.15em] text-[var(--color-text-secondary)]">
-            Update
-          </span>
-        </div>
-        <div className="border border-[var(--color-line)] rounded-[var(--radius-lg)] bg-[var(--color-bg-card)] p-[24px] flex flex-col justify-center items-center gap-[8px] relative overflow-hidden transition-all duration-300 border-l-[4px] border-l-[#6366f1] bg-gradient-to-br from-[#6366f1]/5 to-transparent">
-          <span className="text-[2.6rem] font-bold leading-none tracking-[-0.04em] text-white font-mono">
-            {summaryStats.keep}
-          </span>
-          <span className="text-[0.85rem] font-bold uppercase tracking-[0.15em] text-[var(--color-text-secondary)]">
-            Keep
-          </span>
-        </div>
+    <div className="flex flex-col gap-8 max-w-7xl mx-auto w-full">
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((card) => (
+          <div
+            key={card.label}
+            className={`relative group rounded-2xl border ${card.border} bg-gradient-to-br ${card.bg} p-5 flex flex-col items-center gap-2 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${card.glow} overflow-hidden`}
+          >
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${card.bg} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+            />
+            <div className="relative flex items-center gap-2">
+              <span
+                className={`material-symbols-outlined ${card.text} text-[22px] opacity-70`}
+              >
+                {card.icon}
+              </span>
+              <span className="text-[2.2rem] font-bold leading-none tracking-tight text-white font-mono tabular-nums">
+                {card.value}
+              </span>
+            </div>
+            <span
+              className={`relative text-xs font-semibold uppercase tracking-widest ${card.text} opacity-80`}
+            >
+              {card.label}
+            </span>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-[32px] grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] gap-[24px]">
-        <article className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 hover:bg-[var(--color-bg-card-hover)] hover:border-[var(--color-line-strong)] hover:-translate-y-[2px]">
-          <div className="flex items-center justify-between mb-[4px]">
-            <h3 className="m-0 mb-2 text-[1.25rem] font-semibold text-white tracking-[-0.01em]">
-              Instance Profile
-            </h3>
-            <button
-              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-              onClick={goToIdentity}
-            >
+      {/* Info Panels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {/* Instance Profile */}
+        <article className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 flex flex-col gap-5 transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.1]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-indigo-400 text-[18px]">
+                  dns
+                </span>
+              </div>
+              <h3 className="m-0 text-base font-semibold text-white">
+                Instance Profile
+              </h3>
+            </div>
+            <Button variant="outline" size="xs" onClick={goToIdentity}>
               Edit
-            </button>
+            </Button>
           </div>
-          <DataList>
-            <DataItem label="Profile Name" value={form.serverName} />
-            <DataItem
+          <div className="flex flex-col gap-3">
+            <InfoRow label="Profile Name" value={form.serverName} />
+            <InfoRow
               label="Runtime"
               value={`${rail.minecraft} | ${rail.fabric}`}
             />
-            <DataItem label="Endpoint" value={form.serverAddress} />
-          </DataList>
+            <InfoRow label="Endpoint" value={form.serverAddress} />
+          </div>
         </article>
 
-        <article className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 hover:bg-[var(--color-bg-card-hover)] hover:border-[var(--color-line-strong)] hover:-translate-y-[2px]">
-          <div className="flex items-center justify-between mb-[4px]">
-            <h3 className="m-0 mb-2 text-[1.25rem] font-semibold text-white tracking-[-0.01em]">
-              Content Catalog
-            </h3>
-            <button
-              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-              onClick={goToMods}
-            >
+        {/* Content Catalog */}
+        <article className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 flex flex-col gap-5 transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.1]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-emerald-400 text-[18px]">
+                  inventory_2
+                </span>
+              </div>
+              <h3 className="m-0 text-base font-semibold text-white">
+                Content Catalog
+              </h3>
+            </div>
+            <Button variant="outline" size="xs" onClick={goToMods}>
               Manage
-            </button>
+            </Button>
           </div>
-          <DataList>
-            <DataItem label="Total Mods" value={selectedMods.length} />
-            <DataItem label="Core Mods" value="2 (Managed)" />
-            <DataItem
+          <div className="flex flex-col gap-3">
+            <InfoRow label="Total Mods" value={selectedMods.length} />
+            <InfoRow label="Core Mods" value="2 (Managed)" />
+            <InfoRow
               label="Update Status"
               value={
                 summaryStats.update > 0
                   ? `${summaryStats.update} pending`
                   : "All current"
               }
+              highlight={summaryStats.update > 0 ? "warning" : "success"}
             />
-          </DataList>
+          </div>
         </article>
 
-        <article className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 hover:bg-[var(--color-bg-card-hover)] hover:border-[var(--color-line-strong)] hover:-translate-y-[2px]">
-          <div className="flex items-center justify-between mb-[4px]">
-            <h3 className="m-0 mb-2 text-[1.25rem] font-semibold text-white tracking-[-0.01em]">
-              Display & Menu
-            </h3>
-            <button
-              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-              onClick={goToFancy}
-            >
+        {/* Display & Menu */}
+        <article className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 flex flex-col gap-5 transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.1]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-violet-400 text-[18px]">
+                  palette
+                </span>
+              </div>
+              <h3 className="m-0 text-base font-semibold text-white">
+                Display & Menu
+              </h3>
+            </div>
+            <Button variant="outline" size="xs" onClick={goToFancy}>
               Setup
-            </button>
+            </Button>
           </div>
-          <DataList>
-            <DataItem
+          <div className="flex flex-col gap-3">
+            <InfoRow
               label="Status"
               value={form.fancyMenuEnabled === "true" ? "Active" : "Bypass"}
+              highlight={
+                form.fancyMenuEnabled === "true" ? "success" : undefined
+              }
             />
-            <DataItem
+            <InfoRow
               label="Mode"
               value={
                 form.fancyMenuMode === "custom" ? "Custom Bundle" : "Simplified"
               }
             />
-            <DataItem
+            <InfoRow
               label="Custom Brand"
               value={form.brandingLogoUrl ? "Logo Set" : "Default"}
             />
-          </DataList>
-        </article>
-
-        <article className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 hover:bg-[var(--color-bg-card-hover)] hover:border-[var(--color-line-strong)] hover:-translate-y-[2px]">
-          <div className="flex items-center justify-between mb-[4px]">
-            <h3 className="m-0 mb-2 text-[1.25rem] font-semibold text-white tracking-[-0.01em]">
-              Recent Mods
-            </h3>
-          </div>
-          <div className="grid gap-[8px]">
-            {selectedMods.slice(0, 5).map((mod) => (
-              <div
-                key={mod.projectId || mod.name}
-                className="flex justify-between items-center gap-[16px] py-[6px] px-[8px] border border-[var(--color-line)] rounded-[var(--radius-md)] bg-white/2"
-              >
-                <span className="font-semibold text-white whitespace-nowrap overflow-hidden text-ellipsis">
-                  {mod.name}
-                </span>
-                <span className="text-[0.74rem] text-[var(--color-text-muted)] uppercase tracking-[0.05em] whitespace-nowrap overflow-hidden text-ellipsis">
-                  {mod.versionId || "Custom"}
-                </span>
-              </div>
-            ))}
-            {selectedMods.length > 5 ? (
-              <span className="text-[0.8rem] text-[var(--color-text-secondary)] mt-[10px] mx-[4px] inline-block">
-                and {selectedMods.length - 5} more...
-              </span>
-            ) : null}
           </div>
         </article>
       </div>
-    </>
+
+      {/* Recent Mods */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-sky-400 text-[18px]">
+                extension
+              </span>
+            </div>
+            <h3 className="m-0 text-base font-semibold text-white">
+              Recent Mods
+            </h3>
+            <span className="text-xs text-[var(--color-text-muted)] bg-white/[0.05] px-2 py-0.5 rounded-full border border-white/[0.06]">
+              {selectedMods.length} total
+            </span>
+          </div>
+          <Button variant="outline" size="xs" onClick={goToMods}>
+            View All
+          </Button>
+        </div>
+        <div className="grid gap-2">
+          {selectedMods.slice(0, 5).map((mod) => (
+            <div
+              key={mod.projectId || mod.name}
+              className="flex items-center gap-3 py-2.5 px-3 rounded-xl border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.05] transition-colors"
+            >
+              <div className="w-8 h-8 rounded-lg bg-black/30 border border-white/[0.06] flex items-center justify-center shrink-0 overflow-hidden">
+                {mod.projectId ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={`https://cdn.modrinth.com/data/${mod.projectId}/icon.png`}
+                    alt=""
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-[var(--color-text-muted)] text-[16px]">
+                    extension
+                  </span>
+                )}
+              </div>
+              <span className="text-sm font-medium text-white truncate flex-1">
+                {mod.name}
+              </span>
+              <span className="text-[10px] font-mono text-[var(--color-text-muted)] bg-black/20 px-2 py-0.5 rounded border border-white/[0.04] shrink-0 uppercase tracking-wider max-w-[100px] truncate">
+                {mod.versionId || "Custom"}
+              </span>
+            </div>
+          ))}
+          {selectedMods.length > 5 ? (
+            <button
+              className="text-xs text-[var(--color-text-muted)] hover:text-white mt-1 py-2 text-center rounded-lg hover:bg-white/[0.04] transition-colors cursor-pointer border-none bg-transparent"
+              onClick={goToMods}
+            >
+              +{selectedMods.length - 5} more mods...
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string | number;
+  highlight?: "success" | "warning";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg bg-black/15 border border-white/[0.04]">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] shrink-0">
+        {label}
+      </span>
+      <span
+        className={`text-sm font-medium truncate text-right ${
+          highlight === "success"
+            ? "text-emerald-400"
+            : highlight === "warning"
+              ? "text-amber-400"
+              : "text-[var(--color-text-primary)]"
+        }`}
+      >
+        {value || "—"}
+      </span>
+    </div>
   );
 }

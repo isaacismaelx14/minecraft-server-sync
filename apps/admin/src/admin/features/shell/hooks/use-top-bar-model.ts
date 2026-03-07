@@ -361,9 +361,35 @@ export function useTopBarModel() {
     }
   };
 
+  const discardDraft = async () => {
+    store.setStatus("draft", "Discarding draft...");
+    try {
+      await requestJson<{ success: true }>("/v1/admin/draft", "DELETE");
+      await store.loadBootstrap(true);
+      store.setHasSavedDraft(false);
+      store.setStatus("draft", "Draft discarded.", "ok");
+    } catch {
+      try {
+        await requestJson<{ success: true }>("/v1/admin/draft", "PATCH", {
+          discard: true,
+        });
+        await store.loadBootstrap(true);
+        store.setHasSavedDraft(false);
+        store.setStatus("draft", "Draft discarded.", "ok");
+      } catch {
+        store.setStatus(
+          "draft",
+          "Discard failed. Restart @minerelay/api so the discard route is loaded, then retry.",
+          "error",
+        );
+      }
+    }
+  };
+
   return {
     ...store,
     saveDraft,
+    discardDraft,
     exarotonAction,
     publishProfile,
   };

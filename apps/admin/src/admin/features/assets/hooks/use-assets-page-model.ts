@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -120,15 +120,16 @@ async function resolvePackFromModrinth(
 async function fetchPopularFromModrinth(
   type: AssetType,
   minecraftVersion: string,
+  query: string = "",
 ): Promise<SearchResult[]> {
   const facets = JSON.stringify([
     [`project_type:${type === "resourcepack" ? "resourcepack" : "shader"}`],
     [`versions:${minecraftVersion}`],
   ]);
-  const modrinthUrl = `https://api.modrinth.com/v2/search?query=&index=follows&limit=10&facets=${encodeURIComponent(facets)}`;
+  const modrinthUrl = `https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&index=${query ? "relevance" : "follows"}&limit=12&facets=${encodeURIComponent(facets)}`;
   const response = await fetch(modrinthUrl);
   if (!response.ok) {
-    throw new Error(`Failed loading popular ${type}s (${response.status})`);
+    throw new Error(`Failed loading ${type}s (${response.status})`);
   }
 
   const json = (await response.json()) as ModrinthSearchResponse;
@@ -152,39 +153,79 @@ export function useAssetsPageModel() {
   const [loadingPopular, setLoadingPopular] = useState(false);
   const [installingId, setInstallingId] = useState<string | null>(null);
 
-  const openPopularModal = async (type: AssetType) => {
-    const minecraftVersion = store.form.minecraftVersion.trim();
-    if (!minecraftVersion) {
-      store.setStatus("mods", "Set Minecraft version first.", "error");
-      return;
-    }
+  const [searchQuery, setSearchQuery] = useState("");
+  const inFlightKeyRef = useRef<string>("");
 
+  const loadAssets = useCallback(
+    async (type: AssetType, query: string) => {
+      const normalizedQuery = query.trim();
+      const requestKey = `${type}:${normalizedQuery}`;
+      if (inFlightKeyRef.current === requestKey) {
+        return;
+      }
+      inFlightKeyRef.current = requestKey;
+
+      const minecraftVersion = store.form.minecraftVersion.trim();
+      if (!minecraftVersion) {
+        store.setStatus("mods", "Set Minecraft version first.", "error");
+        inFlightKeyRef.current = "";
+        return;
+      }
+
+      setLoadingPopular(true);
+      try {
+        const payload = await fetchPopularFromModrinth(
+          type,
+          minecraftVersion,
+          normalizedQuery,
+        );
+        setPopular(payload ?? []);
+        const action = normalizedQuery ? "searched" : "loaded popular";
+        store.setStatus(
+          "mods",
+          `Successfully ${action} ${type === "resourcepack" ? "resourcepacks" : "shaderpacks"}.`,
+          "ok",
+        );
+      } catch (error) {
+        setPopular([]);
+        store.setStatus(
+          "mods",
+          (error as Error).message || "Failed to load assets.",
+          "error",
+        );
+      } finally {
+        setLoadingPopular(false);
+        inFlightKeyRef.current = "";
+      }
+    },
+    [store],
+  );
+
+  const openPopularModal = (type: AssetType) => {
     setModalType(type);
-    setLoadingPopular(true);
-    try {
-      const payload = await fetchPopularFromModrinth(type, minecraftVersion);
-      setPopular(payload ?? []);
-      store.setStatus(
-        "mods",
-        `Loaded popular ${type === "resourcepack" ? "resourcepacks" : "shaderpacks"}.`,
-        "ok",
-      );
-    } catch (error) {
-      setPopular([]);
-      store.setStatus(
-        "mods",
-        (error as Error).message || "Failed to load popular assets.",
-        "error",
-      );
-    } finally {
-      setLoadingPopular(false);
-    }
+    setSearchQuery("");
+    void loadAssets(type, "");
   };
+
+  const executeSearch = useCallback(
+    (query: string) => {
+      const normalizedQuery = query.trim();
+      if (normalizedQuery === searchQuery) {
+        return;
+      }
+      setSearchQuery(normalizedQuery);
+      if (modalType) {
+        void loadAssets(modalType, normalizedQuery);
+      }
+    },
+    [loadAssets, modalType, searchQuery],
+  );
 
   const closePopularModal = () => {
     setModalType(null);
     setPopular([]);
     setInstallingId(null);
+    setSearchQuery("");
   };
 
   const installFromPopular = async (projectId: string) => {
@@ -267,6 +308,8 @@ export function useAssetsPageModel() {
     popular,
     loadingPopular,
     installingId,
+    searchQuery,
+    executeSearch,
     openPopularModal,
     closePopularModal,
     installFromPopular,

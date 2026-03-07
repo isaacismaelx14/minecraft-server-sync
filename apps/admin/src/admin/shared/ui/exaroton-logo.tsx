@@ -5,10 +5,31 @@ import { memo, type CSSProperties } from "react";
 export const ExarotonLogo = memo(function ExarotonLogo({
   className,
   style,
+  iconOnly,
 }: {
   className?: string;
   style?: CSSProperties;
+  iconOnly?: boolean;
 }) {
+  if (iconOnly) {
+    return (
+      <svg
+        className={className}
+        style={style}
+        viewBox="0 0 200.4 200.4"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="Exaroton"
+      >
+        <path
+          fill="#19BA19"
+          d="M198,73.3c2.9-2.9,2.9-7.6,0-10.5L137.4,2.2c-2.9-2.9-7.6-2.9-10.5,0l-21.7,21.7c-2.9,2.9-7.6,2.9-10.5,0L73.2,2.3c-2.9-2.9-7.6-2.9-10.5,0L2.2,62.9c-2.9,2.9-2.9,7.6,0,10.5l21.7,21.7c2.9,2.9,2.9,7.6,0,10.5L2.2,127.1c-2.9,2.9-2.9,7.6,0,10.5l60.6,60.6c2.9,2.9,7.6,2.9,10.5,0L95,176.5c2.9-2.9,7.6-2.9,10.5,0l21.7,21.7c2.9,2.9,7.6,2.9,10.5,0l60.6-60.6c2.9-2.9,2.9-7.6,0-10.5l-21.7-21.7c-2.9-2.9-2.9-7.6,0-10.5L198,73.3z M154.3,112.1c0,23.3-19,42.3-42.3,42.3H88.2c-23.3,0-42.3-19-42.3-42.3V88.3C45.9,65,64.9,46,88.2,46H112c23.3,0,42.3,19,42.3,42.3V112.1z"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg
       className={className}

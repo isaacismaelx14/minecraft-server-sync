@@ -1,16 +1,72 @@
 "use client";
 
-import { ModalShell } from "@/admin/shared/ui/modal-shell";
+import { DiscoverModal } from "@/admin/shared/ui/discover-modal";
+import React from "react";
 import { statusClass } from "@/admin/shared/ui/status";
 import { ui } from "@/admin/shared/ui/styles";
 
 import { useAssetsPageModel } from "../hooks/use-assets-page-model";
+
+function InstalledRow({
+  iconUrl,
+  name,
+  fallback,
+  tag1,
+  tag2,
+  description,
+  rightActions,
+}: {
+  iconUrl?: string;
+  name: string;
+  fallback: string;
+  tag1?: string;
+  tag2?: string;
+  description?: string;
+  rightActions: React.ReactNode;
+}) {
+  return (
+    <div className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-xl p-4 flex items-center gap-4 hover:border-[var(--color-brand-primary)]/30 transition-colors">
+      <div className="w-12 h-12 bg-black/20 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-line)] shrink-0 overflow-hidden">
+        {iconUrl ? (
+          <img src={iconUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <span className="font-bold text-xl">{fallback}</span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h4 className="font-bold truncate text-[1rem] m-0 leading-none">
+            {name}
+          </h4>
+          {tag1 ? (
+            <span className="text-[10px] bg-black/20 border border-[var(--color-line)] px-1.5 py-0.5 rounded text-[var(--color-text-muted)] uppercase font-semibold">
+              {tag1}
+            </span>
+          ) : null}
+          {tag2 ? (
+            <span className="text-[10px] bg-black/20 border border-[var(--color-line)] px-1.5 py-0.5 rounded text-[var(--color-text-muted)] uppercase font-semibold">
+              {tag2}
+            </span>
+          ) : null}
+        </div>
+        {description ? (
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-1 truncate m-0">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">{rightActions}</div>
+    </div>
+  );
+}
 
 function PopularAssetModal({
   type,
   popular,
   loading,
   installingId,
+  searchQuery,
+  onSearch,
   onClose,
   onInstall,
 }: {
@@ -24,119 +80,152 @@ function PopularAssetModal({
   }>;
   loading: boolean;
   installingId: string | null;
+  searchQuery: string;
+  onSearch: (query: string) => void;
   onClose: () => void;
   onInstall: (projectId: string) => Promise<void>;
 }) {
   const title = type === "resourcepack" ? "Add Resourcepack" : "Add Shaderpack";
+  const [localQuery, setLocalQuery] = React.useState(searchQuery);
+  const triggerSearch = React.useEffectEvent(onSearch);
+  const lastSubmittedRef = React.useRef(searchQuery);
+
+  React.useEffect(() => {
+    setLocalQuery(searchQuery);
+    lastSubmittedRef.current = searchQuery;
+  }, [searchQuery]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (lastSubmittedRef.current === localQuery) return;
+      lastSubmittedRef.current = localQuery;
+      triggerSearch(localQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localQuery]);
 
   return (
-    <ModalShell onClose={onClose} wide>
-      <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
-        <h3 style={{ margin: 0 }}>{title}</h3>
-        <button
-          className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div style={{ padding: "16px 20px" }}>
-        <p className={`${ui.hint} mt-0`}>Top 10 popular on Modrinth.</p>
-
+    <DiscoverModal
+      title={title}
+      icon={type === "resourcepack" ? "texture" : "gradient"}
+      searchPlaceholder={`Search ${type === "resourcepack" ? "resourcepacks" : "shaderpacks"} on Modrinth...`}
+      searchQuery={localQuery}
+      onSearchQueryChange={setLocalQuery}
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-[16px]">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-bold flex items-center gap-2 m-0">
+            <span className="material-symbols-outlined text-[var(--color-text-muted)]">
+              {searchQuery ? "search" : "explore"}
+            </span>
+            {searchQuery
+              ? `Search Results for "${searchQuery}"`
+              : "Top 12 Popular on Modrinth"}
+          </h3>
+        </div>
         {loading ? (
           <p className={ui.hint}>Loading...</p>
         ) : popular.length === 0 ? (
-          <p className={ui.hint}>No popular items found.</p>
+          <p className={ui.hint}>No items found.</p>
         ) : (
-          <div className="grid gap-[10px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {popular.map((entry) => (
               <div
                 key={entry.projectId}
-                className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[10px_12px]"
+                className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-xl p-5 flex flex-col gap-4 hover:border-[var(--color-brand-primary)]/50 transition-all group"
               >
-                <div className="flex items-center gap-[12px] min-w-0">
-                  <div className="w-[42px] h-[42px] rounded-[10px] overflow-hidden border border-[var(--color-line)] bg-white/5 shrink-0">
+                <div className="flex justify-between items-start">
+                  <div className="w-14 h-14 bg-black/20 rounded-xl flex items-center justify-center border border-[var(--color-line)] shrink-0 overflow-hidden">
                     {entry.iconUrl ? (
                       <img
                         src={entry.iconUrl}
-                        alt={`${entry.title} icon`}
-                        width={42}
-                        height={42}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
+                        alt=""
+                        className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="grid place-items-center w-full h-full text-[0.75rem] text-[var(--color-text-muted)]">
-                        ?
+                      <span className="material-symbols-outlined text-[32px] text-[var(--color-text-muted)]">
+                        {type === "resourcepack" ? "texture" : "gradient"}
                       </span>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold truncate">{entry.title}</div>
-                    <div className={ui.hint}>by {entry.author}</div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">
+                      ID
+                    </span>
+                    <span
+                      className="text-xs font-medium max-w-[80px] truncate"
+                      title={entry.projectId}
+                    >
+                      {entry.projectId}
+                    </span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className={ui.buttonPrimary}
-                  onClick={() => void onInstall(entry.projectId)}
-                  disabled={installingId === entry.projectId}
-                >
-                  {installingId === entry.projectId ? "Adding..." : "Add"}
-                </button>
+                <div className="flex-1">
+                  <h4 className="font-bold text-lg group-hover:text-[var(--color-brand-primary)] transition-colors line-clamp-1 m-0">
+                    {entry.title}
+                  </h4>
+                  <p
+                    className="text-xs text-[var(--color-text-muted)] line-clamp-2 mt-1 m-0"
+                    title={entry.description}
+                  >
+                    {entry.description}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-4 border-t border-[var(--color-line)]">
+                  <div className="flex flex-col min-w-0 flex-1 mr-2">
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">
+                      Author
+                    </span>
+                    <span className="text-xs font-medium truncate">
+                      {entry.author}
+                    </span>
+                  </div>
+                  <button
+                    className="bg-[var(--color-brand-primary)]/10 border border-transparent text-[var(--color-brand-primary)] hover:bg-[var(--color-brand-primary)] hover:text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={installingId === entry.projectId}
+                    onClick={() => void onInstall(entry.projectId)}
+                  >
+                    {installingId === entry.projectId
+                      ? "Installing..."
+                      : "Install"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </ModalShell>
+    </DiscoverModal>
   );
 }
 
-function AssetIcon({
-  src,
-  alt,
-  fallback,
-  size = 24,
+function EmptyAssetState({
+  title,
+  description,
+  icon = "inventory_2",
 }: {
-  src?: string;
-  alt: string;
-  fallback: string;
-  size?: number;
+  title: string;
+  description: string;
+  icon?: string;
 }) {
   return (
-    <div
-      className="rounded-[8px] overflow-hidden border border-[var(--color-line)] bg-white/5 shrink-0 text-[var(--color-text-muted)] grid place-items-center"
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        fontSize: `${Math.max(12, Math.round(size * 0.5))}px`,
-      }}
-      aria-hidden="true"
-    >
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          width={size}
-          height={size}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      ) : (
-        <span>{fallback}</span>
-      )}
+    <div className="border border-[var(--color-line)] border-dashed bg-black/10 rounded-xl p-10 flex flex-col items-center justify-center gap-3 text-center transition-colors hover:bg-black/20 hover:border-[var(--color-brand-primary)]/30">
+      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-[var(--color-line)] mb-2 shadow-inner">
+        <span className="material-symbols-outlined text-[32px] text-[var(--color-text-muted)]">
+          {icon}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1 items-center">
+        <h4 className="m-0 text-base font-bold text-[var(--color-text-primary)]">
+          {title}
+        </h4>
+        <p className="m-0 text-[13px] text-[var(--color-text-muted)] max-w-sm leading-relaxed">
+          {description}
+        </p>
+      </div>
     </div>
   );
-}
-
-function EmptyAssetState({ text }: { text: string }) {
-  return <p className={ui.hint}>{text}</p>;
 }
 
 export function AssetsPage() {
@@ -150,6 +239,8 @@ export function AssetsPage() {
     popular,
     loadingPopular,
     installingId,
+    searchQuery,
+    executeSearch,
     openPopularModal,
     closePopularModal,
     installFromPopular,
@@ -161,185 +252,186 @@ export function AssetsPage() {
   const hiddenMods = Math.max(selectedMods.length - modPreview.length, 0);
 
   return (
-    <section className="grid gap-[24px]">
-      <header className="flex items-start justify-between gap-[16px]">
+    <div className="flex flex-col gap-8 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col gap-6">
         <div>
-          <h2>Assets</h2>
-          <p className="text-[0.9rem] text-[var(--color-text-muted)] m-0 leading-[1.5]">
+          <h1 className="text-3xl font-black tracking-tight m-0">Assets</h1>
+          <p className="text-[var(--color-text-muted)] mt-1 mb-0 text-sm">
             Manage user-side assets. Mods, resourcepacks, and shaderpacks are
             tracked here.
           </p>
         </div>
-      </header>
+      </div>
 
-      <div className={statusClass(status.tone)}>{status.text}</div>
+      {status.text ? (
+        <div className={statusClass(status.tone)}>{status.text}</div>
+      ) : null}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-[16px]">
-        <section className={`${ui.panel} xl:col-span-2`}>
-          <div className="flex items-center justify-between gap-[12px]">
-            <div className="grid gap-[4px]">
-              <h3>Mods</h3>
-              <span className={ui.hint}>Installed: {selectedMods.length}</span>
-            </div>
+      <div className="flex flex-col gap-8">
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold flex items-center gap-2 m-0">
+              <span className="material-symbols-outlined text-[var(--color-brand-primary)]">
+                package
+              </span>
+              Mods
+              <span className="bg-[var(--color-brand-primary)]/10 border border-[var(--color-brand-primary)]/20 text-[var(--color-brand-primary)] px-2 py-0.5 rounded text-xs ml-2">
+                {selectedMods.length} Installed
+              </span>
+            </h3>
             <button
               type="button"
-              className={ui.buttonPrimary}
+              className="text-sm text-[var(--color-brand-primary)] font-medium hover:underline cursor-pointer bg-transparent border-none p-0"
               onClick={openModsManager}
             >
               Open Mods Manager
             </button>
           </div>
 
-          <div className="grid gap-[10px]">
+          <div className="grid grid-cols-1 gap-3">
             {modPreview.length === 0 ? (
-              <EmptyAssetState text="No mods installed yet." />
+              <EmptyAssetState
+                title="No mods loaded"
+                description="Your server is currently vanilla. Add mods to enhance your gameplay experience."
+                icon="package_2"
+              />
             ) : (
-              <div className="grid gap-[10px]">
-                {modPreview.map((entry) => (
-                  <div
-                    key={`${entry.projectId ?? entry.sha256}-${entry.versionId ?? "latest"}`}
-                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
-                  >
-                    <div className="flex items-center gap-[12px] min-w-0">
-                      <AssetIcon
-                        src={entry.iconUrl}
-                        alt={`${entry.name} icon`}
-                        fallback="M"
-                      />
-                      <div className="grid gap-[2px] min-w-0">
-                        <strong className="truncate">{entry.name}</strong>
-                        <span className={ui.hint}>
-                          {entry.side === "both" ? "user + server" : entry.side}
-                        </span>
-                      </div>
-                    </div>
+              modPreview.map((entry) => (
+                <InstalledRow
+                  key={`${entry.projectId ?? entry.sha256}-${entry.versionId ?? "latest"}`}
+                  iconUrl={entry.iconUrl}
+                  name={entry.name}
+                  fallback="M"
+                  tag1={entry.side === "both" ? "user + server" : entry.side}
+                  description={entry.slug ?? "Managed mod"}
+                  rightActions={
                     <button
                       type="button"
-                      className={ui.buttonGhost}
+                      className="px-3 py-1.5 rounded-lg bg-black/20 border border-[var(--color-line)] text-xs font-bold hover:bg-white/5 transition-colors text-[var(--color-text-secondary)] cursor-pointer"
                       onClick={openModsManager}
                     >
                       Managed in Mods Manager
                     </button>
-                  </div>
-                ))}
-              </div>
+                  }
+                />
+              ))
             )}
+
             {hiddenMods > 0 ? (
-              <p className={ui.hint}>
-                +{hiddenMods} more mod(s) in Mods Manager.
-              </p>
+              <button
+                type="button"
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-brand-primary)] font-bold text-sm flex items-center justify-center gap-1 w-full mt-2 cursor-pointer bg-transparent border-none"
+                onClick={openModsManager}
+              >
+                View {hiddenMods} more mod(s)
+                <span className="material-symbols-outlined text-[16px]">
+                  expand_more
+                </span>
+              </button>
             ) : null}
           </div>
         </section>
 
-        <section className={ui.panel}>
-          <div className="flex items-center justify-between gap-[12px]">
-            <div className="grid gap-[4px]">
-              <h3>Resourcepacks</h3>
-              <span className={ui.hint}>
-                Installed: {selectedResources.length}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold flex items-center gap-2 m-0">
+              <span className="material-symbols-outlined text-[#10b981]">
+                texture
               </span>
-            </div>
+              Resourcepacks
+              <span className="bg-[#10b981]/10 border border-[#10b981]/20 text-[#10b981] px-2 py-0.5 rounded text-xs ml-2">
+                {selectedResources.length} Installed
+              </span>
+            </h3>
             <button
               type="button"
-              className={ui.buttonPrimary}
+              className="text-sm text-[var(--color-brand-primary)] font-medium hover:underline cursor-pointer bg-transparent border-none p-0"
               onClick={() => void openPopularModal("resourcepack")}
             >
               Add Resourcepack
             </button>
           </div>
 
-          <div className="grid gap-[10px]">
+          <div className="grid grid-cols-1 gap-3">
             {selectedResources.length === 0 ? (
-              <EmptyAssetState text="No resourcepacks installed." />
+              <EmptyAssetState
+                title="No resourcepacks found"
+                description="Resourcepacks can change the look of blocks, items, and UI. Add some to customize your world."
+                icon="texture"
+              />
             ) : (
-              <div className="grid gap-[10px]">
-                {selectedResources.map((entry) => (
-                  <div
-                    key={entry.sha256}
-                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
-                  >
-                    <div className="flex items-center gap-[12px] min-w-0">
-                      <AssetIcon
-                        src={entry.iconUrl}
-                        alt={`${entry.name} icon`}
-                        fallback="R"
-                      />
-                      <div className="grid gap-[2px] min-w-0">
-                        <strong className="truncate">{entry.name}</strong>
-                        <span className={ui.hint}>
-                          {entry.slug ?? entry.projectId ?? "custom pack"}
-                        </span>
-                      </div>
-                    </div>
+              selectedResources.map((entry) => (
+                <InstalledRow
+                  key={entry.sha256}
+                  iconUrl={entry.iconUrl}
+                  name={entry.name}
+                  fallback="R"
+                  tag1={entry.slug ?? entry.projectId ?? "custom pack"}
+                  rightActions={
                     <button
                       type="button"
-                      className={ui.buttonDanger}
+                      className="px-3 py-1.5 rounded-lg bg-[#e11d48]/10 text-[#f43f5e] text-xs font-bold hover:bg-[#e11d48]/20 transition-colors cursor-pointer border border-transparent"
                       onClick={() =>
                         removeResource(entry.projectId, entry.sha256)
                       }
                     >
                       Remove
                     </button>
-                  </div>
-                ))}
-              </div>
+                  }
+                />
+              ))
             )}
           </div>
         </section>
 
-        <section className={ui.panel}>
-          <div className="flex items-center justify-between gap-[12px]">
-            <div className="grid gap-[4px]">
-              <h3>Shaderpacks</h3>
-              <span className={ui.hint}>
-                Installed: {selectedShaders.length}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold flex items-center gap-2 m-0">
+              <span className="material-symbols-outlined text-[#a855f7]">
+                gradient
               </span>
-            </div>
+              Shaderpacks
+              <span className="bg-[#a855f7]/10 border border-[#a855f7]/20 text-[#c084fc] px-2 py-0.5 rounded text-xs ml-2">
+                {selectedShaders.length} Installed
+              </span>
+            </h3>
             <button
               type="button"
-              className={ui.buttonPrimary}
+              className="text-sm text-[var(--color-brand-primary)] font-medium hover:underline cursor-pointer bg-transparent border-none p-0"
               onClick={() => void openPopularModal("shaderpack")}
             >
               Add Shaderpack
             </button>
           </div>
 
-          <div className="grid gap-[10px]">
+          <div className="grid grid-cols-1 gap-3">
             {selectedShaders.length === 0 ? (
-              <EmptyAssetState text="No shaderpacks installed." />
+              <EmptyAssetState
+                title="No shaderpacks installed"
+                description="Shaderpacks dramatically improve lighting, shadows, and water. Browse the gallery to find one."
+                icon="gradient"
+              />
             ) : (
-              <div className="grid gap-[10px]">
-                {selectedShaders.map((entry) => (
-                  <div
-                    key={entry.sha256}
-                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
-                  >
-                    <div className="flex items-center gap-[12px] min-w-0">
-                      <AssetIcon
-                        src={entry.iconUrl}
-                        alt={`${entry.name} icon`}
-                        fallback="S"
-                      />
-                      <div className="grid gap-[2px] min-w-0">
-                        <strong className="truncate">{entry.name}</strong>
-                        <span className={ui.hint}>
-                          {entry.slug ?? entry.projectId ?? "custom shader"}
-                        </span>
-                      </div>
-                    </div>
+              selectedShaders.map((entry) => (
+                <InstalledRow
+                  key={entry.sha256}
+                  iconUrl={entry.iconUrl}
+                  name={entry.name}
+                  fallback="S"
+                  tag1={entry.slug ?? entry.projectId ?? "custom shader"}
+                  rightActions={
                     <button
                       type="button"
-                      className={ui.buttonDanger}
+                      className="px-3 py-1.5 rounded-lg bg-[#e11d48]/10 text-[#f43f5e] text-xs font-bold hover:bg-[#e11d48]/20 transition-colors cursor-pointer border border-transparent"
                       onClick={() =>
                         removeShader(entry.projectId, entry.sha256)
                       }
                     >
                       Remove
                     </button>
-                  </div>
-                ))}
-              </div>
+                  }
+                />
+              ))
             )}
           </div>
         </section>
@@ -351,10 +443,12 @@ export function AssetsPage() {
           popular={popular}
           loading={loadingPopular}
           installingId={installingId}
+          searchQuery={searchQuery}
+          onSearch={executeSearch}
           onClose={closePopularModal}
           onInstall={installFromPopular}
         />
       ) : null}
-    </section>
+    </div>
   );
 }

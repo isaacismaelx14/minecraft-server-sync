@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 
+import { Button } from "@/admin/shared/ui/button";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import {
   exarotonStatusClass,
@@ -24,35 +25,30 @@ const ExarotonWidget = memo(function ExarotonWidget() {
   const disableRestartByStatus = [0, 2, 3, 4, 6].includes(server.status);
 
   return (
-    <div className="bg-black/30 border border-[var(--color-line-strong)] rounded-[var(--radius-xl)] py-[6px] px-[16px] flex items-center gap-[16px] text-[0.85rem] backdrop-blur-[var(--blur-glass)]">
-      <div className="flex items-center gap-[8px] font-semibold">
+    <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl py-1.5 px-4 backdrop-blur-md">
+      <div className="flex items-center gap-2.5">
         <span
-          className={`widget-dot ${statusTone}`}
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background:
-              statusTone === "ok"
-                ? "var(--success)"
-                : statusTone === "error"
-                  ? "var(--danger)"
-                  : "var(--text-muted)",
-          }}
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            statusTone === "ok"
+              ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+              : statusTone === "error"
+                ? "bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]"
+                : "bg-gray-500"
+          }`}
         />
-        <span className="text-[var(--color-text-primary)] font-bold">
-          {server.name}:
-        </span>
-        <span className={exarotonStatusClass(server.status)}>
+        <span className="text-sm font-semibold text-white">{server.name}</span>
+        <span
+          className={`text-xs font-semibold px-1.5 py-0.5 rounded ${exarotonStatusClass(server.status)}`}
+        >
           {server.statusLabel}
         </span>
-        <span className="text-[var(--color-text-muted)] text-[0.72rem] font-medium ml-[2px] whitespace-nowrap">
+        <span className="text-xs text-[var(--color-text-muted)] tabular-nums">
           {server.players.count}/{server.players.max} online
         </span>
       </div>
-      <div className="flex gap-[4px] border-l border-[var(--color-line)] pl-[12px]">
+      <div className="flex gap-1 border-l border-white/[0.08] pl-2.5">
         <button
-          className="w-[28px] h-[28px] rounded-[6px] grid place-items-center cursor-pointer transition-all duration-200 bg-transparent text-[var(--color-text-secondary)] hover:not-disabled:bg-white/10 hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed [&>svg]:w-[14px] [&>svg]:h-[14px]"
+          className="w-7 h-7 rounded-lg grid place-items-center cursor-pointer transition-all bg-transparent text-[var(--color-text-muted)] hover:not-disabled:bg-white/[0.08] hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed border-none"
           type="button"
           title="Start Server"
           disabled={exaroton.busy || disableStartByStatus}
@@ -62,15 +58,16 @@ const ExarotonWidget = memo(function ExarotonWidget() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="3"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="w-3.5 h-3.5"
           >
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
         </button>
         <button
-          className="w-[28px] h-[28px] rounded-[6px] grid place-items-center cursor-pointer transition-all duration-200 bg-transparent text-[var(--color-text-secondary)] hover:not-disabled:bg-white/10 hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed [&>svg]:w-[14px] [&>svg]:h-[14px]"
+          className="w-7 h-7 rounded-lg grid place-items-center cursor-pointer transition-all bg-transparent text-[var(--color-text-muted)] hover:not-disabled:bg-white/[0.08] hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed border-none"
           type="button"
           title="Restart Server"
           disabled={exaroton.busy || disableRestartByStatus}
@@ -80,16 +77,17 @@ const ExarotonWidget = memo(function ExarotonWidget() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="3"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="w-3.5 h-3.5"
           >
             <path d="M23 4v6h-6" />
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
         </button>
         <button
-          className="w-[28px] h-[28px] rounded-[6px] grid place-items-center cursor-pointer transition-all duration-200 bg-transparent text-[var(--color-text-secondary)] hover:not-disabled:bg-white/10 hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed [&>svg]:w-[14px] [&>svg]:h-[14px]"
+          className="w-7 h-7 rounded-lg grid place-items-center cursor-pointer transition-all bg-transparent text-[var(--color-text-muted)] hover:not-disabled:bg-white/[0.08] hover:not-disabled:text-white disabled:opacity-30 disabled:cursor-not-allowed border-none"
           type="button"
           title="Stop Server"
           disabled={exaroton.busy || disableStopByStatus}
@@ -99,9 +97,10 @@ const ExarotonWidget = memo(function ExarotonWidget() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="3"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="w-3.5 h-3.5"
           >
             <rect x="6" y="6" width="12" height="12" />
           </svg>
@@ -120,11 +119,13 @@ export const TopBar = memo(function TopBar() {
     isBusy,
     logout,
     saveDraft,
+    discardDraft,
     publishProfile,
     statuses,
   } = useTopBarModel();
   const [showExarotonPublishWarning, setShowExarotonPublishWarning] =
     useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const publishButtonLabel =
     isBusy.publish && statuses.publish.text.trim().length > 0
@@ -156,97 +157,157 @@ export const TopBar = memo(function TopBar() {
   };
 
   return (
-    <section className="flex justify-between items-start gap-[24px] border-b border-[var(--color-line)] pb-[24px]">
-      <div className="text-[0.92rem] text-[var(--color-text-secondary)] [&_b]:text-white">
+    <header className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-5 flex-wrap">
+      {/* Left side: server widget */}
+      <div className="flex items-center gap-3 min-w-0">
         {exaroton.connected ? <ExarotonWidget /> : null}
       </div>
-      <div className="flex gap-[12px] items-center">
+
+      {/* Right side: status + actions */}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        {/* Status badge */}
         {hasPendingPublish || hasSavedDraft ? (
-          <div className="flex items-center gap-[8px]">
-            {hasPendingPublish ? (
-              <span className="text-[0.78rem] font-semibold text-[#f97316] bg-[#f97316]/12 border border-[#f97316]/30 rounded-[6px] py-[3px] px-[10px] whitespace-nowrap">
-                Requires Publish
-              </span>
-            ) : (
-              <span className="text-[0.78rem] font-semibold text-[#eab308] bg-[#eab308]/12 border border-[#eab308]/30 rounded-[6px] py-[3px] px-[10px] whitespace-nowrap">
-                Draft pending
-              </span>
-            )}
-            <button
-              className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(99,102,241,0.4),0_0_12px_rgba(99,102,241,0.2)]"
-              type="button"
-              disabled={isBusy.publish || Boolean(publishBlockReason)}
-              onClick={handlePublish}
-              title={
-                publishBlockReason ||
-                (isBusy.publish ? statuses.publish.text : undefined)
-              }
-            >
-              {publishButtonLabel}
-            </button>
-            {publishBlockReason ? (
-              <span className="text-[0.75rem] text-[#fca5a5] font-medium opacity-90 bg-[#ef4444]/10 py-[6px] px-[12px] rounded-[var(--radius-sm)] border border-[#ef4444]/15 absolute left-1/2 bottom-full mb-2 -translate-x-1/2 whitespace-nowrap z-10">
-                {publishBlockReason}
-              </span>
-            ) : null}
-          </div>
+          <span
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border whitespace-nowrap ${
+              hasPendingPublish
+                ? "text-orange-400 bg-orange-500/10 border-orange-500/20"
+                : "text-yellow-400 bg-yellow-500/10 border-yellow-500/20"
+            }`}
+          >
+            {hasPendingPublish ? "Requires Publish" : "Draft pending"}
+          </span>
         ) : (
-          <span className="text-[0.82rem] text-[var(--color-text-muted)]">
+          <span className="text-xs text-[var(--color-text-muted)] px-2.5 py-1">
             All changes published
           </span>
         )}
-        <button
-          className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-          type="button"
-          onClick={() => void saveDraft()}
-        >
+
+        {/* Publish */}
+        {(hasPendingPublish || hasSavedDraft) && (
+          <Button
+            variant="success"
+            size="sm"
+            disabled={isBusy.publish || Boolean(publishBlockReason)}
+            onClick={handlePublish}
+            title={
+              publishBlockReason ||
+              (isBusy.publish ? statuses.publish.text : undefined)
+            }
+          >
+            {publishButtonLabel}
+          </Button>
+        )}
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-white/[0.08] mx-0.5" />
+
+        {/* Save Draft */}
+        <Button variant="outline" size="sm" onClick={() => void saveDraft()}>
           Save Draft
-        </button>
-        <button
-          className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-gradient-to-br from-[#e11d48] to-[#be123c] text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-          type="button"
-          style={{ padding: "8px 12px" }}
-          onClick={() => void logout()}
-        >
+        </Button>
+
+        {/* Discard Draft */}
+        {(hasPendingPublish || hasSavedDraft) && (
+          <Button
+            variant="warn"
+            size="sm"
+            onClick={() => setShowDiscardConfirm(true)}
+          >
+            Discard
+          </Button>
+        )}
+
+        {/* Logout */}
+        <Button variant="danger-ghost" size="sm" onClick={() => void logout()}>
           Logout
-        </button>
+        </Button>
       </div>
 
-      {showExarotonPublishWarning ? (
-        <ModalShell onClose={() => setShowExarotonPublishWarning(false)}>
-          <div className="flex items-center justify-between mb-[4px]">
-            <h2 className="m-0 mb-2 text-[1.25rem] font-semibold text-white tracking-[-0.01em]">
-              Before first Exaroton mod sync
-            </h2>
-            <p className="text-[0.88rem] text-[var(--color-text-muted)] leading-[1.6]">
-              We recommend deleting existing mods from your Exaroton server
-              first to avoid conflicts, duplicates, or incompatible jars.
-            </p>
-          </div>
-          <div className="rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/25 min-h-[42px] flex items-center justify-center py-[10px] px-[14px] text-[0.85rem] text-[var(--color-text-muted)] transition-all duration-150 ease-out mt-3">
-            <p>
-              Once you click publish, server-target mods will be synchronized to
-              the Exaroton <b>mods</b> folder.
-            </p>
-          </div>
-          <div className="flex justify-end gap-[16px] mt-4">
+      {/* Discard Draft Confirmation */}
+      {showDiscardConfirm ? (
+        <ModalShell onClose={() => setShowDiscardConfirm(false)}>
+          <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
+            <h3 className="m-0 text-lg">Discard Draft?</h3>
             <button
-              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
+              className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
               type="button"
-              onClick={() => setShowExarotonPublishWarning(false)}
+              aria-label="Close"
+              onClick={() => setShowDiscardConfirm(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto">
+            <p className="border border-amber-500/30 bg-amber-500/10 text-amber-400 p-4 rounded-xl text-sm leading-relaxed m-0">
+              All unsaved changes will be lost. The profile will be reloaded
+              from the last published state.
+            </p>
+          </div>
+          <div className="p-4 border-t border-[var(--color-line)] flex items-center justify-end gap-3 bg-black/10 shrink-0">
+            <Button
+              variant="flat"
+              size="md"
+              onClick={() => setShowDiscardConfirm(false)}
             >
               Cancel
-            </button>
-            <button
-              className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] inline-flex items-center justify-center text-[0.9rem] gap-[8px] relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-b after:from-white/20 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 hover:not-disabled:after:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8] hover:not-disabled:-translate-y-[2px] disabled:shadow-none disabled:transform-none bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(99,102,241,0.4),0_0_12px_rgba(99,102,241,0.2)]"
-              type="button"
-              onClick={acknowledgeWarningAndPublish}
+            </Button>
+            <Button
+              variant="warn"
+              size="md"
+              className="!bg-amber-500 !text-black !border-transparent hover:not-disabled:!bg-amber-400 shadow-lg shadow-amber-500/20"
+              onClick={() => {
+                void discardDraft();
+                setShowDiscardConfirm(false);
+              }}
             >
-              I Understand
-            </button>
+              Discard Changes
+            </Button>
           </div>
         </ModalShell>
       ) : null}
-    </section>
+
+      {/* Exaroton Publish Warning */}
+      {showExarotonPublishWarning ? (
+        <ModalShell onClose={() => setShowExarotonPublishWarning(false)}>
+          <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
+            <h3 className="m-0 text-lg">Before first Exaroton mod sync</h3>
+            <button
+              className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
+              type="button"
+              aria-label="Close"
+              onClick={() => setShowExarotonPublishWarning(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto flex flex-col gap-3">
+            <p className="text-sm text-[var(--color-text-muted)] leading-relaxed m-0">
+              We recommend deleting existing mods from your Exaroton server
+              first to avoid conflicts, duplicates, or incompatible jars.
+            </p>
+            <div className="bg-black/25 border border-[var(--color-line)] rounded-xl p-4 text-sm text-[var(--color-text-muted)] leading-relaxed">
+              Once you click publish, server-target mods will be synchronized to
+              the Exaroton <b className="text-white">mods</b> folder.
+            </div>
+          </div>
+          <div className="p-4 border-t border-[var(--color-line)] flex items-center justify-end gap-3 bg-black/10 shrink-0">
+            <Button
+              variant="flat"
+              size="md"
+              onClick={() => setShowExarotonPublishWarning(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              size="md"
+              onClick={acknowledgeWarningAndPublish}
+            >
+              I Understand
+            </Button>
+          </div>
+        </ModalShell>
+      ) : null}
+    </header>
   );
 });

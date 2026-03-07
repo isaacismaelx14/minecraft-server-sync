@@ -1,5 +1,5 @@
-import { CentralModsManagerPage } from "@/admin/features/mod-manager/components/central-mods-manager-page";
+import { ModManagerPage } from "@/admin/features/mod-manager/components/mod-manager-page";
 
 export default function AssetsModsRoute() {
-  return <CentralModsManagerPage />;
+  return <ModManagerPage />;
 }

@@ -4,118 +4,19 @@ import { memo } from "react";
 
 import { useAdminStore } from "@/admin/shared/store/admin-store";
 
-function NavIcon({
-  view,
-}: {
-  view: "overview" | "identity" | "assets" | "fancy" | "servers" | "launcher";
-}) {
-  if (view === "overview") {
-    return (
-      <svg
-        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-      </svg>
-    );
-  }
-  if (view === "identity") {
-    return (
-      <svg
-        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-      </svg>
-    );
-  }
-  if (view === "assets") {
-    return (
-      <svg
-        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-      </svg>
-    );
-  }
-  if (view === "fancy") {
-    return (
-      <svg
-        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 19l7-7 3 3-7 7-3-3z" />
-        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-        <path d="M2 2l7.5 1.5" />
-        <path d="M14 11l4 4" />
-      </svg>
-    );
-  }
-  if (view === "servers") {
-    return (
-      <svg
-        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
-        <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
-        <line x1="6" y1="6" x2="6.01" y2="6" />
-        <line x1="6" y1="18" x2="6.01" y2="18" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <path d="M9 12l2 2 4-4" />
-    </svg>
-  );
-}
-
 const NAV_ITEMS = [
-  { view: "overview", label: "Overview" },
-  { view: "identity", label: "Identity" },
-  { view: "assets", label: "Assets" },
-  { view: "fancy", label: "Fancy Menu" },
-  { view: "servers", label: "Servers" },
-  { view: "launcher", label: "Launcher Pairing" },
+  { view: "overview", label: "Overview", icon: "dashboard" },
+  { view: "identity", label: "Identity", icon: "fingerprint" },
+  { view: "assets", label: "Assets", icon: "deployed_code" },
+  { view: "fancy", label: "Fancy Menu", icon: "auto_awesome" },
+  { view: "servers", label: "Servers", icon: "dns" },
+  { view: "launcher", label: "Launcher", icon: "rocket_launch" },
+] as const;
+
+const STAT_ITEMS = [
+  { key: "mods", icon: "extension", label: "Mods" },
+  { key: "resources", icon: "texture", label: "Resources" },
+  { key: "shaders", icon: "blur_on", label: "Shaders" },
 ] as const;
 
 export const Sidebar = memo(function Sidebar() {
@@ -130,77 +31,149 @@ export const Sidebar = memo(function Sidebar() {
     isBusy,
   } = useAdminStore();
 
+  const counts: Record<string, number> = {
+    mods: selectedMods.length,
+    resources: selectedResources.length,
+    shaders: selectedShaders.length,
+  };
+
   return (
-    <aside className="border border-[var(--color-line)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface)] backdrop-blur-[var(--blur-glass)] p-[24px] grid grid-rows-[auto_1fr_auto] gap-[32px] animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)]">
-      <div className="grid gap-[4px] pb-[16px] border-b border-[var(--color-line)]">
-        <h1 className="m-0 text-[1.25rem] font-bold bg-gradient-to-br from-white to-[#a5b4fc] text-transparent bg-clip-text tracking-[-0.01em]">
-          MineRelay Admin
-        </h1>
-        <span className="font-mono text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-brand-accent)] font-medium">
-          Control Room
-        </span>
+    <aside className="border border-[var(--color-line)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface)] backdrop-blur-[var(--blur-glass)] p-5 grid grid-rows-[auto_1fr_auto] gap-6 animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)]">
+      {/* ── Brand ── */}
+      <div className="flex items-center gap-3 pb-4 border-b border-[var(--color-line)]">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] grid place-items-center shrink-0">
+          <span className="material-symbols-outlined text-white text-[18px]">
+            sports_esports
+          </span>
+        </div>
+        <div className="grid gap-0.5 min-w-0">
+          <h1 className="m-0 text-sm font-bold bg-gradient-to-br from-white to-[#a5b4fc] text-transparent bg-clip-text leading-tight truncate">
+            MineRelay
+          </h1>
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)] font-medium leading-tight">
+            Admin Panel
+          </span>
+        </div>
       </div>
 
-      <nav className="grid content-start gap-[8px]" aria-label="Sections">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.view}
-            className={`border border-transparent rounded-[var(--radius-md)] bg-transparent text-[var(--color-text-secondary)] py-[14px] px-[20px] text-[0.95rem] font-medium cursor-pointer flex items-center gap-[14px] transition-all duration-150 ease-out text-left w-full relative hover:bg-[var(--color-bg-card-hover)] hover:text-white hover:translate-x-[4px] group before:absolute before:left-0 before:top-[25%] before:bottom-[25%] before:w-[3px] before:bg-[var(--color-brand-primary)] before:scale-y-0 before:transition-transform before:duration-150 before:rounded-r-[4px] hover:before:scale-y-[0.6] data-[active=true]:before:scale-y-[1.5] data-[active=true]:before:top-[15%] data-[active=true]:before:bottom-[15%] data-[active=true]:bg-gradient-to-r data-[active=true]:from-[rgba(99,102,241,0.15)] data-[active=true]:to-[rgba(99,102,241,0.02)] data-[active=true]:border-[rgba(99,102,241,0.2)] data-[active=true]:text-white data-[active=true]:font-semibold`}
-            data-active={view === item.view}
-            type="button"
-            onClick={() => setView(item.view)}
-          >
-            <NavIcon view={item.view} />
-            <span>{item.label}</span>
-          </button>
-        ))}
+      {/* ── Navigation ── */}
+      <nav className="grid content-start gap-1" aria-label="Sections">
+        {NAV_ITEMS.map((item) => {
+          const active = view === item.view;
+          return (
+            <button
+              key={item.view}
+              className={[
+                "group relative flex items-center gap-3 w-full rounded-[var(--radius-md)] px-3 py-2.5 text-[0.85rem] font-medium text-left cursor-pointer transition-all duration-150 ease-out border border-transparent",
+                active
+                  ? "bg-gradient-to-r from-[rgba(99,102,241,0.15)] to-[rgba(99,102,241,0.03)] border-[rgba(99,102,241,0.2)] text-white font-semibold"
+                  : "bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-card-hover)] hover:text-white",
+                "before:absolute before:left-0 before:top-1/4 before:bottom-1/4 before:w-[3px] before:rounded-r before:bg-[var(--color-brand-primary)] before:transition-transform before:duration-150",
+                active
+                  ? "before:scale-y-100"
+                  : "before:scale-y-0 hover:before:scale-y-50",
+              ].join(" ")}
+              type="button"
+              onClick={() => setView(item.view)}
+            >
+              <span
+                className={[
+                  "material-symbols-outlined text-[20px] transition-colors duration-150",
+                  active
+                    ? "text-[var(--color-brand-accent)]"
+                    : "text-[var(--color-text-muted)] group-hover:text-[var(--color-brand-accent)]",
+                ].join(" ")}
+              >
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </nav>
 
-      <div className="grid gap-[8px]">
+      {/* ── Runtime Stats ── */}
+      <div className="grid gap-2">
         {isBusy.bootstrap ? (
           <>
-            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
-              Loading runtime...
+            {/* Version skeleton */}
+            <div className="bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-md)] p-3 grid gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-white/[0.06] animate-pulse shrink-0" />
+                <div className="h-3.5 w-24 rounded bg-white/[0.06] animate-pulse" />
+              </div>
+              <div className="h-px bg-[var(--color-line)]" />
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded bg-white/[0.06] animate-pulse shrink-0" />
+                <div className="h-3.5 w-28 rounded bg-white/[0.06] animate-pulse" />
+              </div>
             </div>
-            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
-              Loading loader...
-            </div>
-            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
-              Loading mods...
+            {/* Asset counts skeleton */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-2 px-1 grid place-items-center gap-1"
+                >
+                  <div className="w-4 h-4 rounded bg-white/[0.06] animate-pulse" />
+                  <div className="w-5 h-3.5 rounded bg-white/[0.06] animate-pulse" />
+                  <div className="w-10 h-2 rounded bg-white/[0.06] animate-pulse" />
+                </div>
+              ))}
             </div>
           </>
         ) : (
           <>
-            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
-              <b className="text-[var(--color-text-secondary)]">MC</b>{" "}
-              {rail.minecraft}
+            {/* Version info */}
+            <div className="bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-md)] p-3 grid gap-2">
+              <div className="flex items-center gap-2 text-[0.78rem]">
+                <span className="material-symbols-outlined text-[14px] text-[var(--color-text-muted)]">
+                  sports_esports
+                </span>
+                <span className="text-[var(--color-text-primary)] font-mono font-medium">
+                  {rail.minecraft}
+                </span>
+              </div>
+              <div className="h-px bg-[var(--color-line)]" />
+              <div className="flex items-center gap-2 text-[0.78rem]">
+                <span className="material-symbols-outlined text-[14px] text-[var(--color-text-muted)]">
+                  memory
+                </span>
+                <span className="text-[var(--color-text-primary)] font-mono font-medium">
+                  {rail.fabric}
+                </span>
+              </div>
             </div>
-            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
-              <b className="text-[var(--color-text-secondary)]">Loader</b>{" "}
-              {rail.fabric}
+
+            {/* Asset counts */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {STAT_ITEMS.map((s) => (
+                <div
+                  key={s.key}
+                  className="bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-2 px-1 grid place-items-center gap-0.5 overflow-hidden"
+                >
+                  <span className="material-symbols-outlined text-[16px] text-[var(--color-text-muted)]">
+                    {s.icon}
+                  </span>
+                  <span className="text-[0.8rem] font-semibold text-[var(--color-text-primary)] leading-none">
+                    {counts[s.key]}
+                  </span>
+                  <span className="text-[0.55rem] text-[var(--color-text-muted)] uppercase tracking-tight leading-none truncate max-w-full">
+                    {s.label}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
-              {selectedMods.length} mods
-            </div>
-            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
-              {selectedResources.length} resourcepacks
-            </div>
-            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
-              {selectedShaders.length} shaderpacks
-            </div>
-            {hasPendingPublish ? (
-              <div
-                className="text-[0.82rem] bg-black/20 border rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]"
-                style={{
-                  color: "var(--warning)",
-                  borderColor: "var(--warning)",
-                  background: "rgba(245,158,11,0.05)",
-                  fontWeight: 600,
-                }}
-              >
+
+            {/* Pending publish warning */}
+            {hasPendingPublish && (
+              <div className="flex items-center gap-2 text-[0.78rem] font-semibold rounded-[var(--radius-sm)] px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-400">
+                <span className="material-symbols-outlined text-[16px]">
+                  publish
+                </span>
                 Requires Publish
               </div>
-            ) : null}
+            )}
           </>
         )}
       </div>

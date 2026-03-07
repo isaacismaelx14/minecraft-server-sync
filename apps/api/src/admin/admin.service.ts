@@ -468,6 +468,10 @@ export class AdminService implements OnModuleInit {
   }
 
   async saveDraft(input: SaveDraftDto) {
+    if (input.discard === true) {
+      return this.discardDraft();
+    }
+
     const serverId = this.getServerId();
     const server = await this.prisma.server.findUnique({
       where: { id: serverId },
@@ -476,8 +480,8 @@ export class AdminService implements OnModuleInit {
       throw new NotFoundException(`Server '${serverId}' not found`);
     }
 
-    const serverName = input.serverName.trim();
-    const serverAddress = input.serverAddress.trim();
+    const serverName = input.serverName?.trim() || '';
+    const serverAddress = input.serverAddress?.trim() || '';
     const profileId = input.profileId?.trim();
     const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
     const minecraftVersion = input.minecraftVersion?.trim() || undefined;
@@ -555,6 +559,26 @@ export class AdminService implements OnModuleInit {
       }),
       draft,
     };
+  }
+
+  async discardDraft() {
+    await this.prisma.appSetting.upsert({
+      where: { id: APP_SETTING_ID },
+      create: {
+        id: APP_SETTING_ID,
+        supportedMinecraftVersions: [],
+        supportedPlatforms: ['fabric'],
+        releaseMajor: 1,
+        releaseMinor: 0,
+        releasePatch: 0,
+        publishDraft: Prisma.DbNull,
+      },
+      update: {
+        publishDraft: Prisma.DbNull,
+      },
+    });
+
+    return { success: true as const };
   }
 
   async connectExaroton(apiKey: string) {
@@ -1058,18 +1082,22 @@ export class AdminService implements OnModuleInit {
     const cleanQuery = query.trim();
     const cleanVersion = minecraftVersion.trim();
 
-    // For empty queries, use a simple search without version filter to get popular mods
     const searchQuery = cleanQuery || '';
     const searchIndex = cleanQuery ? 'relevance' : 'follows';
+    const normalizedType = this.normalizeAssetType(type);
 
-    // Build facets array - only filter by project type for popular mods
     const facetsArray = [
       [`project_type:${this.modrinthProjectTypeForAsset(type)}`],
     ];
 
-    // Only add version filter if we have both a query and version
-    if (cleanVersion && cleanQuery) {
+    // Always constrain by selected Minecraft version when provided.
+    if (cleanVersion) {
       facetsArray.push([`versions:${cleanVersion}`]);
+    }
+
+    // Mods must be installable on Fabric for this admin panel.
+    if (normalizedType === 'mod') {
+      facetsArray.push(['categories:fabric']);
     }
 
     const facets = JSON.stringify(facetsArray);
@@ -1103,8 +1131,7 @@ export class AdminService implements OnModuleInit {
     }
 
     const payload = (await response.json()) as ModrinthSearchResponse;
-
-    return payload.hits.map((hit) => ({
+    const mapped = payload.hits.map((hit) => ({
       projectId: hit.project_id,
       title: hit.title,
       description: hit.description,
@@ -1114,6 +1141,22 @@ export class AdminService implements OnModuleInit {
       categories: hit.categories,
       latestVersion: hit.latest_version,
     }));
+
+    if (cleanQuery && cleanVersion) {
+      const exact = await this.tryResolveExactAssetSearchHit(
+        cleanQuery,
+        cleanVersion,
+        normalizedType,
+      );
+      if (
+        exact &&
+        !mapped.some((entry) => entry.projectId === exact.projectId)
+      ) {
+        mapped.unshift(exact);
+      }
+    }
+
+    return mapped;
   }
 
   async popularAssets(
@@ -2658,6 +2701,69 @@ export class AdminService implements OnModuleInit {
     }
 
     return project;
+  }
+
+  private async tryResolveExactAssetSearchHit(
+    query: string,
+    minecraftVersion: string,
+    type: AssetType,
+  ): Promise<{
+    projectId: string;
+    title: string;
+    description: string;
+    iconUrl: string | undefined;
+    slug: string;
+    author: string;
+    categories: string[] | undefined;
+    latestVersion: string | undefined;
+  } | null> {
+    try {
+      const project = await this.fetchProject(query, {});
+      const expectedProjectType = this.modrinthProjectTypeForAsset(type);
+      if (
+        project.project_type &&
+        project.project_type !== expectedProjectType
+      ) {
+        return null;
+      }
+
+      const versions = await this.fetchProjectVersions(project.id);
+      const requireFabricLoader = type === 'mod';
+      const compatible = versions
+        .filter(
+          (entry) =>
+            (!requireFabricLoader || entry.loaders.includes('fabric')) &&
+            entry.game_versions.includes(minecraftVersion),
+        )
+        .sort((left, right) => {
+          const leftRank = this.versionTypeRank(left.version_type);
+          const rightRank = this.versionTypeRank(right.version_type);
+          if (leftRank !== rightRank) {
+            return leftRank - rightRank;
+          }
+          return (
+            Date.parse(right.date_published) - Date.parse(left.date_published)
+          );
+        });
+
+      const latest = compatible[0];
+      if (!latest) {
+        return null;
+      }
+
+      return {
+        projectId: project.id,
+        title: project.title,
+        description: `Matched by project ID/slug: ${query}`,
+        iconUrl: project.icon_url,
+        slug: project.slug,
+        author: 'Modrinth',
+        categories: [],
+        latestVersion: latest.name?.trim() || latest.id || undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async fetchProjectVersions(

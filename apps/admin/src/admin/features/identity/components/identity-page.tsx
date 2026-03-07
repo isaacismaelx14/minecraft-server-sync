@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/admin/shared/ui/button";
 import { DataItem, DataList } from "@/admin/shared/ui/data-list";
 import { TextInput } from "@/admin/shared/ui/form-controls";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
@@ -100,17 +101,17 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
             <span>I understand this change can break the system.</span>
           </label>
           <div className={ui.row}>
-            <button
-              type="button"
-              className={ui.buttonGhost}
+            <Button
+              variant="ghost"
+              size="lg"
               onClick={() => void refreshLoaders()}
             >
               Refresh Loader List
-            </button>
+            </Button>
             <div className="relative inline-flex flex-col items-center">
-              <button
-                type="button"
-                className={ui.buttonPrimary}
+              <Button
+                variant="primary"
+                size="lg"
                 disabled={!confirmed}
                 onClick={() => {
                   void saveSettings();
@@ -118,7 +119,7 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
                 }}
               >
                 Save Matrix
-              </button>
+              </Button>
               {!confirmed ? (
                 <span className="absolute top-full mt-[8px] bg-black/80 backdrop-blur-[4px] text-[var(--color-text-muted)] text-[0.75rem] p-[6px_10px] rounded-[var(--radius-sm)] border border-[var(--color-line)] whitespace-nowrap animate-[fadeIn_0.2s_ease-out] pointer-events-none z-10">
                   Confirm to enable save
@@ -129,13 +130,13 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
         </>
       ) : (
         <div className={ui.row}>
-          <button
-            type="button"
-            className={ui.buttonGhost}
+          <Button
+            variant="ghost"
+            size="lg"
             onClick={() => void refreshLoaders()}
           >
             Refresh Loader List
-          </button>
+          </Button>
         </div>
       )}
 
@@ -146,20 +147,112 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function SectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="shrink-0 mt-0.5 w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--color-brand-primary)]/10 border border-[var(--color-brand-primary)]/20 grid place-items-center text-[var(--color-brand-primary)]">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold leading-tight tracking-tight m-0">
+          {title}
+        </h3>
+        <p className="m-0 mt-1 text-sm text-[var(--color-text-muted)] leading-snug">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function BrandingUploadCard({
+  label,
+  imageUrl,
+  altText,
+  placeholder,
+  buttonLabel,
+  onUpload,
+  wide,
+}: {
+  label: string;
+  imageUrl: string | undefined;
+  altText: string;
+  placeholder: string;
+  buttonLabel: string;
+  onUpload: (file: File | null) => void;
+  wide?: boolean;
+}) {
+  return (
+    <div className="group relative rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/20 p-4 flex items-center gap-4 transition-all duration-200 hover:border-[var(--color-line-strong)] hover:bg-black/30">
+      <div
+        className={`shrink-0 ${wide ? "w-[120px] h-[68px]" : "w-[72px] h-[72px]"} rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/40 overflow-hidden grid place-items-center text-[var(--color-text-muted)] text-xs`}
+      >
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={altText}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="opacity-40">{placeholder}</span>
+        )}
+      </div>
+      <div className="flex flex-col gap-2 min-w-0">
+        <span className={ui.dataLabel}>{label}</span>
+        <div className="relative inline-flex items-center w-fit">
+          <Button variant="ghost" size="xs">
+            {buttonLabel}
+          </Button>
+          <input
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            type="file"
+            accept="image/*"
+            onChange={(event) => onUpload(event.target.files?.[0] || null)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function IdentityPage() {
   const { form, setTextFieldFromEvent, uploadBrandingImage } =
     useIdentityPageModel();
   const [openMatrix, setOpenMatrix] = useState(false);
 
   return (
-    <>
-      <div className={ui.gridTwo}>
+    <div className="flex flex-col gap-5 max-w-7xl mx-auto w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Server Identity */}
         <article className={ui.panel}>
-          <h3>Server Identity</h3>
-          <p className={ui.hint}>
-            Master identification and connection endpoints.
-          </p>
-          <div className="grid gap-[16px]">
+          <SectionHeader
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-[18px] h-[18px]"
+              >
+                <rect x="2" y="2" width="20" height="20" rx="5" />
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+              </svg>
+            }
+            title="Server Identity"
+            description="Master identification and connection endpoints."
+          />
+          <div className="grid gap-4 mt-1">
             <TextInput
               name="serverName"
               label="Display Name"
@@ -182,94 +275,86 @@ export function IdentityPage() {
           </div>
         </article>
 
+        {/* Runtime & Compatibility */}
         <article className={ui.panel}>
-          <h3>Runtime & Compatibility</h3>
-          <p className={ui.hint}>Minecraft and Fabric loader configuration.</p>
-          <DataList>
-            <DataItem label="MC Version" value={form.minecraftVersion} />
-            <DataItem label="Loader" value={form.loaderVersion} />
-          </DataList>
-          <div className={ui.row}>
-            <button
-              type="button"
-              className={ui.buttonPrimary}
+          <SectionHeader
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-[18px] h-[18px]"
+              >
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            }
+            title="Runtime & Compatibility"
+            description="Minecraft and Fabric loader configuration."
+          />
+          <div className="mt-1">
+            <DataList>
+              <DataItem label="MC Version" value={form.minecraftVersion} />
+              <DataItem label="Loader" value={form.loaderVersion} />
+            </DataList>
+          </div>
+          <div className="mt-auto pt-2">
+            <Button
+              variant="primary"
+              size="lg"
               onClick={() => setOpenMatrix(true)}
             >
               Update Runtime Settings
-            </button>
+            </Button>
           </div>
         </article>
 
-        <article className={ui.panel}>
-          <h3>Branding & Assets</h3>
-          <p className={ui.hint}>Visual identity for the launcher and menu.</p>
-          <div className="grid gap-[16px]">
-            <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-[12px] items-center">
-              <div className="w-[84px] h-[84px] rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/30 overflow-hidden grid place-items-center text-[var(--color-text-muted)]">
-                {form.brandingLogoUrl ? (
-                  <img
-                    src={form.brandingLogoUrl}
-                    alt="Logo"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>Icon</span>
-                )}
-              </div>
-              <div className="grid gap-[8px]">
-                <span className={ui.dataLabel}>Server Logo / Icon</span>
-                <div className="relative inline-flex items-center w-fit">
-                  <button className={ui.buttonGhost} type="button">
-                    Change Icon
-                  </button>
-                  <input
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      void uploadBrandingImage(
-                        "logo",
-                        event.target.files?.[0] || null,
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </div>
+        {/* Branding & Assets — full width */}
+        <article className={`${ui.panel} md:col-span-2`}>
+          <SectionHeader
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-[18px] h-[18px]"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            }
+            title="Branding & Assets"
+            description="Visual identity for the launcher and menu."
+          />
 
-            <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-[12px] items-center">
-              <div className="w-[84px] h-[84px] rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/30 overflow-hidden grid place-items-center text-[var(--color-text-muted)]">
-                {form.brandingBackgroundUrl ? (
-                  <img
-                    src={form.brandingBackgroundUrl}
-                    alt="BG"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>BG</span>
-                )}
-              </div>
-              <div className="grid gap-[8px]">
-                <span className={ui.dataLabel}>Background Wallpaper</span>
-                <div className="relative inline-flex items-center w-fit">
-                  <button className={ui.buttonGhost} type="button">
-                    Change BG
-                  </button>
-                  <input
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      void uploadBrandingImage(
-                        "background",
-                        event.target.files?.[0] || null,
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
+            <BrandingUploadCard
+              label="Server Logo / Icon"
+              imageUrl={form.brandingLogoUrl}
+              altText="Logo"
+              placeholder="Icon"
+              buttonLabel="Change Icon"
+              onUpload={(file) => void uploadBrandingImage("logo", file)}
+            />
+            <BrandingUploadCard
+              label="Background Wallpaper"
+              imageUrl={form.brandingBackgroundUrl}
+              altText="BG"
+              placeholder="BG"
+              buttonLabel="Change BG"
+              onUpload={(file) => void uploadBrandingImage("background", file)}
+              wide
+            />
+          </div>
 
+          <div className="mt-1">
             <TextInput
               name="brandingNewsUrl"
               label="Server News Feed URL (RSS/JSON)"
@@ -284,6 +369,6 @@ export function IdentityPage() {
       {openMatrix ? (
         <SupportMatrixModal onClose={() => setOpenMatrix(false)} />
       ) : null}
-    </>
+    </div>
   );
 }

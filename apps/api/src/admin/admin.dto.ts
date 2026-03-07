@@ -9,6 +9,7 @@ import {
   IsString,
   Matches,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -329,11 +330,18 @@ export class PublishProfileDto {
 }
 
 export class SaveDraftDto {
-  @IsString()
-  serverName!: string;
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  discard?: boolean;
 
+  @ValidateIf((value: SaveDraftDto) => value.discard !== true)
   @IsString()
-  serverAddress!: string;
+  serverName?: string;
+
+  @ValidateIf((value: SaveDraftDto) => value.discard !== true)
+  @IsString()
+  serverAddress?: string;
 
   @IsString()
   @IsOptional()

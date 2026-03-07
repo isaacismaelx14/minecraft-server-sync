@@ -88,6 +88,11 @@ export class AdminController {
     return this.adminService.saveDraft(payload);
   }
 
+  @Delete('/v1/admin/draft')
+  discardDraft() {
+    return this.adminService.discardDraft();
+  }
+
   @Post('/v1/admin/exaroton/connect')
   connectExaroton(@Body() payload: ConnectExarotonDto) {
     return this.adminService.connectExaroton(payload.apiKey);
