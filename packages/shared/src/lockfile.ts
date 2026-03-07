@@ -8,6 +8,13 @@ export const SideSchema = z
   .default("client");
 export type Side = z.infer<typeof SideSchema>;
 
+export const SideSupportSchema = z.enum([
+  "required",
+  "optional",
+  "unsupported",
+]);
+export type SideSupport = z.infer<typeof SideSupportSchema>;
+
 const BaseFileSchema = z.object({
   kind: z.enum(["mod", "resourcepack", "shaderpack", "config"]),
   name: z.string().min(1),
@@ -19,6 +26,8 @@ export const LockItemSchema = BaseFileSchema.extend({
   kind: z.literal("mod"),
   provider: ProviderSchema,
   side: SideSchema,
+  clientSide: SideSupportSchema.optional(),
+  serverSide: SideSupportSchema.optional(),
   projectId: z.string().min(1).optional(),
   versionId: z.string().min(1).optional(),
   iconUrl: z.string().url().optional(),
@@ -28,11 +37,21 @@ export type LockItem = z.infer<typeof LockItemSchema>;
 
 export const ResourcePackSchema = BaseFileSchema.extend({
   kind: z.literal("resourcepack"),
+  provider: ProviderSchema.optional(),
+  projectId: z.string().min(1).optional(),
+  versionId: z.string().min(1).optional(),
+  iconUrl: z.string().url().optional(),
+  slug: z.string().min(1).optional(),
 });
 export type ResourcePack = z.infer<typeof ResourcePackSchema>;
 
 export const ShaderPackSchema = BaseFileSchema.extend({
   kind: z.literal("shaderpack"),
+  provider: ProviderSchema.optional(),
+  projectId: z.string().min(1).optional(),
+  versionId: z.string().min(1).optional(),
+  iconUrl: z.string().url().optional(),
+  slug: z.string().min(1).optional(),
 });
 export type ShaderPack = z.infer<typeof ShaderPackSchema>;
 

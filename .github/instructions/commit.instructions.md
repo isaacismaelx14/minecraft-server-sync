@@ -43,6 +43,7 @@ Only these are allowed:
 Only these are allowed:
 
 - `api`
+- `admin`
 - `launcher`
 - `platform`
 - `desktop`
@@ -74,7 +75,7 @@ Valid:
 - `ci(platform): update semantic release workflow inputs`
 - `feat(api): expose package version at root endpoint`
 - `fix(launcher): show app version in compact header`
-- `chore(release): @mss/api/v0.1.0-beta.32`
+- `chore(release): @minerelay/api/v0.1.0-beta.32`
 
 Invalid:
 

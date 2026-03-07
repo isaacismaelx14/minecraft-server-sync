@@ -1,13 +1,15 @@
 {
   "defaultBranch": "main",
-  "releaseNamespace": "@mss",
+  "releaseNamespace": "@minerelay",
   "targets": {
     "api": "apps/api",
+    "admin": "apps/admin",
     "launcher": "apps/launcher",
     "shared": "packages/shared"
   },
   "scopeMap": {
     "api": "api",
+    "admin": "admin",
     "launcher": "launcher",
     "platform": "launcher",
     "desktop": "launcher",

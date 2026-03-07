@@ -7,7 +7,7 @@ build/
 coverage/
 *.tsbuildinfo
 .turbo/
-apps/api/src/admin/public/*.js
+.wrangler/
 
 # Rust/Tauri
 **/target/
@@ -23,7 +23,7 @@ instances/
 runtimes/
 **/.runtime-artifacts/
 infra/sample-data/artifacts/
-.mss-client/
+.minerelay/
 /artifacts/
 !apps/api/src/artifacts/
 !apps/api/src/artifacts/**
@@ -50,4 +50,3 @@ output/playwright
 
 launcher-trust-store.json
 launcher.runtime.json
-

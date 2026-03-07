@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
@@ -15,27 +16,22 @@ async function bootstrap() {
   const httpAdapterHost = app.get(HttpAdapterHost);
 
   app.useGlobalFilters(new PrismaExceptionFilter(httpAdapterHost));
+  app.setGlobalPrefix('v1');
 
   // Correlation ID and structured logging support
-  app.use(
-    (
-      req: express.Request,
-      res: express.Response,
-      next: express.NextFunction,
-    ) => {
-      req.headers['x-correlation-id'] =
-        req.headers['x-correlation-id'] || randomUUID();
-      next();
-    },
-  );
+  app.use((req: express.Request, next: express.NextFunction) => {
+    req.headers['x-correlation-id'] =
+      req.headers['x-correlation-id'] || randomUUID();
+    next();
+  });
 
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"], // Needed for some React hydration and basic UI interactions, can be tightened later
-          styleSrc: ["'self'", "'unsafe-inline'"], // Allows inline styles injected by React
+          scriptSrc: ["'self'", "'unsafe-inline'"], // Swagger UI injects inline bootstrapping scripts
+          styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI uses inline styles
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
@@ -48,21 +44,32 @@ async function bootstrap() {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+  const allowAnyOrigin = configuredOrigins.includes('*');
 
   if (isProd && configuredOrigins.length === 0) {
     throw new Error('CORS_ORIGIN must be configured in production');
   }
 
   app.enableCors({
-    origin:
-      configuredOrigins.length > 0
+    origin: allowAnyOrigin
+      ? true
+      : configuredOrigins.length > 0
         ? configuredOrigins
         : [
             'http://localhost:1420',
+            'http://localhost:3001',
             'http://localhost:5173',
             'tauri://localhost',
           ],
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Admin-Refresh-Token',
+      'X-CSRF-Token',
+      'X-Correlation-Id',
+    ],
+    exposedHeaders: ['X-Correlation-Id'],
     credentials: true,
   });
 
@@ -82,10 +89,8 @@ async function bootstrap() {
   if (!isProd || isSwaggerEnabled) {
     const metadata = getApiMetadata();
     const swagger = new DocumentBuilder()
-      .setTitle('Minecraft Server Syncer API')
-      .setDescription(
-        'Profile metadata and lockfile API for the Minecraft Server Syncer',
-      )
+      .setTitle('MineRelay API')
+      .setDescription('Profile metadata and lockfile API for MineRelay')
       .setVersion(metadata.version)
       .build();
 
