@@ -33,6 +33,7 @@ use objc2_foundation::{MainThreadMarker, NSData};
 use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 
 use tauri::{
+  Emitter,
   menu::{Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
   Manager,
@@ -52,7 +53,11 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(state)
-    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+      let app_state = app.state::<Arc<state::AppState>>().inner().clone();
+      for arg in &args {
+        ingest_pairing_link_and_notify(app, &app_state, arg.as_str());
+      }
       show_primary_window(app);
     }))
     .plugin(tauri_plugin_deep_link::init())
@@ -65,10 +70,12 @@ pub fn run() {
         .map_err(|error| anyhow::anyhow!("failed to register deep link: {error}"))?;
 
       let app_state = app.state::<Arc<state::AppState>>().inner().clone();
+      let app_handle = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         for url in event.urls() {
-          let _ = crate::launcher_control::ingest_pairing_link(
-            app_state.as_ref(),
+          ingest_pairing_link_and_notify(
+            &app_handle,
+            &app_state,
             url.as_str(),
           );
         }
@@ -146,6 +153,32 @@ pub fn run() {
       handle_quit_request(app_handle, app_state);
     }
   });
+}
+
+fn ingest_pairing_link_and_notify(
+  app: &tauri::AppHandle,
+  state: &Arc<state::AppState>,
+  raw_url: &str,
+) {
+  let Ok(handled) = crate::launcher_control::ingest_pairing_link(
+    state.as_ref(),
+    raw_url,
+  ) else {
+    return;
+  };
+
+  if !handled {
+    return;
+  }
+
+  let settings = state.settings.lock().clone();
+  let _ = app.emit("settings://updated", &settings);
+
+  let payload = crate::launcher_control::pairing_link_applied_event(
+    state.as_ref(),
+    raw_url,
+  );
+  let _ = app.emit(crate::launcher_control::EVENT_PAIRING_LINK_APPLIED, payload);
 }
 
 #[cfg(target_os = "macos")]

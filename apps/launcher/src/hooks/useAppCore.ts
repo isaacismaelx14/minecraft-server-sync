@@ -12,6 +12,11 @@ const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
 const LAUNCHER_STREAM_MAX_RETRIES = 3;
 
+type PairingLinkAppliedEvent = {
+  url: string;
+  apiBaseUrl: string | null;
+};
+
 import {
   type ScreenState,
   type InstallMode,
@@ -1253,45 +1258,98 @@ export function useAppCore() {
     }
   }, [activeView, wizardActive]);
 
-  const beginWizardPathsStep = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
+  const beginWizardPathsStep = useCallback(
+    async (
+      draftOverride?: Partial<{
+        apiBaseUrl: string;
+        profileLockUrl: string;
+        pairingCode: string;
+      }>,
+    ) => {
+      if (!settings) {
+        return;
+      }
 
-    const apiBaseUrl = normalizeApiBaseUrl(profileSourceDraft.apiBaseUrl);
-    if (!apiBaseUrl) {
-      setError(
-        "API base URL must be a valid https URL (or localhost http for development).",
-      );
-      return;
-    }
-    const profileLockInput = profileSourceDraft.profileLockUrl.trim();
-    const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
-    if (profileLockInput && !profileLockUrl) {
-      setError(
-        "Profile lock URL must be a valid https URL (or localhost http for development).",
-      );
-      return;
-    }
+      const effectiveDraft = {
+        apiBaseUrl: draftOverride?.apiBaseUrl ?? profileSourceDraft.apiBaseUrl,
+        profileLockUrl:
+          draftOverride?.profileLockUrl ?? profileSourceDraft.profileLockUrl,
+        pairingCode:
+          draftOverride?.pairingCode ?? profileSourceDraft.pairingCode,
+      };
 
-    const next: AppSettings = {
-      ...settings,
-      apiBaseUrl,
-      profileLockUrl: profileLockUrl || null,
-      pairingCode: profileSourceDraft.pairingCode.trim() || null,
+      const apiBaseUrl = normalizeApiBaseUrl(effectiveDraft.apiBaseUrl);
+      if (!apiBaseUrl) {
+        setError(
+          "API base URL must be a valid https URL (or localhost http for development).",
+        );
+        return;
+      }
+      const profileLockInput = effectiveDraft.profileLockUrl.trim();
+      const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
+      if (profileLockInput && !profileLockUrl) {
+        setError(
+          "Profile lock URL must be a valid https URL (or localhost http for development).",
+        );
+        return;
+      }
+
+      const next: AppSettings = {
+        ...settings,
+        apiBaseUrl,
+        profileLockUrl: profileLockUrl || null,
+        pairingCode: effectiveDraft.pairingCode.trim() || null,
+      };
+
+      await saveSettings(next);
+      setWizardStep("paths");
+      await startWizardDetection();
+    },
+    [
+      profileSourceDraft.apiBaseUrl,
+      profileSourceDraft.profileLockUrl,
+      profileSourceDraft.pairingCode,
+      saveSettings,
+      settings,
+      startWizardDetection,
+    ],
+  );
+
+  useEffect(() => {
+    let stopPairingListener: UnlistenFn | undefined;
+
+    void listen<PairingLinkAppliedEvent>(
+      "launcher://pairing-link-applied",
+      (event) => {
+        const normalizedApiBase = normalizeApiBaseUrl(
+          event.payload.apiBaseUrl ?? "",
+        );
+
+        if (normalizedApiBase) {
+          setProfileSourceDraft((current) => ({
+            ...current,
+            apiBaseUrl: normalizedApiBase,
+          }));
+        }
+
+        if (
+          isSetupWindow &&
+          wizardActive &&
+          wizardStep === "source" &&
+          normalizedApiBase
+        ) {
+          setHint("Pairing link received. Continuing setup automatically.");
+          void beginWizardPathsStep({ apiBaseUrl: normalizedApiBase });
+        }
+      },
+    ).then((off) => {
+      stopPairingListener = off;
+    });
+
+    return () => {
+      stopPairingListener?.();
     };
-
-    await saveSettings(next);
-    setWizardStep("paths");
-    await startWizardDetection();
-  }, [
-    profileSourceDraft.apiBaseUrl,
-    profileSourceDraft.profileLockUrl,
-    profileSourceDraft.pairingCode,
-    saveSettings,
-    settings,
-    startWizardDetection,
-  ]);
+  }, [beginWizardPathsStep, isSetupWindow, setHint, wizardActive, wizardStep]);
 
   const pickWizardManualLauncherPath = useCallback(async () => {
     const picked = await invoke<string | null>("launcher_pick_manual_path");

@@ -30,6 +30,14 @@ const AUTH_INPUT: &str = "launcher-auth-v1";
 const REQUEST_INPUT: &str = "launcher-request-v1";
 const EVENT_STATUS: &str = "launcher-server://status";
 const EVENT_ERROR: &str = "launcher-server://error";
+pub const EVENT_PAIRING_LINK_APPLIED: &str = "launcher://pairing-link-applied";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingLinkAppliedEvent {
+  pub url: String,
+  pub api_base_url: Option<String>,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -649,6 +657,24 @@ pub fn ingest_pairing_link(state: &AppState, raw_url: &str) -> Result<bool, Stri
   }
 
   Ok(true)
+}
+
+pub fn pairing_link_applied_event(
+  state: &AppState,
+  raw_url: &str,
+) -> PairingLinkAppliedEvent {
+  let api_base_url = state
+    .settings
+    .lock()
+    .api_base_url
+    .clone()
+    .map(|value| value.trim().trim_end_matches('/').to_string())
+    .filter(|value| !value.is_empty());
+
+  PairingLinkAppliedEvent {
+    url: raw_url.trim().to_string(),
+    api_base_url,
+  }
 }
 
 fn blocked_host_reason(state: &AppState, api_base: &str) -> Option<String> {

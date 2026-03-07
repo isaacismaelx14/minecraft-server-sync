@@ -927,10 +927,21 @@ pub fn launcher_server_stream_stop(state: State<'_, Arc<AppState>>) {
 
 #[tauri::command]
 pub fn launcher_pairing_apply_link(
+  app: AppHandle,
   state: State<'_, Arc<AppState>>,
   url: String,
 ) -> Result<bool, String> {
-  launcher_control::ingest_pairing_link(state.inner(), &url)
+  let handled = launcher_control::ingest_pairing_link(state.inner(), &url)?;
+
+  if handled {
+    let settings = state.settings.lock().clone();
+    let _ = app.emit("settings://updated", &settings);
+
+    let payload = launcher_control::pairing_link_applied_event(state.inner(), &url);
+    let _ = app.emit(launcher_control::EVENT_PAIRING_LINK_APPLIED, payload);
+  }
+
+  Ok(handled)
 }
 
 
