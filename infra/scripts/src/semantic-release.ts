@@ -4,11 +4,9 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   dedupeEntries,
-  determineReleaseLevel,
   parseCommits,
   type GitCommit,
   type ParsedReleaseConfig,
-  type ReleaseLevel,
 } from "./release/commit-parser";
 import { inferScopedEntriesWithAi } from "./release/ai-scope-inference";
 import {
@@ -28,6 +26,14 @@ import {
   type ReleaseChannel,
 } from "./release/versioning";
 import { generateAiReleaseNotes } from "./release/ai-release-notes";
+import {
+  buildReleasePlan,
+  buildReverseDependencyGraph,
+  determineDetectedBump,
+  type PlannedRelease,
+  type TargetAnalysis,
+  type TargetManifest,
+} from "./release/release-plan";
 
 type ReleaseConfig = ParsedReleaseConfig & {
   defaultBranch: string;
@@ -53,6 +59,31 @@ type CliArgs = {
 };
 
 type GitHubRepo = ReturnType<typeof getGithubRepoFromGitRemote>;
+
+type PackageManifest = {
+  name?: string;
+  version?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+};
+
+type TargetContext = {
+  target: string;
+  targetPath: string;
+  packageJsonPath: string;
+  changelogPath: string;
+  packageName: string;
+  currentVersion: string;
+  localDependencyPackageNames: string[];
+};
+
+type TargetEvaluation = TargetAnalysis & {
+  previousTag: string | null;
+  commits: GitCommit[];
+  errors: string[];
+};
 
 const AUTO_TARGET = "auto";
 const USAGE =
@@ -89,8 +120,29 @@ async function main(): Promise<void> {
 
   const releaseHead = getCurrentHead();
   const repo = getGithubRepoFromGitRemote();
-  const targetsToEvaluate =
-    args.target === AUTO_TARGET ? allowedTargets : [args.target];
+  const targetsToEvaluate = allowedTargets;
+  const sharedTarget = config.targets.shared ? "shared" : undefined;
+
+  const targetContexts = loadTargetContexts({
+    repoRoot,
+    config,
+    targets: targetsToEvaluate,
+  });
+
+  const manifests: TargetManifest[] = targetsToEvaluate.map((target) => ({
+    target,
+    packageName: getRequiredRecordValue(
+      targetContexts,
+      target,
+      "target context",
+    ).packageName,
+    dependencies: getRequiredRecordValue(
+      targetContexts,
+      target,
+      "target context",
+    ).localDependencyPackageNames,
+  }));
+  const reverseDependencyGraph = buildReverseDependencyGraph(manifests);
 
   if (args.target === AUTO_TARGET && !args.aiScopeInfer) {
     const missingBootstrapTags: string[] = [];
@@ -124,17 +176,51 @@ async function main(): Promise<void> {
     }
   }
 
-  let releasedTargets = 0;
+  const evaluations = await evaluateTargetsForRelease({
+    args,
+    config,
+    releaseHead,
+    targets: targetsToEvaluate,
+    targetContexts,
+  });
 
-  for (const target of targetsToEvaluate) {
+  const releasePlan = buildReleasePlan({
+    targetOrder: targetsToEvaluate,
+    analyses: evaluations,
+    reverseDependencyGraph,
+    requestedTarget: args.target,
+    autoTarget: AUTO_TARGET,
+    sharedTarget,
+  });
+
+  if (releasePlan.length > 1 && args.nextVersion) {
+    throw new Error(
+      "--next-version can only be used when exactly one target will be released.",
+    );
+  }
+
+  validateReleasePlan({
+    args,
+    config,
+    releasePlan,
+    evaluations,
+    targetContexts,
+  });
+
+  const orderedPlan = orderReleasePlanForExecution(releasePlan);
+  const sharedReleaseBodyByTarget = new Map<string, string>();
+
+  let releasedTargets = 0;
+  for (const plannedRelease of orderedPlan) {
     const released = await releaseTarget({
       args,
       config,
-      repoRoot,
       repo,
-      target,
-      releaseHead,
-      showTargetHeader: args.target === AUTO_TARGET,
+      plannedRelease,
+      evaluations,
+      targetContexts,
+      showTargetHeader: args.target === AUTO_TARGET || orderedPlan.length > 1,
+      sharedReleaseBodyByTarget,
     });
     if (released) {
       releasedTargets += 1;
@@ -162,100 +248,67 @@ async function main(): Promise<void> {
 async function releaseTarget(params: {
   args: CliArgs;
   config: ReleaseConfig;
-  repoRoot: string;
   repo: GitHubRepo;
-  target: string;
-  releaseHead: string;
+  plannedRelease: PlannedRelease;
+  evaluations: Record<string, TargetEvaluation>;
+  targetContexts: Record<string, TargetContext>;
   showTargetHeader: boolean;
+  sharedReleaseBodyByTarget: Map<string, string>;
 }): Promise<boolean> {
   const {
     args,
     config,
-    repoRoot,
     repo,
-    target,
-    releaseHead,
+    plannedRelease,
+    evaluations,
+    targetContexts,
     showTargetHeader,
+    sharedReleaseBodyByTarget,
   } = params;
+  const target = plannedRelease.target;
 
   if (showTargetHeader) {
-    console.log(`\n=== Evaluating target: ${target} ===`);
+    const reason =
+      plannedRelease.reason === "direct"
+        ? "direct"
+        : `dependency (${plannedRelease.dependencySourceTarget})`;
+    console.log(`\n=== Releasing target: ${target} [${reason}] ===`);
   }
 
-  const targetRelativePath = config.targets[target];
-  if (!targetRelativePath) {
-    throw new Error(`Missing target path for ${target} in release.config.json`);
-  }
-  const targetPath = resolve(repoRoot, targetRelativePath);
-  const packageJsonPath = resolve(targetPath, "package.json");
-  const changelogPath = resolve(targetPath, "CHANGELOG.md");
-
-  const currentVersion = readPackageVersion(packageJsonPath);
-  const previousTag =
-    args.fromTag ?? getLatestTargetTag(config.releaseNamespace, target);
-  if (!previousTag && !args.aiScopeInfer) {
-    const bootstrapTag = `${config.releaseNamespace}/${target}/v${currentVersion}`;
-    throw new Error(
-      `[${target}] No release tag found (${config.releaseNamespace}/${target}/v*). Bootstrap first:\n` +
-        `  git tag ${bootstrapTag}\n` +
-        `  git push origin ${bootstrapTag}`,
-    );
-  }
-  if (!previousTag && args.aiScopeInfer) {
-    console.log(
-      `[${target}] No baseline tag found. AI scope inference will evaluate full history.`,
-    );
-  }
-  const commits = getCommitsSinceTag(previousTag, releaseHead);
-
-  if (commits.length === 0) {
-    console.log(
-      `[${target}] No commits found since ${previousTag ?? "repo start"}.`,
-    );
-    return false;
-  }
-
-  let parsedCommits = parseCommits(commits, config);
-  if (args.aiScopeInfer) {
-    parsedCommits = await recoverScopedCommitsWithAi({
-      args,
-      config,
-      target,
-      parsedCommits,
-    });
-  }
-  const errors = parsedCommits.flatMap((commit) => commit.errors);
-  if (errors.length > 0) {
-    throw new Error(
-      `[${target}] Release aborted due to invalid commits:\n- ${errors.join("\n- ")}`,
-    );
-  }
-
-  const { changes, breakingNotes } = collectTargetChanges(
-    parsedCommits,
+  const evaluation = getRequiredRecordValue(
+    evaluations,
     target,
+    "target evaluation",
+  );
+  const targetContext = getRequiredRecordValue(
+    targetContexts,
+    target,
+    "target context",
+  );
+  const sourceTarget =
+    plannedRelease.reason === "dependency"
+      ? plannedRelease.dependencySourceTarget
+      : target;
+  if (!sourceTarget) {
+    throw new Error(`[${target}] Missing dependency source target.`);
+  }
+  const sourceEvaluation = getRequiredRecordValue(
+    evaluations,
+    sourceTarget,
+    "target evaluation",
   );
 
-  if (changes.length === 0 && breakingNotes.length === 0) {
-    console.log(
-      `[${target}] No scoped changes since ${previousTag ?? "repo start"}.`,
+  if (!sourceEvaluation.detectedBump) {
+    throw new Error(
+      `[${target}] Missing detected release bump from source target ${sourceTarget}.`,
     );
-    return false;
   }
 
-  const detectedBump = determineReleaseLevel(
-    changes.map((change) => ({
-      type: change.type,
-      scope: change.scope,
-      target,
-      description: change.description,
-      breaking: change.breaking,
-      section: change.section,
-      release: releaseFromType(change.type, config),
-      source: "header",
-    })),
-    breakingNotes,
-  );
+  const currentVersion = targetContext.currentVersion;
+  const previousTag = evaluation.previousTag;
+  const effectiveChanges = sourceEvaluation.changes;
+  const effectiveBreakingNotes = sourceEvaluation.breakingNotes;
+  const detectedBump = sourceEvaluation.detectedBump;
 
   const nextVersion = computeNextVersion({
     currentVersion,
@@ -275,8 +328,8 @@ async function releaseTarget(params: {
     repoWebUrl: repo.webUrl,
     newTag,
     previousTag,
-    changes,
-    breakingNotes,
+    changes: effectiveChanges,
+    breakingNotes: effectiveBreakingNotes,
   });
 
   const changelogEntry = buildChangelogEntry({
@@ -286,12 +339,20 @@ async function releaseTarget(params: {
     repoWebUrl: repo.webUrl,
     newTag,
     previousTag,
-    changes,
-    breakingNotes,
+    changes: effectiveChanges,
+    breakingNotes: effectiveBreakingNotes,
   });
 
   let releaseBody = rawReleaseBody;
-  if (args.notesMode === "ai") {
+  if (plannedRelease.reason === "dependency") {
+    const sourceBody = sharedReleaseBodyByTarget.get(sourceTarget);
+    if (!sourceBody) {
+      throw new Error(
+        `[${target}] Missing release notes for dependency source ${sourceTarget}.`,
+      );
+    }
+    releaseBody = sourceBody;
+  } else if (args.notesMode === "ai") {
     releaseBody = await buildAiBodyWithFallback({
       args,
       target,
@@ -300,11 +361,12 @@ async function releaseTarget(params: {
       newTag,
       previousTag,
       repoWebUrl: repo.webUrl,
-      changes,
-      breakingNotes,
+      changes: effectiveChanges,
+      breakingNotes: effectiveBreakingNotes,
       rawReleaseBody,
     });
   }
+  sharedReleaseBodyByTarget.set(target, releaseBody);
 
   console.log(`Target: ${target}`);
   console.log(`Current version: ${currentVersion}`);
@@ -329,16 +391,16 @@ async function releaseTarget(params: {
   const modifiedFiles = bumpTargetVersion(
     target,
     nextVersion,
-    repoRoot,
-    packageJsonPath,
+    targetContext.packageJsonPath,
+    targetContext.targetPath,
   );
-  const existingChangelog = existsSync(changelogPath)
-    ? readFileSync(changelogPath, "utf8")
+  const existingChangelog = existsSync(targetContext.changelogPath)
+    ? readFileSync(targetContext.changelogPath, "utf8")
     : null;
   const nextChangelog = prependChangelog(existingChangelog, changelogEntry);
-  writeFileSync(changelogPath, nextChangelog, "utf8");
+  writeFileSync(targetContext.changelogPath, nextChangelog, "utf8");
 
-  gitAdd([...modifiedFiles, changelogPath]);
+  gitAdd([...modifiedFiles, targetContext.changelogPath]);
   gitCommit(`chore(release): ${newTag}`);
   gitTag(newTag);
 
@@ -714,10 +776,198 @@ function getCurrentHead(): string {
   return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
 }
 
+function loadTargetContexts(params: {
+  repoRoot: string;
+  config: ReleaseConfig;
+  targets: string[];
+}): Record<string, TargetContext> {
+  const contexts: Record<string, TargetContext> = {};
+  const packageNameToTarget = new Map<string, string>();
+
+  for (const target of params.targets) {
+    const relativePath = params.config.targets[target];
+    if (!relativePath) {
+      throw new Error(
+        `Missing target path for ${target} in release.config.json`,
+      );
+    }
+    const targetPath = resolve(params.repoRoot, relativePath);
+    const packageJsonPath = resolve(targetPath, "package.json");
+    const manifest = readPackageManifest(packageJsonPath);
+    if (!manifest.name) {
+      throw new Error(`Expected package name in ${packageJsonPath}`);
+    }
+
+    contexts[target] = {
+      target,
+      targetPath,
+      packageJsonPath,
+      changelogPath: resolve(targetPath, "CHANGELOG.md"),
+      packageName: manifest.name,
+      currentVersion: readPackageVersion(packageJsonPath),
+      localDependencyPackageNames: [],
+    };
+    packageNameToTarget.set(manifest.name, target);
+  }
+
+  for (const target of params.targets) {
+    const context = getRequiredRecordValue(contexts, target, "target context");
+    const manifest = readPackageManifest(context.packageJsonPath);
+    const dependencyNames = getManifestDependencyNames(manifest);
+    context.localDependencyPackageNames = dependencyNames.filter(
+      (dependencyName) => packageNameToTarget.has(dependencyName),
+    );
+  }
+
+  return contexts;
+}
+
+async function evaluateTargetsForRelease(params: {
+  args: CliArgs;
+  config: ReleaseConfig;
+  releaseHead: string;
+  targets: string[];
+  targetContexts: Record<string, TargetContext>;
+}): Promise<Record<string, TargetEvaluation>> {
+  const results: Record<string, TargetEvaluation> = {};
+
+  for (const target of params.targets) {
+    const context = params.targetContexts[target];
+    const previousTag =
+      target === params.args.target && params.args.fromTag
+        ? params.args.fromTag
+        : getLatestTargetTag(params.config.releaseNamespace, target);
+    const commits = previousTag
+      ? getCommitsSinceTag(previousTag, params.releaseHead)
+      : params.args.aiScopeInfer
+        ? getCommitsSinceTag(null, params.releaseHead)
+        : [];
+
+    let parsedCommits = parseCommits(commits, params.config);
+    if (params.args.aiScopeInfer) {
+      parsedCommits = await recoverScopedCommitsWithAi({
+        args: params.args,
+        config: params.config,
+        target,
+        parsedCommits,
+      });
+    }
+
+    const { changes, breakingNotes } = collectTargetChanges(
+      parsedCommits,
+      target,
+    );
+
+    results[target] = {
+      target,
+      previousTag,
+      commits,
+      errors: parsedCommits.flatMap((commit) => commit.errors),
+      changes,
+      breakingNotes,
+      detectedBump: determineDetectedBump(changes),
+    };
+
+    if (!previousTag && params.args.aiScopeInfer) {
+      console.log(
+        `[${target}] No baseline tag found. AI scope inference is evaluating full history.`,
+      );
+    }
+  }
+
+  return results;
+}
+
+function validateReleasePlan(params: {
+  args: CliArgs;
+  config: ReleaseConfig;
+  releasePlan: PlannedRelease[];
+  evaluations: Record<string, TargetEvaluation>;
+  targetContexts: Record<string, TargetContext>;
+}): void {
+  for (const plannedRelease of params.releasePlan) {
+    const target = plannedRelease.target;
+    const evaluation = getRequiredRecordValue(
+      params.evaluations,
+      target,
+      "target evaluation",
+    );
+    const sourceTarget =
+      plannedRelease.reason === "dependency"
+        ? plannedRelease.dependencySourceTarget
+        : target;
+    if (!sourceTarget) {
+      throw new Error(`[${target}] Missing dependency source target.`);
+    }
+    const sourceEvaluation = getRequiredRecordValue(
+      params.evaluations,
+      sourceTarget,
+      "target evaluation",
+    );
+
+    if (!evaluation.previousTag && !params.args.aiScopeInfer) {
+      const currentVersion = getRequiredRecordValue(
+        params.targetContexts,
+        target,
+        "target context",
+      ).currentVersion;
+      const bootstrapTag = `${params.config.releaseNamespace}/${target}/v${currentVersion}`;
+      throw new Error(
+        `[${target}] No release tag found (${params.config.releaseNamespace}/${target}/v*). Bootstrap first:\n` +
+          `  git tag ${bootstrapTag}\n` +
+          `  git push origin ${bootstrapTag}`,
+      );
+    }
+
+    if (sourceEvaluation.errors.length > 0) {
+      throw new Error(
+        `[${sourceTarget}] Release aborted due to invalid commits:\n- ${sourceEvaluation.errors.join("\n- ")}`,
+      );
+    }
+  }
+}
+
+function orderReleasePlanForExecution(
+  releasePlan: PlannedRelease[],
+): PlannedRelease[] {
+  const direct = releasePlan.filter(
+    (plannedRelease) => plannedRelease.reason === "direct",
+  );
+  const dependency = releasePlan.filter(
+    (plannedRelease) => plannedRelease.reason === "dependency",
+  );
+  return [...direct, ...dependency];
+}
+
+function readPackageManifest(packageJsonPath: string): PackageManifest {
+  return JSON.parse(readFileSync(packageJsonPath, "utf8")) as PackageManifest;
+}
+
+function getManifestDependencyNames(manifest: PackageManifest): string[] {
+  return [
+    ...new Set([
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...Object.keys(manifest.devDependencies ?? {}),
+      ...Object.keys(manifest.peerDependencies ?? {}),
+      ...Object.keys(manifest.optionalDependencies ?? {}),
+    ]),
+  ];
+}
+
+function getRequiredRecordValue<T>(
+  record: Record<string, T>,
+  key: string,
+  label: string,
+): T {
+  const value = record[key];
+  if (!value) {
+    throw new Error(`Missing ${label} for ${key}.`);
+  }
+  return value;
+}
+
 function readPackageVersion(packageJsonPath: string): string {
-  const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-    version?: string;
-  };
+  const parsed = readPackageManifest(packageJsonPath);
   if (!parsed.version) {
     throw new Error(`Expected semantic version in ${packageJsonPath}`);
   }
@@ -836,33 +1086,25 @@ function dedupeChanges(changes: ChangeItem[]): ChangeItem[] {
   return deduped;
 }
 
-function releaseFromType(type: string, config: ReleaseConfig): ReleaseLevel {
-  const rule = config.types[type];
-  if (!rule) {
-    return "patch";
-  }
-  return rule.release;
-}
-
 function bumpTargetVersion(
   target: string,
   nextVersion: string,
-  repoRoot: string,
   packageJsonPath: string,
+  targetPath: string,
 ): string[] {
   if (target === "launcher") {
     execFileSync(
       "node",
       ["apps/launcher/scripts/set-release-version.mjs", nextVersion],
       {
-        cwd: repoRoot,
+        cwd: resolve(targetPath, "../.."),
         stdio: "inherit",
       },
     );
     return [
-      resolve(repoRoot, "apps/launcher/package.json"),
-      resolve(repoRoot, "apps/launcher/src-tauri/tauri.conf.json"),
-      resolve(repoRoot, "apps/launcher/src-tauri/Cargo.toml"),
+      resolve(targetPath, "package.json"),
+      resolve(targetPath, "src-tauri/tauri.conf.json"),
+      resolve(targetPath, "src-tauri/Cargo.toml"),
     ];
   }
 
