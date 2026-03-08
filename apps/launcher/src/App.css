@@ -1875,6 +1875,35 @@ ul {
   font-size: 0.9rem;
 }
 
+.app-context-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 160px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: rgba(9, 12, 20, 0.96);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+  overflow: hidden;
+}
+
+.app-context-menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.app-context-menu-item:hover,
+.app-context-menu-item:focus-visible {
+  outline: none;
+  background: rgba(59, 130, 246, 0.2);
+}
+
 .btn.danger {
   background: linear-gradient(135deg, var(--danger), #dc2626);
   color: #fff;
