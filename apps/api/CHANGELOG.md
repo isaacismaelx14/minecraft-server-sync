@@ -1,5 +1,17 @@
 # Changelog
 
+## [@minerelay/api/v0.2.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.1) (2026-03-08)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.2.0...%40minerelay%2Fapi%2Fv0.2.1)
+
+## Build
+
+- **api:** target node 24 for builds ([3227898](https://github.com/isaacismaelx14/minerelay/commit/322789825f9f4e22b5e125da7c210bda143e4d7a))
+
+## Bug Fixes
+
+- **api:** migrate prisma 7 datasource and adapter ([34c3a36](https://github.com/isaacismaelx14/minerelay/commit/34c3a3666179a09c1fc8bb00fee2ce68e3aaa0da))
+
 ## [@minerelay/api/v0.2.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.0) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.1.1...%40minerelay%2Fapi%2Fv0.2.0)
