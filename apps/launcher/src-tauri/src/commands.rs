@@ -99,8 +99,17 @@ pub fn settings_set(app: AppHandle, state: State<'_, Arc<AppState>>, settings_pa
 }
 
 #[tauri::command]
-pub fn launcher_detect(state: State<'_, Arc<AppState>>) -> Vec<LauncherCandidate> {
-  let mut detected = launcher_apps::detect_installed_launchers();
+pub async fn launcher_detect(state: State<'_, Arc<AppState>>) -> Result<Vec<LauncherCandidate>, String> {
+  #[cfg(target_os = "windows")]
+  let detection_timeout_ms = 2_000;
+
+  #[cfg(not(target_os = "windows"))]
+  let detection_timeout_ms = 5_000;
+
+  let mut detected = launcher_apps::detect_with_timeout(detection_timeout_ms)
+    .await
+    .map(|result| result.candidates)
+    .unwrap_or_default();
 
   if let Some(custom) = state.settings.lock().custom_launcher_path.clone() {
     let trimmed = custom.trim().to_string();
@@ -113,7 +122,7 @@ pub fn launcher_detect(state: State<'_, Arc<AppState>>) -> Vec<LauncherCandidate
     }
   }
 
-  detected
+  Ok(detected)
 }
 
 #[tauri::command]

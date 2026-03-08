@@ -151,6 +151,15 @@ const WINDOWS_UNINSTALL_SCAN_BUDGET: StdDuration = StdDuration::from_millis(900)
 const WINDOWS_STORE_LOOKUP_MAX_ELAPSED: StdDuration = StdDuration::from_millis(1200);
 
 #[cfg(target_os = "windows")]
+const WINDOWS_DETECTION_SLOW_MS: u64 = 1_500;
+
+#[cfg(target_os = "windows")]
+const WINDOWS_DETECTION_TELEMETRY_SAMPLE_WINDOW: usize = 64;
+
+#[cfg(target_os = "windows")]
+const WINDOWS_DETECTION_TELEMETRY_EVERY: u64 = 10;
+
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone)]
 struct WindowsDetectionCacheEntry {
   captured_at: Instant,
@@ -165,6 +174,25 @@ struct WindowsStoreAppCacheEntry {
 }
 
 #[cfg(target_os = "windows")]
+#[derive(Debug, Default)]
+struct WindowsDetectionTelemetryState {
+  total_runs: u64,
+  slow_runs: u64,
+  timed_out_runs: u64,
+  samples_ms: Vec<u64>,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct WindowsDetectionTelemetrySnapshot {
+  total_runs: u64,
+  slow_runs: u64,
+  timed_out_runs: u64,
+  avg_ms: u64,
+  p95_ms: u64,
+}
+
+#[cfg(target_os = "windows")]
 fn windows_detection_cache() -> &'static Mutex<Option<WindowsDetectionCacheEntry>> {
   static CACHE: OnceLock<Mutex<Option<WindowsDetectionCacheEntry>>> = OnceLock::new();
   CACHE.get_or_init(|| Mutex::new(None))
@@ -174,6 +202,59 @@ fn windows_detection_cache() -> &'static Mutex<Option<WindowsDetectionCacheEntry
 fn windows_store_app_cache() -> &'static Mutex<Option<WindowsStoreAppCacheEntry>> {
   static CACHE: OnceLock<Mutex<Option<WindowsStoreAppCacheEntry>>> = OnceLock::new();
   CACHE.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_detection_telemetry_state() -> &'static Mutex<WindowsDetectionTelemetryState> {
+  static STATE: OnceLock<Mutex<WindowsDetectionTelemetryState>> = OnceLock::new();
+  STATE.get_or_init(|| Mutex::new(WindowsDetectionTelemetryState::default()))
+}
+
+#[cfg(target_os = "windows")]
+fn record_windows_detection_sample(
+  elapsed_ms: u64,
+  timed_out: bool,
+) -> WindowsDetectionTelemetrySnapshot {
+  let mut state = windows_detection_telemetry_state()
+    .lock()
+    .unwrap_or_else(|e| e.into_inner());
+
+  state.total_runs = state.total_runs.saturating_add(1);
+  if timed_out {
+    state.timed_out_runs = state.timed_out_runs.saturating_add(1);
+  }
+  if elapsed_ms >= WINDOWS_DETECTION_SLOW_MS {
+    state.slow_runs = state.slow_runs.saturating_add(1);
+  }
+
+  state.samples_ms.push(elapsed_ms);
+  if state.samples_ms.len() > WINDOWS_DETECTION_TELEMETRY_SAMPLE_WINDOW {
+    let overflow = state.samples_ms.len() - WINDOWS_DETECTION_TELEMETRY_SAMPLE_WINDOW;
+    state.samples_ms.drain(..overflow);
+  }
+
+  let avg_ms = if state.samples_ms.is_empty() {
+    0
+  } else {
+    state.samples_ms.iter().sum::<u64>() / (state.samples_ms.len() as u64)
+  };
+
+  let mut sorted = state.samples_ms.clone();
+  sorted.sort_unstable();
+  let p95_ms = if sorted.is_empty() {
+    0
+  } else {
+    let idx = (sorted.len() - 1) * 95 / 100;
+    sorted[idx]
+  };
+
+  WindowsDetectionTelemetrySnapshot {
+    total_runs: state.total_runs,
+    slow_runs: state.slow_runs,
+    timed_out_runs: state.timed_out_runs,
+    avg_ms,
+    p95_ms,
+  }
 }
 
 fn detect_installed_launchers_detailed() -> Vec<DetectedLauncher> {
@@ -242,6 +323,36 @@ pub async fn detect_with_timeout(timeout_ms: u64) -> LauncherResult<LauncherDete
 
   #[cfg(not(target_os = "windows"))]
   let official_maybe_uwp = false;
+
+  #[cfg(target_os = "windows")]
+  {
+    let snapshot = record_windows_detection_sample(elapsed_ms, timed_out);
+    if timed_out
+      || elapsed_ms >= WINDOWS_DETECTION_SLOW_MS
+      || snapshot.total_runs % WINDOWS_DETECTION_TELEMETRY_EVERY == 0
+    {
+      let details = json!({
+        "timeoutMs": timeout_ms,
+        "elapsedMs": elapsed_ms,
+        "timedOut": timed_out,
+        "candidateCount": candidates.len(),
+        "officialMaybeUwp": official_maybe_uwp,
+        "stats": {
+          "totalRuns": snapshot.total_runs,
+          "slowRuns": snapshot.slow_runs,
+          "timedOutRuns": snapshot.timed_out_runs,
+          "avgMs": snapshot.avg_ms,
+          "p95Ms": snapshot.p95_ms
+        }
+      });
+      let details_payload = details.to_string();
+      crate::telemetry::record_structured_event(
+        "launcher.detect",
+        "launcher detection sample",
+        Some(details_payload.as_str()),
+      );
+    }
+  }
 
   Ok(LauncherDetectionResult {
     candidates,
@@ -670,13 +781,25 @@ fn detect_windows_launchers() -> Vec<DetectedLauncher> {
   let detection_start = Instant::now();
   let mut candidates = Vec::new();
 
+  let app_paths_started = Instant::now();
   probe_registry_app_paths(&mut candidates);
+  let app_paths_ms = app_paths_started.elapsed().as_millis() as u64;
+
+  let uninstall_started = Instant::now();
   probe_registry_uninstall_entries(&mut candidates, WINDOWS_UNINSTALL_SCAN_BUDGET);
+  let uninstall_ms = uninstall_started.elapsed().as_millis() as u64;
+
+  let fallback_started = Instant::now();
   probe_windows_filesystem_fallbacks(&mut candidates);
+  let fallback_ms = fallback_started.elapsed().as_millis() as u64;
+
+  let mut store_lookup_ms: Option<u64> = None;
+  let mut store_lookup_skipped = false;
 
   if !candidates.iter().any(|candidate| candidate.id == "official")
     && detection_start.elapsed() < WINDOWS_STORE_LOOKUP_MAX_ELAPSED
   {
+    let store_lookup_started = Instant::now();
     if let Some(app_id) = resolve_official_store_app_id_cached() {
       upsert_detected_launcher(
         &mut candidates,
@@ -689,9 +812,30 @@ fn detect_windows_launchers() -> Vec<DetectedLauncher> {
         },
       );
     }
+    store_lookup_ms = Some(store_lookup_started.elapsed().as_millis() as u64);
+  } else if !candidates.iter().any(|candidate| candidate.id == "official") {
+    store_lookup_skipped = true;
   }
 
   candidates.sort_by_key(|candidate| windows_launcher_sort_key(&candidate.id));
+
+  let total_ms = detection_start.elapsed().as_millis() as u64;
+  let details = json!({
+    "cacheHit": false,
+    "totalMs": total_ms,
+    "appPathsMs": app_paths_ms,
+    "uninstallMs": uninstall_ms,
+    "fallbackMs": fallback_ms,
+    "storeLookupMs": store_lookup_ms,
+    "storeLookupSkipped": store_lookup_skipped,
+    "candidateCount": candidates.len()
+  });
+  let details_payload = details.to_string();
+  crate::telemetry::record_structured_event(
+    "launcher.detect.windows",
+    "windows launcher detection stages",
+    Some(details_payload.as_str()),
+  );
 
   {
     let mut cache = windows_detection_cache().lock().unwrap_or_else(|e| e.into_inner());
