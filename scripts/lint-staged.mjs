@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
 import { execSync, spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDirectory, "..");
+const apiRoot = path.join(repoRoot, "apps/api");
 
 const ESLINT_EXTENSIONS = new Set([
   ".js",
@@ -14,6 +20,7 @@ const ESLINT_EXTENSIONS = new Set([
 function getStagedFiles() {
   const output = execSync("git diff --cached --name-only --diff-filter=ACM", {
     encoding: "utf8",
+    cwd: repoRoot,
   }).trim();
 
   if (!output) {
@@ -49,7 +56,7 @@ console.log(`Linting ${filesToLint.length} staged API file(s)...`);
 const result = spawnSync(
   "pnpm",
   ["exec", "eslint", "--max-warnings=0", "--no-warn-ignored", ...filesToLint],
-  { stdio: "inherit", cwd: "apps/api" },
+  { stdio: "inherit", cwd: apiRoot },
 );
 
 if (typeof result.status === "number") {
