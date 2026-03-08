@@ -26,6 +26,8 @@ export default function App() {
     launcherStreamRetryCount,
     launcherStreamRetryCountdownSec,
     retryLauncherServerStreamNow,
+    contextMenu,
+    handleContextMenuRefresh,
     closeModalOpen,
     closeModalVariant,
     handleCloseModalQuit,
@@ -66,6 +68,21 @@ export default function App() {
           </div>
         ) : null}
         <ToastContainer toasts={toasts} />
+        {contextMenu ? (
+          <div
+            className="app-context-menu"
+            role="menu"
+            style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          >
+            <button
+              className="app-context-menu-item"
+              role="menuitem"
+              onClick={() => handleContextMenuRefresh()}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : null}
         {closeModalOpen ? (
           <CloseModal
             variant={closeModalVariant}
@@ -117,6 +134,21 @@ export default function App() {
           </div>
         ) : null}
         <ToastContainer toasts={toasts} />
+        {contextMenu ? (
+          <div
+            className="app-context-menu"
+            role="menu"
+            style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          >
+            <button
+              className="app-context-menu-item"
+              role="menuitem"
+              onClick={() => handleContextMenuRefresh()}
+            >
+              Refresh
+            </button>
+          </div>
+        ) : null}
         {closeModalOpen ? (
           <CloseModal
             variant={closeModalVariant}
@@ -157,6 +189,21 @@ export default function App() {
         </div>
       ) : null}
       <ToastContainer toasts={toasts} />
+      {contextMenu ? (
+        <div
+          className="app-context-menu"
+          role="menu"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+        >
+          <button
+            className="app-context-menu-item"
+            role="menuitem"
+            onClick={() => handleContextMenuRefresh()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : null}
       {closeModalOpen ? (
         <CloseModal
           variant={closeModalVariant}

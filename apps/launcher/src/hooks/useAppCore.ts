@@ -17,6 +17,11 @@ type PairingLinkAppliedEvent = {
   apiBaseUrl: string | null;
 };
 
+type ContextMenuState = {
+  x: number;
+  y: number;
+};
+
 import {
   type ScreenState,
   type InstallMode,
@@ -172,6 +177,7 @@ export function useAppCore() {
   const [brokenLogoUrls, setBrokenLogoUrls] = useState<Record<string, true>>(
     {},
   );
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closeModalVariant, setCloseModalVariant] =
     useState<CloseModalVariant>("normal");
@@ -1116,6 +1122,55 @@ export function useAppCore() {
   ]);
 
   const isMacOS = /Mac|iPhone|iPad/.test(navigator.userAgent);
+  const isWindows = /Windows/.test(navigator.userAgent);
+
+  const handleContextMenuRefresh = useCallback(() => {
+    setContextMenu(null);
+    window.location.reload();
+  }, []);
+
+  useEffect(() => {
+    if (!isWindows) {
+      return;
+    }
+
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    };
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".app-context-menu")) {
+        return;
+      }
+      setContextMenu(null);
+    };
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    };
+
+    const hideMenu = () => {
+      setContextMenu(null);
+    };
+
+    window.addEventListener("contextmenu", onContextMenu);
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+    window.addEventListener("blur", hideMenu);
+    window.addEventListener("scroll", hideMenu, true);
+
+    return () => {
+      window.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+      window.removeEventListener("blur", hideMenu);
+      window.removeEventListener("scroll", hideMenu, true);
+    };
+  }, [isWindows]);
 
   const showCloseModal = useCallback((variant: CloseModalVariant) => {
     setCloseModalVariant(variant);
@@ -1803,6 +1858,8 @@ export function useAppCore() {
     currentWindow,
     isSetupWindow,
     isCompactWindow,
+    contextMenu,
+    handleContextMenuRefresh,
     closeModalOpen,
     closeModalVariant,
     handleCloseModalQuit,
