@@ -1,5 +1,5 @@
 use std::{
-  collections::{BTreeMap, HashMap, HashSet},
+  collections::{BTreeMap, HashMap, HashSet, VecDeque},
   fs::File,
   io::Write,
   path::{Path, PathBuf},
@@ -12,12 +12,14 @@ use std::{
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
+use sysinfo::System;
 use tauri::AppHandle;
 use tokio::{
   fs,
   io::{AsyncReadExt, AsyncWriteExt},
-  sync::Semaphore,
+  sync::Mutex as TokioMutex,
   time::{sleep, Duration},
 };
 use url::Url;
@@ -1367,64 +1369,107 @@ async fn download_with_concurrency(
   completed_bytes: Arc<AtomicU64>,
   start: Instant,
 ) -> LauncherResult<()> {
-  let semaphore = Arc::new(Semaphore::new(4));
-  let mut tasks = Vec::new();
+  if files.is_empty() {
+    return Ok(());
+  }
 
-  for file in files.iter().cloned() {
-    let permit = Arc::clone(&semaphore)
-      .acquire_owned()
-      .await
-      .map_err(|error| LauncherError::Fs(format!("failed to acquire semaphore permit: {error}")))?;
+  let worker_count = recommended_download_workers().min(files.len()).max(1);
+  let details = json!({
+    "workerCount": worker_count,
+    "fileCount": files.len(),
+    "totalBytes": total_bytes,
+  });
+  let details_payload = details.to_string();
+  crate::telemetry::record_structured_event(
+    "launcher.sync",
+    "download worker queue started",
+    Some(details_payload.as_str()),
+  );
 
+  let queue = Arc::new(TokioMutex::new(VecDeque::from(files.to_vec())));
+  let mut workers = Vec::new();
+
+  for _ in 0..worker_count {
     let client = state.http.clone();
     let cancel = Arc::clone(&state.cancel_sync);
     let app_handle = app.clone();
     let completed = Arc::clone(&completed_bytes);
-    let stage = staging_root.join(&file.path);
+    let queue = Arc::clone(&queue);
+    let staging_root = staging_root.to_path_buf();
 
-    tasks.push(tokio::spawn(async move {
-      let _permit = permit;
-
-      if let Some(parent) = stage.parent() {
-        fs::create_dir_all(parent).await?;
-      }
-
-      download_with_retry(&client, &file.provider, &file.url, &stage, &cancel, |delta| {
-        let new_total = completed.fetch_add(delta, Ordering::SeqCst) + delta;
-        let speed = compute_speed(start, new_total);
-        let eta = if total_bytes > 0 && speed > 0 {
-          Some((total_bytes.saturating_sub(new_total)) / speed)
-        } else {
-          None
+    workers.push(tokio::spawn(async move {
+      loop {
+        let next_file = {
+          let mut queue_guard = queue.lock().await;
+          queue_guard.pop_front()
         };
 
-        emit_sync_progress(
-          &app_handle,
-          &SyncProgressEvent {
-            phase: "downloading".to_string(),
-            completed_bytes: new_total,
-            total_bytes,
-            current_file: Some(file.name.clone()),
-            speed_bps: speed,
-            eta_sec: eta,
-          },
-        );
-      })
-      .await?;
+        let Some(file) = next_file else {
+          break;
+        };
 
-      verify_sha256(&stage, &file.sha256).await?;
+        let stage = staging_root.join(&file.path);
+        if let Some(parent) = stage.parent() {
+          fs::create_dir_all(parent).await?;
+        }
+
+        let current_file_name = file.name.clone();
+        download_with_retry(&client, &file.provider, &file.url, &stage, &cancel, |delta| {
+          let new_total = completed.fetch_add(delta, Ordering::SeqCst) + delta;
+          let speed = compute_speed(start, new_total);
+          let eta = if total_bytes > 0 && speed > 0 {
+            Some((total_bytes.saturating_sub(new_total)) / speed)
+          } else {
+            None
+          };
+
+          emit_sync_progress(
+            &app_handle,
+            &SyncProgressEvent {
+              phase: "downloading".to_string(),
+              completed_bytes: new_total,
+              total_bytes,
+              current_file: Some(current_file_name.clone()),
+              speed_bps: speed,
+              eta_sec: eta,
+            },
+          );
+        })
+        .await?;
+
+        verify_sha256(&stage, &file.sha256).await?;
+      }
+
       Ok::<(), LauncherError>(())
     }));
   }
 
-  for task in tasks {
-    let result = task
+  for worker in workers {
+    let result = worker
       .await
-      .map_err(|error| LauncherError::Fs(format!("download task failed: {error}")))?;
+      .map_err(|error| LauncherError::Fs(format!("download worker failed: {error}")))?;
     result?;
   }
 
   Ok(())
+}
+
+fn recommended_download_workers() -> usize {
+  let cpu_cores = std::thread::available_parallelism()
+    .map(|value| value.get())
+    .unwrap_or(4);
+
+  let mut system = System::new();
+  system.refresh_memory();
+  let total_memory_mb = system.total_memory() / (1024 * 1024);
+
+  if cpu_cores <= 4 || (total_memory_mb > 0 && total_memory_mb <= 8_192) {
+    1
+  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
+    2
+  } else {
+    3
+  }
 }
 
 async fn download_with_retry<F>(

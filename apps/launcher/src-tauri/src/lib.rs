@@ -104,6 +104,7 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      commands::app_performance_profile,
       commands::settings_get,
       commands::settings_set,
       commands::launcher_detect,

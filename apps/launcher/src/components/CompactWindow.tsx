@@ -31,6 +31,7 @@ export function CompactWindow({
     launcherServerControls,
     isServerActionBusy,
     runLauncherServerAction,
+    isActionBusy,
   } = core;
 
   const filteredLaunchers = useMemo(
@@ -51,6 +52,9 @@ export function CompactWindow({
 
   const compactHasServerInfo = catalog !== null;
   const compactNeedsConnect = !compactHasServerInfo;
+  const isLaunching = isActionBusy("launcher:open");
+  const isOpeningOverview = isActionBusy("window:openSetup");
+  const isCancellingLaunch = isActionBusy("session:cancel");
   const isAwaiting = sessionStatus.phase === "awaiting_game_start";
   const statusTitle = isAwaiting
     ? "Awaiting Launch"
@@ -144,8 +148,9 @@ export function CompactWindow({
                 <button
                   className="btn cancel-session"
                   onClick={() => void cancelSession()}
+                  disabled={isCancellingLaunch}
                 >
-                  Cancel Launch
+                  {isCancellingLaunch ? "Cancelling..." : "Cancel Launch"}
                 </button>
               ) : (
                 <button
@@ -157,22 +162,29 @@ export function CompactWindow({
                       ? void runSyncCycle(false)
                       : void openLauncherFromCompact()
                   }
-                  disabled={compactNeedsConnect ? isChecking : compactPlaying}
+                  disabled={
+                    compactNeedsConnect
+                      ? isChecking
+                      : compactPlaying || isLaunching
+                  }
                 >
                   {compactNeedsConnect
                     ? isChecking
                       ? "Connecting..."
                       : "Connect"
-                    : compactPlaying
-                      ? "Playing"
-                      : "Play"}
+                    : isLaunching
+                      ? "Launching..."
+                      : compactPlaying
+                        ? "Playing"
+                        : "Play"}
                 </button>
               )}
               <button
                 className="btn ghost"
                 onClick={() => void openSetupWindow()}
+                disabled={isOpeningOverview}
               >
-                Overview
+                {isOpeningOverview ? "Opening..." : "Overview"}
               </button>
             </div>
           </div>

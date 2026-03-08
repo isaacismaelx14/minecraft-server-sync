@@ -138,6 +138,13 @@ export interface AppCloseResponse {
   reason: string | null;
 }
 
+export interface AppPerformanceProfile {
+  mode: "normal" | "slow";
+  cpuCores: number;
+  totalMemoryMb: number;
+  recommendedDownloadWorkers: number;
+}
+
 export interface LauncherUpdateStatus {
   currentVersion: string;
   latestVersion: string | null;

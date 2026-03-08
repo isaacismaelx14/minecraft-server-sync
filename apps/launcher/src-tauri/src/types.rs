@@ -323,6 +323,15 @@ pub struct AppCloseResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AppPerformanceProfile {
+  pub mode: String,
+  pub cpu_cores: u32,
+  pub total_memory_mb: u64,
+  pub recommended_download_workers: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LauncherServerPermissions {
   pub can_view_status: bool,
   #[serde(default)]

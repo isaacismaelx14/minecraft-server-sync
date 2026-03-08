@@ -42,6 +42,7 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
     sync,
     syncBytesLabel,
     completeWizard,
+    isActionBusy,
   } = core;
 
   return (
@@ -142,8 +143,11 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             <button
               className="btn primary"
               onClick={() => void beginWizardPathsStep()}
+              disabled={isActionBusy("wizard:beginPaths")}
             >
-              Continue to Path Setup
+              {isActionBusy("wizard:beginPaths")
+                ? "Loading..."
+                : "Continue to Path Setup"}
             </button>
             <button className="btn disabled" disabled>
               Log In
@@ -210,8 +214,11 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                 <button
                   className="btn ghost"
                   onClick={() => void pickWizardManualLauncherPath()}
+                  disabled={isActionBusy("wizard:pickLauncherPath")}
                 >
-                  Pick Launcher Path
+                  {isActionBusy("wizard:pickLauncherPath")
+                    ? "Picking..."
+                    : "Pick Launcher Path"}
                 </button>
               </>
             ) : null}
@@ -248,14 +255,18 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                 <button
                   className="btn ghost"
                   onClick={() => void pickWizardMinecraftRootPath()}
+                  disabled={isActionBusy("wizard:pickMinecraftPath")}
                 >
-                  Pick Minecraft Dir
+                  {isActionBusy("wizard:pickMinecraftPath")
+                    ? "Picking..."
+                    : "Pick Minecraft Dir"}
                 </button>
                 <button
                   className="btn ghost"
                   onClick={() => void startWizardDetection()}
+                  disabled={isActionBusy("wizard:detect")}
                 >
-                  Rescan
+                  {isActionBusy("wizard:detect") ? "Scanning..." : "Rescan"}
                 </button>
               </div>
               <p className="wizard-meta">
@@ -276,11 +287,19 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             <button
               className="btn primary"
               onClick={() => void continueWizardRuntimeStep()}
-              disabled={wizardProgress < 100}
+              disabled={
+                wizardProgress < 100 ||
+                isActionBusy("wizard:detect") ||
+                isActionBusy("wizard:continueRuntime")
+              }
             >
               {wizardProgress < 100
                 ? "Detecting Launcher..."
-                : "Continue to Runtime Check"}
+                : isActionBusy("wizard:detect")
+                  ? "Scanning..."
+                  : isActionBusy("wizard:continueRuntime")
+                    ? "Loading..."
+                    : "Continue to Runtime Check"}
             </button>
           </div>
         </div>
@@ -373,18 +392,24 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             <button
               className="btn ghost"
               onClick={() => void installFabricRuntime()}
+              disabled={isActionBusy("wizard:installRuntime")}
             >
-              Install / Ensure Fabric Runtime
+              {isActionBusy("wizard:installRuntime")
+                ? "Installing..."
+                : "Install / Ensure Fabric Runtime"}
             </button>
             <button
               className="btn primary"
               onClick={() => void continueWizardSyncStep()}
               disabled={
                 !versionReadiness?.allowlisted ||
-                !versionReadiness?.foundInMinecraftRootDir
+                !versionReadiness?.foundInMinecraftRootDir ||
+                isActionBusy("wizard:continueSync")
               }
             >
-              Continue to Initial Sync
+              {isActionBusy("wizard:continueSync")
+                ? "Loading..."
+                : "Continue to Initial Sync"}
             </button>
           </div>
         </div>
@@ -503,9 +528,11 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             <button
               className="btn primary"
               onClick={() => void completeWizard()}
-              disabled={wizardSyncing}
+              disabled={wizardSyncing || isActionBusy("wizard:complete")}
             >
-              {wizardSyncing ? "Syncing..." : "Run Sync and Finish Setup"}
+              {wizardSyncing || isActionBusy("wizard:complete")
+                ? "Syncing..."
+                : "Run Sync and Finish Setup"}
             </button>
           </div>
         </div>

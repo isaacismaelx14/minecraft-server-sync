@@ -6,6 +6,7 @@ use std::sync::{
 
 use serde::Deserialize;
 use serde_json::json;
+use sysinfo::System;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
@@ -23,7 +24,7 @@ use crate::{
   state::AppState,
   sync,
   types::{
-    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
+    AppCloseResponse, AppPerformanceProfile, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
     GameSessionPhase, GameSessionStatus, InstanceState,
     LauncherServerControlsState, LauncherUpdateAction, LauncherUpdateCommandError,
     LauncherUpdateErrorCode,
@@ -85,6 +86,35 @@ enum UpdaterEndpointResolveError {
 #[tauri::command]
 pub fn settings_get(state: State<'_, Arc<AppState>>) -> AppSettings {
   state.settings.lock().clone()
+}
+
+#[tauri::command]
+pub fn app_performance_profile() -> AppPerformanceProfile {
+  let cpu_cores = std::thread::available_parallelism()
+    .map(|value| value.get() as u32)
+    .unwrap_or(4);
+
+  let mut system = System::new();
+  system.refresh_memory();
+  let total_memory_mb = system.total_memory() / (1024 * 1024);
+
+  let slow_hardware = cpu_cores <= 4 || (total_memory_mb > 0 && total_memory_mb <= 8_192);
+  let mode = if slow_hardware { "slow" } else { "normal" }.to_string();
+
+  let recommended_download_workers = if slow_hardware {
+    1
+  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
+    2
+  } else {
+    3
+  };
+
+  AppPerformanceProfile {
+    mode,
+    cpu_cores,
+    total_memory_mb,
+    recommended_download_workers,
+  }
 }
 
 #[tauri::command]

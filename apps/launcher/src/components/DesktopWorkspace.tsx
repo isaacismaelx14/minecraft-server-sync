@@ -60,6 +60,7 @@ export function DesktopWorkspace({
     launcherServerControls,
     isServerActionBusy,
     runLauncherServerAction,
+    isActionBusy,
   } = core;
   const serverControlReady = Boolean(
     launcherServerControls?.enabled &&
@@ -350,8 +351,9 @@ export function DesktopWorkspace({
               <button
                 className="btn primary"
                 onClick={() => void saveProfileSource()}
+                disabled={isActionBusy("source:save")}
               >
-                Save Source
+                {isActionBusy("source:save") ? "Saving..." : "Save Source"}
               </button>
             </div>
           </section>
@@ -394,8 +396,11 @@ export function DesktopWorkspace({
                     <button
                       className="btn ghost"
                       onClick={() => void saveProfileSource()}
+                      disabled={isActionBusy("source:save")}
                     >
-                      Save Pairing Code
+                      {isActionBusy("source:save")
+                        ? "Saving..."
+                        : "Save Pairing Code"}
                     </button>
                   </div>
                 </>
@@ -446,8 +451,11 @@ export function DesktopWorkspace({
                     <button
                       className="btn ghost"
                       onClick={() => void pickManualLauncherFromSettings()}
+                      disabled={isActionBusy("settings:pickLauncherPath")}
                     >
-                      Pick Launcher Path
+                      {isActionBusy("settings:pickLauncherPath")
+                        ? "Picking..."
+                        : "Pick Launcher Path"}
                     </button>
                   </div>
                 </div>
@@ -529,8 +537,11 @@ export function DesktopWorkspace({
                     <button
                       className="btn ghost"
                       onClick={() => void pickMinecraftRootFromSettings()}
+                      disabled={isActionBusy("settings:pickMinecraftPath")}
                     >
-                      Pick Dir
+                      {isActionBusy("settings:pickMinecraftPath")
+                        ? "Picking..."
+                        : "Pick Dir"}
                     </button>
                     <button
                       className="btn ghost"
@@ -674,9 +685,9 @@ export function DesktopWorkspace({
               <button
                 className="btn ghost"
                 onClick={() => void runSyncCycle(true)}
-                disabled={sessionActive}
+                disabled={sessionActive || isChecking}
               >
-                Run Check + Auto Apply
+                {isChecking ? "Running..." : "Run Check + Auto Apply"}
               </button>
             </div>
           </section>
@@ -963,8 +974,11 @@ export function DesktopWorkspace({
             <button
               className="btn ghost"
               onClick={() => void returnToMainWindow()}
+              disabled={isActionBusy("window:returnMain")}
             >
-              Back to Launcher
+              {isActionBusy("window:returnMain")
+                ? "Opening..."
+                : "Back to Launcher"}
             </button>
           </div>
         </header>

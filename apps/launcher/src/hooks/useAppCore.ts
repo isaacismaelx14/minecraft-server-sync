@@ -9,8 +9,13 @@ const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MineRelay";
 const BUNDLED_APP_VERSION = __APP_VERSION__;
 const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const AUTO_SYNC_INTERVAL_SLOW_MS = 60 * 60 * 1000;
 const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
 const LAUNCHER_STREAM_MAX_RETRIES = 3;
+const AUTO_UPDATE_DEFER_MS = 3_000;
+const AUTO_UPDATE_DEFER_SLOW_MS = 12_000;
+const AUTO_UPDATE_SLOW_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000;
+const SLOW_SYNC_AVG_THRESHOLD_MS = 20_000;
 
 type PairingLinkAppliedEvent = {
   url: string;
@@ -44,6 +49,7 @@ import {
   type SyncApplyOptions,
   type SyncCycleOptions,
   type AppCloseResponse,
+  type AppPerformanceProfile,
   type LauncherUpdateStatus,
   type LauncherUpdateInstallResponse,
   type CatalogSnapshot,
@@ -151,6 +157,10 @@ export function useAppCore() {
 
   const [lastCheckAt, setLastCheckAt] = useState<Date | null>(null);
   const [nextCheckAt, setNextCheckAt] = useState<Date | null>(null);
+  const [performanceProfile, setPerformanceProfile] =
+    useState<AppPerformanceProfile | null>(null);
+  const [syncAvgMs, setSyncAvgMs] = useState(0);
+  const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({});
 
   const [wizardActive, setWizardActive] = useState(false);
   const [wizardStep, setWizardStep] = useState<OnboardingStep>("source");
@@ -195,6 +205,8 @@ export function useAppCore() {
   const devtoolsUnlockActiveRef = useRef(false);
   const devtoolsUnlockBufferRef = useRef("");
   const devtoolsUnlockTimeoutRef = useRef<number | null>(null);
+  const lastAutoUpdateCheckAtRef = useRef(0);
+  const actionBusyRef = useRef<Record<string, boolean>>({});
 
   const hasLauncherServerPermission = useCallback(
     (controls: LauncherServerControlsState | null) => {
@@ -211,6 +223,50 @@ export function useAppCore() {
       );
     },
     [],
+  );
+
+  const adaptiveSlowMode = useMemo(() => {
+    const backendSlow = performanceProfile?.mode === "slow";
+    const runtimeSlow = syncAvgMs >= SLOW_SYNC_AVG_THRESHOLD_MS;
+    return backendSlow || runtimeSlow;
+  }, [performanceProfile?.mode, syncAvgMs]);
+
+  const refreshPerformanceProfile = useCallback(async () => {
+    try {
+      const profile = await invoke<AppPerformanceProfile>(
+        "app_performance_profile",
+      );
+      setPerformanceProfile(profile);
+    } catch {
+      setPerformanceProfile(null);
+    }
+  }, []);
+
+  const runLockedAction = useCallback(
+    async <T>(
+      key: string,
+      action: () => Promise<T>,
+    ): Promise<T | undefined> => {
+      if (actionBusyRef.current[key]) {
+        return undefined;
+      }
+
+      actionBusyRef.current[key] = true;
+      setActionBusy((current) => ({ ...current, [key]: true }));
+
+      try {
+        return await action();
+      } finally {
+        actionBusyRef.current[key] = false;
+        setActionBusy((current) => ({ ...current, [key]: false }));
+      }
+    },
+    [],
+  );
+
+  const isActionBusy = useCallback(
+    (key: string) => Boolean(actionBusy[key]),
+    [actionBusy],
   );
 
   const progressPercent = useMemo(() => {
@@ -839,6 +895,27 @@ export function useAppCore() {
 
   const checkLauncherUpdate = useCallback(
     async (autoInstall: boolean, suppressErrors = false): Promise<boolean> => {
+      if (autoInstall) {
+        if (cycleInFlight.current) {
+          return false;
+        }
+
+        if (launcherStreamStatus !== "connected") {
+          setLauncherUpdateNotice(
+            "Update check deferred until server connection is stable.",
+          );
+          return false;
+        }
+
+        if (
+          adaptiveSlowMode &&
+          Date.now() - lastAutoUpdateCheckAtRef.current <
+            AUTO_UPDATE_SLOW_MIN_INTERVAL_MS
+        ) {
+          return false;
+        }
+      }
+
       if (
         checkingLauncherUpdateRef.current ||
         installingLauncherUpdateRef.current
@@ -894,11 +971,19 @@ export function useAppCore() {
         }
         return false;
       } finally {
+        if (autoInstall) {
+          lastAutoUpdateCheckAtRef.current = Date.now();
+        }
         checkingLauncherUpdateRef.current = false;
         setIsCheckingLauncherUpdate(false);
       }
     },
-    [installLauncherUpdate, launcherAppVersion],
+    [
+      adaptiveSlowMode,
+      installLauncherUpdate,
+      launcherAppVersion,
+      launcherStreamStatus,
+    ],
   );
 
   const runSyncCycle = useCallback(
@@ -906,6 +991,8 @@ export function useAppCore() {
       if (cycleInFlight.current) {
         return;
       }
+
+      const cycleStartedAt = Date.now();
 
       cycleInFlight.current = true;
       setIsChecking(true);
@@ -932,6 +1019,12 @@ export function useAppCore() {
         setError(cause instanceof Error ? cause.message : String(cause));
         setScreen("ready");
       } finally {
+        const elapsedMs = Date.now() - cycleStartedAt;
+        setSyncAvgMs((current) =>
+          current <= 0
+            ? elapsedMs
+            : Math.round(current * 0.75 + elapsedMs * 0.25),
+        );
         setIsChecking(false);
         cycleInFlight.current = false;
       }
@@ -940,47 +1033,56 @@ export function useAppCore() {
   );
 
   const startWizardDetection = useCallback(async () => {
-    setError(null);
-    setWizardProgress(0);
-    setWizardDetection(null);
+    await runLockedAction("wizard:detect", async () => {
+      setError(null);
+      setWizardProgress(0);
+      setWizardDetection(null);
 
-    const detectionTimeoutMs = /Windows/.test(navigator.userAgent)
-      ? 2_000
-      : 5_000;
+      const detectionTimeoutMs = /Windows/.test(navigator.userAgent)
+        ? 2_000
+        : 5_000;
 
-    const started = Date.now();
-    const timer = window.setInterval(() => {
-      const elapsed = Date.now() - started;
-      const pct = Math.min(95, Math.round((elapsed / detectionTimeoutMs) * 95));
-      setWizardProgress(pct);
-    }, 120);
+      const started = Date.now();
+      const timer = window.setInterval(() => {
+        const elapsed = Date.now() - started;
+        const pct = Math.min(
+          95,
+          Math.round((elapsed / detectionTimeoutMs) * 95),
+        );
+        setWizardProgress(pct);
+      }, 120);
 
-    try {
-      const [detected, rootStatus] = await Promise.all([
-        invoke<LauncherDetectionResult>("launcher_detect_with_timeout", {
-          timeoutMs: detectionTimeoutMs,
-        }),
-        invoke<MinecraftRootStatus>("minecraft_root_detect"),
-      ]);
+      try {
+        const [detected, rootStatus] = await Promise.all([
+          invoke<LauncherDetectionResult>("launcher_detect_with_timeout", {
+            timeoutMs: detectionTimeoutMs,
+          }),
+          invoke<MinecraftRootStatus>("minecraft_root_detect"),
+        ]);
 
-      setWizardDetection(detected);
-      setLaunchers(detected.candidates);
-      setWizardMinecraftRootStatus(rootStatus);
-      setWizardMinecraftRootPath(rootStatus.path);
-      setWizardProgress(100);
+        setWizardDetection(detected);
+        setLaunchers(detected.candidates);
+        setWizardMinecraftRootStatus(rootStatus);
+        setWizardMinecraftRootPath(rootStatus.path);
+        setWizardProgress(100);
 
-      const resolvedLauncherId = resolvePreferredLauncherId(
-        detected.candidates,
-        settings?.selectedLauncherId ?? null,
-        settings?.customLauncherPath ?? null,
-      );
-      setWizardSelectedLauncherId(resolvedLauncherId ?? "custom");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      window.clearInterval(timer);
-    }
-  }, [settings?.customLauncherPath, settings?.selectedLauncherId]);
+        const resolvedLauncherId = resolvePreferredLauncherId(
+          detected.candidates,
+          settings?.selectedLauncherId ?? null,
+          settings?.customLauncherPath ?? null,
+        );
+        setWizardSelectedLauncherId(resolvedLauncherId ?? "custom");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        window.clearInterval(timer);
+      }
+    });
+  }, [
+    runLockedAction,
+    settings?.customLauncherPath,
+    settings?.selectedLauncherId,
+  ]);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -988,6 +1090,7 @@ export function useAppCore() {
       const localVersion = await getAppVersion().catch(() => null);
       setLauncherAppVersion(localVersion ?? BUNDLED_APP_VERSION);
       const loaded = await loadSettingsAndLaunchers();
+      await refreshPerformanceProfile();
       await refreshSessionStatus();
 
       if (onboardingRequired(loaded.settings)) {
@@ -1002,15 +1105,22 @@ export function useAppCore() {
 
       setWizardActive(false);
       await runSyncCycle(true);
-      await checkLauncherUpdate(true, true);
+      const autoUpdateDelayMs = adaptiveSlowMode
+        ? AUTO_UPDATE_DEFER_SLOW_MS
+        : AUTO_UPDATE_DEFER_MS;
+      window.setTimeout(() => {
+        void checkLauncherUpdate(true, true);
+      }, autoUpdateDelayMs);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setScreen("ready");
     }
   }, [
     checkLauncherUpdate,
+    adaptiveSlowMode,
     isCompactWindow,
     loadSettingsAndLaunchers,
+    refreshPerformanceProfile,
     refreshSessionStatus,
     runSyncCycle,
   ]);
@@ -1266,17 +1376,27 @@ export function useAppCore() {
       return;
     }
 
+    const syncIntervalMs = adaptiveSlowMode
+      ? AUTO_SYNC_INTERVAL_SLOW_MS
+      : AUTO_SYNC_INTERVAL_MS;
+
     const timer = window.setInterval(() => {
-      void runSyncCycle(true);
-      void checkLauncherUpdate(true, true);
-    }, AUTO_SYNC_INTERVAL_MS);
+      void (async () => {
+        await runSyncCycle(true);
+        if (launcherStreamStatus === "connected") {
+          await checkLauncherUpdate(true, true);
+        }
+      })();
+    }, syncIntervalMs);
 
     return () => {
       window.clearInterval(timer);
     };
   }, [
+    adaptiveSlowMode,
     checkLauncherUpdate,
     isCompactWindow,
+    launcherStreamStatus,
     runSyncCycle,
     sessionActive,
     settings,
@@ -1333,49 +1453,53 @@ export function useAppCore() {
         pairingCode: string;
       }>,
     ) => {
-      if (!settings) {
-        return;
-      }
+      await runLockedAction("wizard:beginPaths", async () => {
+        if (!settings) {
+          return;
+        }
 
-      const effectiveDraft = {
-        apiBaseUrl: draftOverride?.apiBaseUrl ?? profileSourceDraft.apiBaseUrl,
-        profileLockUrl:
-          draftOverride?.profileLockUrl ?? profileSourceDraft.profileLockUrl,
-        pairingCode:
-          draftOverride?.pairingCode ?? profileSourceDraft.pairingCode,
-      };
+        const effectiveDraft = {
+          apiBaseUrl:
+            draftOverride?.apiBaseUrl ?? profileSourceDraft.apiBaseUrl,
+          profileLockUrl:
+            draftOverride?.profileLockUrl ?? profileSourceDraft.profileLockUrl,
+          pairingCode:
+            draftOverride?.pairingCode ?? profileSourceDraft.pairingCode,
+        };
 
-      const apiBaseUrl = normalizeApiBaseUrl(effectiveDraft.apiBaseUrl);
-      if (!apiBaseUrl) {
-        setError(
-          "API base URL must be a valid https URL (or localhost http for development).",
-        );
-        return;
-      }
-      const profileLockInput = effectiveDraft.profileLockUrl.trim();
-      const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
-      if (profileLockInput && !profileLockUrl) {
-        setError(
-          "Profile lock URL must be a valid https URL (or localhost http for development).",
-        );
-        return;
-      }
+        const apiBaseUrl = normalizeApiBaseUrl(effectiveDraft.apiBaseUrl);
+        if (!apiBaseUrl) {
+          setError(
+            "API base URL must be a valid https URL (or localhost http for development).",
+          );
+          return;
+        }
+        const profileLockInput = effectiveDraft.profileLockUrl.trim();
+        const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
+        if (profileLockInput && !profileLockUrl) {
+          setError(
+            "Profile lock URL must be a valid https URL (or localhost http for development).",
+          );
+          return;
+        }
 
-      const next: AppSettings = {
-        ...settings,
-        apiBaseUrl,
-        profileLockUrl: profileLockUrl || null,
-        pairingCode: effectiveDraft.pairingCode.trim() || null,
-      };
+        const next: AppSettings = {
+          ...settings,
+          apiBaseUrl,
+          profileLockUrl: profileLockUrl || null,
+          pairingCode: effectiveDraft.pairingCode.trim() || null,
+        };
 
-      await saveSettings(next);
-      setWizardStep("paths");
-      await startWizardDetection();
+        await saveSettings(next);
+        setWizardStep("paths");
+        await startWizardDetection();
+      });
     },
     [
       profileSourceDraft.apiBaseUrl,
       profileSourceDraft.profileLockUrl,
       profileSourceDraft.pairingCode,
+      runLockedAction,
       saveSettings,
       settings,
       startWizardDetection,
@@ -1419,75 +1543,82 @@ export function useAppCore() {
   }, [beginWizardPathsStep, isSetupWindow, setHint, wizardActive, wizardStep]);
 
   const pickWizardManualLauncherPath = useCallback(async () => {
-    const picked = await invoke<string | null>("launcher_pick_manual_path");
-    if (!picked) {
-      return;
-    }
+    await runLockedAction("wizard:pickLauncherPath", async () => {
+      const picked = await invoke<string | null>("launcher_pick_manual_path");
+      if (!picked) {
+        return;
+      }
 
-    setWizardManualLauncherPath(picked);
-    setWizardSelectedLauncherId("custom");
-  }, []);
+      setWizardManualLauncherPath(picked);
+      setWizardSelectedLauncherId("custom");
+    });
+  }, [runLockedAction]);
 
   const pickWizardMinecraftRootPath = useCallback(async () => {
-    const picked = await invoke<string | null>(
-      "minecraft_root_pick_manual_path",
-    );
-    if (!picked) {
-      return;
-    }
+    await runLockedAction("wizard:pickMinecraftPath", async () => {
+      const picked = await invoke<string | null>(
+        "minecraft_root_pick_manual_path",
+      );
+      if (!picked) {
+        return;
+      }
 
-    setWizardMinecraftRootPath(picked);
-  }, []);
+      setWizardMinecraftRootPath(picked);
+    });
+  }, [runLockedAction]);
 
   const continueWizardRuntimeStep = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
+    await runLockedAction("wizard:continueRuntime", async () => {
+      if (!settings) {
+        return;
+      }
 
-    const selectedLauncherId = wizardSelectedLauncherId.trim() || null;
-    const customLauncherPath =
-      wizardSelectedLauncherId === "custom"
-        ? wizardManualLauncherPath.trim()
-        : null;
+      const selectedLauncherId = wizardSelectedLauncherId.trim() || null;
+      const customLauncherPath =
+        wizardSelectedLauncherId === "custom"
+          ? wizardManualLauncherPath.trim()
+          : null;
 
-    if (selectedLauncherId === "custom" && !customLauncherPath) {
-      setError(
-        "Select a launcher executable/app path or choose a detected launcher.",
-      );
-      return;
-    }
+      if (selectedLauncherId === "custom" && !customLauncherPath) {
+        setError(
+          "Select a launcher executable/app path or choose a detected launcher.",
+        );
+        return;
+      }
 
-    const minecraftRoot = wizardMinecraftRootPath.trim();
-    if (!minecraftRoot) {
-      setError("Select a Minecraft launcher directory path.");
-      return;
-    }
+      const minecraftRoot = wizardMinecraftRootPath.trim();
+      if (!minecraftRoot) {
+        setError("Select a Minecraft launcher directory path.");
+        return;
+      }
 
-    const keepDefaultRoot =
-      wizardMinecraftRootStatus &&
-      !wizardMinecraftRootStatus.usingOverride &&
-      wizardMinecraftRootStatus.path === minecraftRoot;
+      const keepDefaultRoot =
+        wizardMinecraftRootStatus &&
+        !wizardMinecraftRootStatus.usingOverride &&
+        wizardMinecraftRootStatus.path === minecraftRoot;
 
-    const next: AppSettings = {
-      ...settings,
-      installMode: "global",
-      selectedLauncherId,
-      customLauncherPath,
-      minecraftRootOverride: keepDefaultRoot ? null : minecraftRoot,
-    };
+      const next: AppSettings = {
+        ...settings,
+        installMode: "global",
+        selectedLauncherId,
+        customLauncherPath,
+        minecraftRootOverride: keepDefaultRoot ? null : minecraftRoot,
+      };
 
-    await saveSettings(next);
-    setWizardStep("runtime");
-    try {
-      await refreshVersionReadiness();
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      setVersionReadiness(fallbackVersionReadiness(message));
-      setError(message);
-    }
+      await saveSettings(next);
+      setWizardStep("runtime");
+      try {
+        await refreshVersionReadiness();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setVersionReadiness(fallbackVersionReadiness(message));
+        setError(message);
+      }
+    });
   }, [
     fallbackVersionReadiness,
     refreshVersionReadiness,
+    runLockedAction,
     saveSettings,
     settings,
     wizardManualLauncherPath,
@@ -1497,133 +1628,147 @@ export function useAppCore() {
   ]);
 
   const installFabricRuntime = useCallback(async () => {
-    try {
-      setError(null);
-      const installed = await invoke<FabricRuntimeStatus>(
-        "runtime_ensure_fabric",
-        { serverId: SERVER_ID },
-      );
-      setWizardRuntimeStatus(installed);
-      await refreshVersionReadiness();
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      setVersionReadiness(fallbackVersionReadiness(message));
-      setError(message);
-    }
-  }, [fallbackVersionReadiness, refreshVersionReadiness]);
+    await runLockedAction("wizard:installRuntime", async () => {
+      try {
+        setError(null);
+        const installed = await invoke<FabricRuntimeStatus>(
+          "runtime_ensure_fabric",
+          { serverId: SERVER_ID },
+        );
+        setWizardRuntimeStatus(installed);
+        await refreshVersionReadiness();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setVersionReadiness(fallbackVersionReadiness(message));
+        setError(message);
+      }
+    });
+  }, [fallbackVersionReadiness, refreshVersionReadiness, runLockedAction]);
 
   const continueWizardSyncStep = useCallback(async () => {
-    if (!versionReadiness) {
-      setError("Readiness data not loaded.");
-      return;
-    }
-
-    if (!versionReadiness.allowlisted) {
-      setError(versionReadiness.guidance);
-      return;
-    }
-
-    if (!versionReadiness.foundInMinecraftRootDir) {
-      setError(
-        "Install/ensure Fabric runtime and managed launcher version before continuing.",
-      );
-      return;
-    }
-
-    setWizardStep("sync");
-    await refreshDashboardState();
-    setScreen("ready");
-  }, [refreshDashboardState, versionReadiness]);
-
-  const completeWizard = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
-
-    setWizardSyncing(true);
-    setError(null);
-
-    try {
-      await runSyncCycle(true, { suppressSyncScreen: true });
-
-      const next: AppSettings = {
-        ...settings,
-        wizardCompleted: true,
-        onboardingVersion: ONBOARDING_VERSION,
-      };
-
-      await saveSettings(next);
-      setWizardActive(false);
-      setHint(
-        "Setup complete. Auto-sync every 30 minutes is active while the app is open.",
-      );
-      setScreen("ready");
-
-      if (isSetupWindow) {
-        await invoke("app_return_to_main_window");
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setWizardSyncing(false);
-    }
-  }, [isSetupWindow, runSyncCycle, saveSettings, settings]);
-
-  const returnToMainWindow = useCallback(async () => {
-    try {
-      await invoke("app_return_to_main_window");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, []);
-
-  const openSetupWindow = useCallback(async () => {
-    try {
-      await invoke("app_open_setup_window");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, []);
-
-  const cancelSession = useCallback(async () => {
-    try {
-      await invoke("session_restore_now");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, []);
-
-  const openLauncherFromCompact = useCallback(async () => {
-    if (compactPlaying) {
-      return;
-    }
-
-    try {
-      setError(null);
-      setHint(null);
-      const result = await invoke<OpenLauncherResponse>("launcher_open", {
-        serverId: SERVER_ID,
-      });
-
-      if (result.session) {
-        setSessionStatus(result.session);
+    await runLockedAction("wizard:continueSync", async () => {
+      if (!versionReadiness) {
+        setError("Readiness data not loaded.");
+        return;
       }
 
-      if (!result.opened) {
-        setHint(
-          "No launcher executable was selected. Choose one in settings or set a custom path.",
+      if (!versionReadiness.allowlisted) {
+        setError(versionReadiness.guidance);
+        return;
+      }
+
+      if (!versionReadiness.foundInMinecraftRootDir) {
+        setError(
+          "Install/ensure Fabric runtime and managed launcher version before continuing.",
         );
         return;
       }
 
-      const message = result.bootstrap?.message
-        ? `Launcher opened. ${result.bootstrap.message}`
-        : "Launcher opened.";
-      setHint(message);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [compactPlaying]);
+      setWizardStep("sync");
+      await refreshDashboardState();
+      setScreen("ready");
+    });
+  }, [refreshDashboardState, runLockedAction, versionReadiness]);
+
+  const completeWizard = useCallback(async () => {
+    await runLockedAction("wizard:complete", async () => {
+      if (!settings) {
+        return;
+      }
+
+      setWizardSyncing(true);
+      setError(null);
+
+      try {
+        await runSyncCycle(true, { suppressSyncScreen: true });
+
+        const next: AppSettings = {
+          ...settings,
+          wizardCompleted: true,
+          onboardingVersion: ONBOARDING_VERSION,
+        };
+
+        await saveSettings(next);
+        setWizardActive(false);
+        setHint(
+          "Setup complete. Auto-sync every 30 minutes is active while the app is open.",
+        );
+        setScreen("ready");
+
+        if (isSetupWindow) {
+          await invoke("app_return_to_main_window");
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setWizardSyncing(false);
+      }
+    });
+  }, [isSetupWindow, runLockedAction, runSyncCycle, saveSettings, settings]);
+
+  const returnToMainWindow = useCallback(async () => {
+    await runLockedAction("window:returnMain", async () => {
+      try {
+        await invoke("app_return_to_main_window");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+  }, [runLockedAction]);
+
+  const openSetupWindow = useCallback(async () => {
+    await runLockedAction("window:openSetup", async () => {
+      try {
+        await invoke("app_open_setup_window");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+  }, [runLockedAction]);
+
+  const cancelSession = useCallback(async () => {
+    await runLockedAction("session:cancel", async () => {
+      try {
+        await invoke("session_restore_now");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+  }, [runLockedAction]);
+
+  const openLauncherFromCompact = useCallback(async () => {
+    await runLockedAction("launcher:open", async () => {
+      if (compactPlaying) {
+        return;
+      }
+
+      try {
+        setError(null);
+        setHint(null);
+        const result = await invoke<OpenLauncherResponse>("launcher_open", {
+          serverId: SERVER_ID,
+        });
+
+        if (result.session) {
+          setSessionStatus(result.session);
+        }
+
+        if (!result.opened) {
+          setHint(
+            "No launcher executable was selected. Choose one in settings or set a custom path.",
+          );
+          return;
+        }
+
+        const message = result.bootstrap?.message
+          ? `Launcher opened. ${result.bootstrap.message}`
+          : "Launcher opened.";
+        setHint(message);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    });
+  }, [compactPlaying, runLockedAction]);
 
   const updateLauncherSelection = useCallback(
     async (value: string) => {
@@ -1654,75 +1799,82 @@ export function useAppCore() {
   );
 
   const pickManualLauncherFromSettings = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
+    await runLockedAction("settings:pickLauncherPath", async () => {
+      if (!settings) {
+        return;
+      }
 
-    const picked = await invoke<string | null>("launcher_pick_manual_path");
-    if (!picked) {
-      return;
-    }
+      const picked = await invoke<string | null>("launcher_pick_manual_path");
+      if (!picked) {
+        return;
+      }
 
-    await saveSettings({
-      ...settings,
-      customLauncherPath: picked,
-      selectedLauncherId: "custom",
+      await saveSettings({
+        ...settings,
+        customLauncherPath: picked,
+        selectedLauncherId: "custom",
+      });
+      setHint("Custom launcher path selected.");
     });
-    setHint("Custom launcher path selected.");
-  }, [saveSettings, settings]);
+  }, [runLockedAction, saveSettings, settings]);
 
   const pickMinecraftRootFromSettings = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
+    await runLockedAction("settings:pickMinecraftPath", async () => {
+      if (!settings) {
+        return;
+      }
 
-    const picked = await invoke<string | null>(
-      "minecraft_root_pick_manual_path",
-    );
-    if (!picked) {
-      return;
-    }
+      const picked = await invoke<string | null>(
+        "minecraft_root_pick_manual_path",
+      );
+      if (!picked) {
+        return;
+      }
 
-    await saveSettings({ ...settings, minecraftRootOverride: picked });
-    setHint("Minecraft root directory selected.");
-  }, [saveSettings, settings]);
+      await saveSettings({ ...settings, minecraftRootOverride: picked });
+      setHint("Minecraft root directory selected.");
+    });
+  }, [runLockedAction, saveSettings, settings]);
 
   const saveProfileSource = useCallback(async () => {
-    if (!settings) {
-      return;
-    }
+    await runLockedAction("source:save", async () => {
+      if (!settings) {
+        return;
+      }
 
-    const apiBaseUrl = normalizeApiBaseUrl(profileSourceDraft.apiBaseUrl);
-    if (!apiBaseUrl) {
-      setError(
-        "API base URL must be a valid https URL (or localhost http for development).",
-      );
-      return;
-    }
-    const profileLockInput = profileSourceDraft.profileLockUrl.trim();
-    const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
-    if (profileLockInput && !profileLockUrl) {
-      setError(
-        "Profile lock URL must be a valid https URL (or localhost http for development).",
-      );
-      return;
-    }
+      const apiBaseUrl = normalizeApiBaseUrl(profileSourceDraft.apiBaseUrl);
+      if (!apiBaseUrl) {
+        setError(
+          "API base URL must be a valid https URL (or localhost http for development).",
+        );
+        return;
+      }
+      const profileLockInput = profileSourceDraft.profileLockUrl.trim();
+      const profileLockUrl = normalizeProfileLockUrl(profileLockInput);
+      if (profileLockInput && !profileLockUrl) {
+        setError(
+          "Profile lock URL must be a valid https URL (or localhost http for development).",
+        );
+        return;
+      }
 
-    const next: AppSettings = {
-      ...settings,
-      apiBaseUrl,
-      profileLockUrl: profileLockUrl || null,
-      pairingCode: profileSourceDraft.pairingCode.trim() || null,
-    };
+      const next: AppSettings = {
+        ...settings,
+        apiBaseUrl,
+        profileLockUrl: profileLockUrl || null,
+        pairingCode: profileSourceDraft.pairingCode.trim() || null,
+      };
 
-    await saveSettings(next);
-    await runSyncCycle(false);
-    await refreshLauncherServerControls();
-    setHint("Profile source settings saved.");
+      await saveSettings(next);
+      await runSyncCycle(false);
+      await refreshLauncherServerControls();
+      setHint("Profile source settings saved.");
+    });
   }, [
     profileSourceDraft.apiBaseUrl,
     profileSourceDraft.profileLockUrl,
     profileSourceDraft.pairingCode,
+    runLockedAction,
     runSyncCycle,
     refreshLauncherServerControls,
     saveSettings,
@@ -1859,6 +2011,7 @@ export function useAppCore() {
     refreshLauncherServerControls,
     runLauncherServerAction,
     retryLauncherServerStreamNow,
+    isActionBusy,
     currentWindow,
     isSetupWindow,
     isCompactWindow,
