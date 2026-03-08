@@ -45,12 +45,14 @@ Use only one of:
 - `desktop`
 - `shared`
 - `core`
+- `ui`
 - `release`
 
 Scope mapping notes:
 
 - `platform` and `desktop` map to launcher release target
 - `core` maps to shared release target
+- `ui` maps to `packages/ui` — use for changes to the shared UI component library (`@minerelay/ui`)
 - `release` is reserved for release automation commits
 
 ## 4) Breaking Changes

@@ -49,6 +49,7 @@ Only these are allowed:
 - `desktop`
 - `shared`
 - `core`
+- `ui`
 - `release`
 
 Do not use any other scope.
