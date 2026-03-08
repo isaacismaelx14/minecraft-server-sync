@@ -10,6 +10,8 @@ import { cn } from "../cn";
 const variantClasses = {
   primary:
     "bg-[var(--color-brand-primary)] text-white border-white/15 shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.12)] hover:not-disabled:brightness-110 hover:not-disabled:shadow-[0_2px_12px_rgba(16,185,129,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 active:not-disabled:shadow-[0_0px_4px_rgba(16,185,129,0.2),inset_0_1px_3px_rgba(0,0,0,0.2)]",
+  glass:
+    "relative overflow-hidden border-white/[0.12] bg-[linear-gradient(135deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))] text-[var(--color-text-primary)] backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.12)] after:pointer-events-none after:absolute after:top-0 after:bottom-0 after:left-[-120%] after:w-1/2 after:skew-x-[-20deg] after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.32),transparent)] after:content-[''] after:transition-[left] after:duration-500 hover:not-disabled:-translate-y-px hover:not-disabled:border-white/[0.18] hover:not-disabled:bg-[linear-gradient(135deg,rgba(255,255,255,0.18),rgba(255,255,255,0.07))] hover:not-disabled:text-white hover:not-disabled:shadow-[0_12px_28px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.16)] hover:not-disabled:after:left-[140%] active:not-disabled:translate-y-0 active:not-disabled:bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))]",
   ghost:
     "bg-white/5 text-[var(--color-text-secondary)] border-white/[0.06] backdrop-blur-sm hover:not-disabled:bg-white/10 hover:not-disabled:border-white/[0.12] hover:not-disabled:text-white",
   outline:
