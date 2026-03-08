@@ -2,6 +2,23 @@
 
 All notable changes to this package will be documented in this file.
 
+## [@minerelay/admin/v0.1.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.3) (2026-03-08)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.2...%40minerelay%2Fadmin%2Fv0.1.3)
+
+## Bug Fixes
+
+- **admin:** redirect unauthenticated users in server layout ([bda2a00](https://github.com/isaacismaelx14/minerelay/commit/bda2a0079a92db6fe1ce032f25e9081a18b72215))
+- **admin:** keep exaroton stream active across views ([bb4c4f5](https://github.com/isaacismaelx14/minerelay/commit/bb4c4f574298375f30c2d29748be57696bf725db))
+
+## Build
+
+- **admin:** target node 24 for builds ([b8fd2f5](https://github.com/isaacismaelx14/minerelay/commit/b8fd2f5817ee526047b885c988afb98567afd7c0))
+
+## Chores
+
+- **admin:** pin dependency versions ([f1f3d0b](https://github.com/isaacismaelx14/minerelay/commit/f1f3d0bf7aca6339851211551589143b4af62e7a))
+
 ## [@minerelay/admin/v0.1.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.2) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.1...%40minerelay%2Fadmin%2Fv0.1.2)
