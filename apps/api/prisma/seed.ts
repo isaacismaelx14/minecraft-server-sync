@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { PrismaClient } from '@prisma/client';
 import { ProfileLockSchema } from '@minerelay/shared';
+import { createPrismaClient } from '../src/db/prisma-client-options';
 import {
   runBootstrapSeed,
   shouldOverwriteExistingSeedData,
   type SeedPrisma,
 } from '../src/db/bootstrap-seed';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   const root = resolve(__dirname, '../../../');

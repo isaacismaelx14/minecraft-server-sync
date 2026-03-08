@@ -1,9 +1,9 @@
 import { randomBytes, scrypt as scryptCb } from 'node:crypto';
 import { promisify } from 'node:util';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../src/db/prisma-client-options';
 
 const scrypt = promisify(scryptCb);
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const ADMIN_CREDENTIAL_ID = 'global';
 
 async function hashPassword(password: string): Promise<string> {
