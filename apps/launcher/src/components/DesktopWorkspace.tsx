@@ -1,13 +1,78 @@
+import { lazy, Suspense } from "react";
 import type { useAppCore } from "../hooks/useAppCore";
-import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
-import { ServerControlBar } from "./ServerControlBar";
-import "../App.css"; // Migrating to Tailwind gradually, so using some existing styles here.
+import { formatTime } from "../utils";
+import { Button } from "@minerelay/ui";
+import type { DesktopWorkspacePageStyles } from "./desktop-workspace-pages/types";
+
+const OverviewPage = lazy(() =>
+  import("./desktop-workspace-pages/OverviewPage").then((m) => ({
+    default: m.OverviewPage,
+  })),
+);
+const SourcePathsPage = lazy(() =>
+  import("./desktop-workspace-pages/SourcePathsPage").then((m) => ({
+    default: m.SourcePathsPage,
+  })),
+);
+const CatalogPage = lazy(() =>
+  import("./desktop-workspace-pages/CatalogPage").then((m) => ({
+    default: m.CatalogPage,
+  })),
+);
+const ActivityPage = lazy(() =>
+  import("./desktop-workspace-pages/ActivityPage").then((m) => ({
+    default: m.ActivityPage,
+  })),
+);
 
 export function DesktopWorkspace({
   core,
 }: {
   core: ReturnType<typeof useAppCore>;
 }) {
+  const blockClass =
+    "grid content-start gap-6 animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)_0.1s_both]";
+  const paneHeadClass = "grid gap-1.5";
+  const subtitleClass =
+    "text-[0.9rem] leading-[1.5] text-[var(--color-text-secondary)] max-[920px]:text-[0.8rem]";
+  const paneGridClass =
+    "grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6 max-[1280px]:grid-cols-[repeat(auto-fit,minmax(260px,1fr))] max-[1080px]:grid-cols-[repeat(auto-fit,minmax(240px,1fr))] max-[920px]:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] max-[920px]:gap-3";
+  const panelCardClass =
+    "relative grid content-start gap-[18px] overflow-hidden rounded-[20px] border border-[var(--color-line)] bg-[var(--color-bg-card)] p-6 transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] before:absolute before:left-0 before:right-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.05),transparent)] hover:-translate-y-0.5 hover:border-[var(--color-line-strong)] hover:bg-[var(--color-bg-card-hover)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)] max-[920px]:gap-3 max-[920px]:p-3";
+  const h3Class =
+    "text-[1.1rem] font-semibold tracking-[0.01em] text-white max-[920px]:text-[1rem]";
+  const dataListClass = "grid gap-[18px]";
+  const dataItemClass = "grid gap-1";
+  const dataLabelClass =
+    "text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-text-muted)]";
+  const dataValueClass =
+    "break-all rounded-[8px] border border-[var(--color-line)] bg-[rgba(0,0,0,0.2)] px-3 py-2 font-mono text-[0.9rem] leading-[1.4] text-[var(--color-text-primary)] transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] hover:border-[var(--color-line-strong)] hover:bg-[rgba(255,255,255,0.03)]";
+  const summaryGridClass =
+    "grid list-none grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-[18px] p-0 max-[920px]:grid-cols-2 max-[920px]:gap-3";
+  const summaryItemClass =
+    "grid gap-1 rounded-[12px] border border-[var(--color-line)] bg-[rgba(0,0,0,0.2)] px-3 py-4 text-center transition-transform duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] hover:scale-[1.03] hover:border-[var(--color-brand-indigo-border)] hover:bg-[var(--color-brand-indigo-bg)] max-[920px]:px-1.5 max-[920px]:py-2.5";
+  const summaryValueClass = "text-[1.4rem] font-bold text-white";
+  const summaryLabelClass =
+    "text-[0.8rem] font-medium uppercase tracking-[0.05em] text-[var(--color-text-muted)]";
+  const overviewListClass = "flex flex-wrap content-start gap-2";
+  const overviewChipClass =
+    "rounded-[8px] border border-[var(--color-line)] bg-[rgba(255,255,255,0.03)] px-2.5 py-1.5 font-mono text-[0.8rem] text-[var(--color-text-secondary)] transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] hover:border-[var(--color-line-strong)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white max-[920px]:px-1.5 max-[920px]:py-[3px] max-[920px]:text-[0.7rem]";
+  const actionsRowClass = "flex flex-wrap gap-[18px]";
+  const baseButtonClass =
+    "relative inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-[12px] px-[18px] py-2.5 text-[0.95rem] font-semibold transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] after:pointer-events-none after:absolute after:left-[-100%] after:top-0 after:h-full after:w-1/2 after:skew-x-[-20deg] after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] after:transition-[left] after:duration-500 hover:after:left-[150%] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:grayscale";
+  const primaryButtonClass = `${baseButtonClass} border-0 bg-[linear-gradient(135deg,var(--color-brand-indigo),var(--color-brand-accent))] bg-[length:200%_200%] text-white shadow-[0_4px_15px_var(--color-brand-indigo-shadow)] hover:-translate-y-px hover:animate-[gradientShift_3s_ease_infinite] hover:shadow-[0_6px_20px_var(--color-brand-indigo-shadow)] active:translate-y-px`;
+  const ghostButtonClass = `${baseButtonClass} border border-[var(--color-line)] bg-[rgba(255,255,255,0.05)] text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white`;
+  const inputBaseClass =
+    "w-full rounded-[12px] border border-[var(--color-line-strong)] bg-[rgba(0,0,0,0.2)] px-[14px] py-3 text-[0.95rem] text-[var(--color-text-primary)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] transition-all duration-200 placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand-primary)] focus:bg-[rgba(0,0,0,0.3)] focus:shadow-[0_0_0_3px_var(--color-brand-primary-glow),inset_0_2px_4px_rgba(0,0,0,0.1)] focus:outline-none";
+  const selectClass = `${inputBaseClass} cursor-pointer appearance-none pr-10`;
+  const detailsClass = "mt-3";
+  const meterClass =
+    "relative h-2 overflow-hidden rounded-[999px] bg-[rgba(0,0,0,0.4)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]";
+  const metricsClass =
+    "flex justify-between gap-3 font-mono text-[0.85rem] text-[var(--color-text-muted)]";
+  const navButtonBaseClass =
+    "group relative flex items-center gap-3 overflow-hidden rounded-[12px] border border-transparent bg-transparent px-4 py-3 text-left text-[0.95rem] font-medium text-[var(--color-text-secondary)] transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:scale-y-0 before:rounded-r-[4px] before:bg-[var(--color-brand-indigo)] before:transition-transform before:duration-150 before:[transition-timing-function:cubic-bezier(0.4,0,0.2,1)] hover:translate-x-1 hover:bg-[var(--color-bg-card-hover)] hover:text-white hover:before:scale-y-[0.4] max-[1080px]:h-12 max-[1080px]:w-12 max-[1080px]:justify-center max-[1080px]:p-3";
+
   const {
     APP_NAME,
     SERVER_ID,
@@ -22,813 +87,86 @@ export function DesktopWorkspace({
     launcherAppVersion,
     canRenderLogo,
     markLogoAsBroken,
-    serverInitial,
     returnToMainWindow,
     sourceLabel,
-    screen,
-    isChecking,
-    sessionActive,
-    hasFancyMenuMod,
-    fancyMenuMode,
-    hasFancyMenuCustomBundle,
-    settings,
-    instance,
-    saveSettings,
-    refreshVersionReadiness,
-    profileSourceDraft,
-    setProfileSourceDraft,
-    saveProfileSource,
-    updateLauncherSelection,
-    launchers,
-    updateCustomPath,
-    pickManualLauncherFromSettings,
-    pickMinecraftRootFromSettings,
-    runSyncCycle,
-    launcherUpdateNotice,
-    isCheckingLauncherUpdate,
-    isInstallingLauncherUpdate,
-    checkLauncherUpdate,
-    installLauncherUpdate,
-    isPlaying,
-    sync,
-    hasSyncTotal,
-    progressPercent,
-    syncHasUnknownTotal,
-    syncBytesLabel,
-    hint,
-    error,
-    isApiSourceMode,
-    launcherServerControls,
-    isServerActionBusy,
-    runLauncherServerAction,
     isActionBusy,
   } = core;
-  const serverControlReady = Boolean(
-    launcherServerControls?.enabled &&
-    !launcherServerControls.reason &&
-    launcherServerControls.permissions.canViewStatus,
-  );
 
-  const renderPrimary = () => {
-    if (screen === "booting") {
-      return (
-        <div className="status-block">
-          <h2>Checking Server State</h2>
-          <p>
-            Loading remote profile lock, comparing local manifest, and
-            evaluating updates.
-          </p>
-        </div>
-      );
-    }
-
-    if (screen === "syncing") {
-      return (
-        <div className="status-block">
-          <h2>Applying Sync</h2>
-          <p>{sync.currentFile ?? sync.phase}</p>
-          <div
-            className="meter"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={hasSyncTotal ? progressPercent : undefined}
-            aria-valuetext={
-              syncHasUnknownTotal
-                ? "Download progress total unknown"
-                : undefined
-            }
-          >
-            <div
-              className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
-              style={{
-                width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
-              }}
-            />
-          </div>
-          <div className="metrics-row">
-            <span>{syncBytesLabel}</span>
-            <span>{bytesToHuman(sync.speedBps)}/s</span>
-            <span>ETA {formatEta(sync.etaSec)}</span>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="status-block">
-        <div className="status-title-row">
-          <h2>
-            {sessionStatus.phase === "playing"
-              ? "Playing"
-              : catalog?.hasUpdates
-                ? "Updates Detected"
-                : "Instance Up to Date"}
-          </h2>
-          {isApiSourceMode && launcherServerControls ? (
-            <div className="status-title-control">
-              <ServerControlBar
-                launcherServerControls={launcherServerControls}
-                isServerActionBusy={isServerActionBusy}
-                runLauncherServerAction={runLauncherServerAction}
-              />
-            </div>
-          ) : null}
-        </div>
-        <p>
-          {sessionActive
-            ? `Live session active in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}.`
-            : catalog?.hasUpdates
-              ? "New server changes were detected. Auto-sync runs every 30 minutes while this app is open."
-              : "All mods/resourcepacks/shaders/configs match server profile."}
-        </p>
-        {catalog?.fancyMenuEnabled && !hasFancyMenuMod ? (
-          <p className="wizard-meta" style={{ color: "#b84e4e" }}>
-            Profile has no FancyMenu mod. Play-only menu customization will not
-            be active.
-          </p>
-        ) : null}
-        {catalog?.fancyMenuEnabled &&
-        hasFancyMenuMod &&
-        fancyMenuMode === "custom" &&
-        !hasFancyMenuCustomBundle ? (
-          <p className="wizard-meta" style={{ color: "#b84e4e" }}>
-            FancyMenu custom mode is enabled, but the custom bundle is missing.
-          </p>
-        ) : null}
-        {isChecking ? (
-          <p className="wizard-meta">Checking server changes...</p>
-        ) : null}
-
-        <ul className="summary-grid">
-          <li>
-            <strong>{catalog?.summary.add ?? 0}</strong>
-            <span>Add</span>
-          </li>
-          <li>
-            <strong>{catalog?.summary.remove ?? 0}</strong>
-            <span>Remove</span>
-          </li>
-          <li>
-            <strong>{catalog?.summary.update ?? 0}</strong>
-            <span>Update</span>
-          </li>
-          <li>
-            <strong>{catalog?.summary.keep ?? 0}</strong>
-            <span>Keep</span>
-          </li>
-        </ul>
-
-        <div className="pane-grid">
-          <section className="panel-card">
-            <h3>Server Profile</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Endpoint</span>
-                <div className="data-value">
-                  {catalog?.serverAddress ?? "--"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Source</span>
-                <div className="data-value">{sourceLabel}</div>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Environment</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Active Launcher</span>
-                <div className="data-value">
-                  {settings?.selectedLauncherId ?? "--"}
-                </div>
-              </div>
-
-              <details className="advanced-options">
-                <summary className="advanced-summary">Technical Paths</summary>
-                <div
-                  className="advanced-content"
-                  style={{ display: "grid", gap: "var(--space-2)" }}
-                >
-                  <div className="data-item">
-                    <span className="data-label">Live Minecraft</span>
-                    <div className="data-value">
-                      {versionReadiness?.liveMinecraftRoot ?? "--"}
-                    </div>
-                  </div>
-                  <div className="data-item">
-                    <span className="data-label">Managed Sync</span>
-                    <div className="data-value">
-                      {instance?.minecraftDir ?? "--"}
-                    </div>
-                  </div>
-                  {settings?.customLauncherPath && (
-                    <div className="data-item">
-                      <span className="data-label">Custom Bin Path</span>
-                      <div className="data-value">
-                        {settings.customLauncherPath}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </details>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Mods ({catalog?.mods.length ?? 0})</h3>
-            <div className="overview-list">
-              {(catalog?.mods ?? []).map((item) => (
-                <span key={item} className="overview-chip">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Resourcepacks ({catalog?.resourcepacks.length ?? 0})</h3>
-            <div className="overview-list">
-              {(catalog?.resourcepacks ?? []).map((item) => (
-                <span key={item} className="overview-chip">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Shaders ({catalog?.shaderpacks.length ?? 0})</h3>
-            <div className="overview-list">
-              {(catalog?.shaderpacks ?? []).map((item) => (
-                <span key={item} className="overview-chip">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Configs ({catalog?.configs.length ?? 0})</h3>
-            <div className="overview-list">
-              {(catalog?.configs ?? []).map((item) => (
-                <span key={item} className="overview-chip">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </section>
-        </div>
-      </div>
-    );
-  };
-
-  const renderSourcePaths = () => {
-    return (
-      <div className="workspace-pane">
-        <div className="pane-head">
-          <h2>Source & Paths</h2>
-          <p className="pane-subtitle">
-            Configure profile source, launcher executable, and live Minecraft
-            root.
-          </p>
-        </div>
-
-        <div className="pane-grid">
-          <section className="panel-card">
-            <h3>Profile Source</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">API Endpoint</span>
-                <input
-                  className="input"
-                  type="text"
-                  value={profileSourceDraft.apiBaseUrl}
-                  placeholder="https://api.example.com"
-                  onChange={(event) =>
-                    setProfileSourceDraft((current) => ({
-                      ...current,
-                      apiBaseUrl: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <details
-                className="advanced-options"
-                open={!!profileSourceDraft.profileLockUrl || undefined}
-              >
-                <summary className="advanced-summary">
-                  Advanced: Direct Lock URL
-                </summary>
-                <div
-                  className="advanced-content"
-                  style={{ display: "grid", gap: "var(--space-2)" }}
-                >
-                  <p
-                    className="pane-subtitle"
-                    style={{ margin: 0, fontSize: "0.75rem" }}
-                  >
-                    Optional. Override the API and fetch the modpack directly
-                    from a URL. Useful for static hosting or testing unreleased
-                    versions.
-                  </p>
-                  <input
-                    className="input"
-                    type="text"
-                    value={profileSourceDraft.profileLockUrl}
-                    placeholder="https://example.com/lock.json"
-                    onChange={(event) =>
-                      setProfileSourceDraft((current) => ({
-                        ...current,
-                        profileLockUrl: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </details>
-
-              <button
-                className="btn primary"
-                onClick={() => void saveProfileSource()}
-                disabled={isActionBusy("source:save")}
-              >
-                {isActionBusy("source:save") ? "Saving..." : "Save Source"}
-              </button>
-            </div>
-          </section>
-
-          {isApiSourceMode ? (
-            <section className="panel-card">
-              <h3>Server Control Pairing</h3>
-              {serverControlReady ? (
-                <div className="data-list">
-                  <div className="data-item">
-                    <span className="data-label">Pairing Status</span>
-                    <div className="data-value">Ready</div>
-                  </div>
-                  <p className="pane-subtitle">
-                    This installation is already paired for server control.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <p className="pane-subtitle">
-                    Pairing is pending. Ask the admin for a one-time pairing
-                    code and save it here.
-                  </p>
-                  <div className="data-list">
-                    <div className="data-item">
-                      <span className="data-label">Pairing Code</span>
-                      <input
-                        className="input"
-                        type="text"
-                        value={profileSourceDraft.pairingCode}
-                        placeholder="ABCD2345"
-                        onChange={(event) =>
-                          setProfileSourceDraft((current) => ({
-                            ...current,
-                            pairingCode: event.target.value.toUpperCase(),
-                          }))
-                        }
-                      />
-                    </div>
-                    <button
-                      className="btn ghost"
-                      onClick={() => void saveProfileSource()}
-                      disabled={isActionBusy("source:save")}
-                    >
-                      {isActionBusy("source:save")
-                        ? "Saving..."
-                        : "Save Pairing Code"}
-                    </button>
-                  </div>
-                </>
-              )}
-            </section>
-          ) : null}
-
-          <section className="panel-card">
-            <h3>Launcher</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Application</span>
-                <select
-                  className="select"
-                  value={settings?.selectedLauncherId ?? ""}
-                  onChange={(event) =>
-                    void updateLauncherSelection(event.target.value)
-                  }
-                >
-                  <option value="">No launcher selected</option>
-                  {launchers
-                    .filter((candidate) => candidate.id !== "custom")
-                    .map((candidate) => (
-                      <option
-                        key={`${candidate.id}:${candidate.path}`}
-                        value={candidate.id}
-                      >
-                        {candidate.name}
-                      </option>
-                    ))}
-                  <option value="custom">Custom path</option>
-                </select>
-              </div>
-
-              {settings?.selectedLauncherId === "custom" ? (
-                <div className="data-item">
-                  <span className="data-label">Custom Bin Path</span>
-                  <div style={{ display: "grid", gap: "8px" }}>
-                    <input
-                      className="input"
-                      type="text"
-                      value={settings.customLauncherPath ?? ""}
-                      placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
-                      onChange={(event) =>
-                        void updateCustomPath(event.target.value)
-                      }
-                    />
-                    <button
-                      className="btn ghost"
-                      onClick={() => void pickManualLauncherFromSettings()}
-                      disabled={isActionBusy("settings:pickLauncherPath")}
-                    >
-                      {isActionBusy("settings:pickLauncherPath")
-                        ? "Picking..."
-                        : "Pick Launcher Path"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="panel-info-box">
-                  <p
-                    className="small-dark"
-                    style={{ margin: 0, fontSize: "0.8rem" }}
-                  >
-                    Choosing a managed launcher (like Prism) allows the app to
-                    automatically discover your instance directories and handle
-                    icon sync.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Paths</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Sync Base Root</span>
-                <div className="data-value">
-                  {instance?.instanceRoot ?? "--"}
-                </div>
-              </div>
-
-              <div className="data-item">
-                <span className="data-label">Managed Game Dir</span>
-                <div className="data-value">
-                  {instance?.minecraftDir ?? "--"}
-                </div>
-              </div>
-
-              <div className="data-item">
-                <span className="data-label">Live Game Dir</span>
-                <div className="data-value">
-                  {versionReadiness?.liveMinecraftRoot ?? "--"}
-                </div>
-              </div>
-
-              <details className="advanced-options">
-                <summary className="advanced-summary">
-                  Advanced: Override Live Directory
-                </summary>
-                <div
-                  className="advanced-content"
-                  style={{ display: "grid", gap: "var(--space-2)" }}
-                >
-                  <p
-                    className="pane-subtitle"
-                    style={{
-                      fontSize: "0.75rem",
-                      marginBottom: "8px",
-                      marginTop: 0,
-                    }}
-                  >
-                    By default, the sync tool targets the standard data folder
-                    of your chosen launcher. Specify an absolute path below to
-                    force a different live directory.
-                  </p>
-                  <input
-                    className="input"
-                    type="text"
-                    value={settings?.minecraftRootOverride ?? ""}
-                    placeholder="Leave empty for default launcher dir"
-                    onChange={(event) =>
-                      settings
-                        ? void saveSettings({
-                            ...settings,
-                            minecraftRootOverride:
-                              event.target.value.trim() || null,
-                          })
-                        : undefined
-                    }
-                  />
-                  <div className="actions-row">
-                    <button
-                      className="btn ghost"
-                      onClick={() => void pickMinecraftRootFromSettings()}
-                      disabled={isActionBusy("settings:pickMinecraftPath")}
-                    >
-                      {isActionBusy("settings:pickMinecraftPath")
-                        ? "Picking..."
-                        : "Pick Dir"}
-                    </button>
-                    <button
-                      className="btn ghost"
-                      onClick={() => void refreshVersionReadiness()}
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                  <p
-                    className="small-dark"
-                    style={{ fontSize: "0.7rem", marginTop: "4px" }}
-                  >
-                    Ready:{" "}
-                    {versionReadiness?.foundInMinecraftRootDir ? "YES" : "NO"} |
-                    Allowlisted: {versionReadiness?.allowlisted ? "YES" : "NO"}
-                  </p>
-                </div>
-              </details>
-            </div>
-          </section>
-        </div>
-      </div>
-    );
-  };
-
-  const renderCatalogPane = () => {
-    return (
-      <div className="workspace-pane">
-        <div className="pane-head">
-          <h2>Catalog</h2>
-          <p className="pane-subtitle">
-            Managed content inventory and lockfile version alignment.
-          </p>
-        </div>
-        <div className="pane-grid">
-          <section className="panel-card">
-            <h3>Content Totals</h3>
-            <ul className="summary-grid">
-              <li>
-                <strong>{catalog?.mods.length ?? 0}</strong>
-                <span>Mods</span>
-              </li>
-              <li>
-                <strong>{catalog?.resourcepacks.length ?? 0}</strong>
-                <span>Resourcepacks</span>
-              </li>
-              <li>
-                <strong>{catalog?.shaderpacks.length ?? 0}</strong>
-                <span>Shaders</span>
-              </li>
-              <li>
-                <strong>{catalog?.configs.length ?? 0}</strong>
-                <span>Configs</span>
-              </li>
-            </ul>
-          </section>
-
-          <section className="panel-card">
-            <h3>Lock Versions</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Installed Version</span>
-                <div className="data-value">
-                  {instance?.installedVersion ?? "none"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Remote Lock</span>
-                <div className="data-value">
-                  {catalog?.profileVersion ?? "--"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Local Snapshot</span>
-                <div className="data-value">
-                  {catalog?.localVersion ?? "--"}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Runtime Targets</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Loader</span>
-                <div className="data-value">
-                  {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Minecraft</span>
-                <div className="data-value">
-                  {catalog?.minecraftVersion ?? "--"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Allowlisted Versions</span>
-                <div className="data-value">
-                  {versionReadiness?.allowedMinecraftVersions.join(", ") ||
-                    "--"}
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-    );
-  };
-
-  const renderActivityPane = () => {
-    return (
-      <div className="workspace-pane">
-        <div className="pane-head">
-          <h2>Activity</h2>
-          <p className="pane-subtitle">
-            Sync schedule, telemetry, and operator messages.
-          </p>
-        </div>
-
-        <div className="pane-grid">
-          <section className="panel-card">
-            <h3>Schedule</h3>
-            <div className="data-list">
-              <div className="panel-info-box">
-                <p
-                  className="small-dark"
-                  style={{ margin: 0, fontSize: "0.8rem" }}
-                >
-                  Auto-apply every 30 minutes while the app is open.
-                </p>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Last Check</span>
-                <div className="data-value">{formatTime(lastCheckAt)}</div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Next Check</span>
-                <div className="data-value">{formatTime(nextCheckAt)}</div>
-              </div>
-              <button
-                className="btn ghost"
-                onClick={() => void runSyncCycle(true)}
-                disabled={sessionActive || isChecking}
-              >
-                {isChecking ? "Running..." : "Run Check + Auto Apply"}
-              </button>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Launcher Updates</h3>
-            <div className="data-list">
-              <div className="data-item">
-                <span className="data-label">Current Version</span>
-                <div className="data-value">
-                  {launcherUpdate?.currentVersion ?? "--"}
-                </div>
-              </div>
-              <div className="data-item">
-                <span className="data-label">Status</span>
-                <div className="data-value">
-                  {launcherUpdate?.available
-                    ? "Update available"
-                    : launcherUpdate
-                      ? "Up to date"
-                      : "Not checked"}
-                </div>
-              </div>
-              {launcherUpdate?.available && (
-                <div className="data-item">
-                  <span className="data-label">Latest Release</span>
-                  <div className="data-value">
-                    {launcherUpdate.latestVersion}
-                  </div>
-                </div>
-              )}
-              <p
-                className="small-dark"
-                style={{ fontSize: "0.75rem", marginTop: "4px" }}
-              >
-                {launcherUpdateNotice ??
-                  "Updater checks run at startup and every 30 minutes."}
-              </p>
-              <div className="actions-row">
-                <button
-                  className="btn ghost"
-                  onClick={() => void checkLauncherUpdate(false)}
-                  disabled={
-                    isCheckingLauncherUpdate || isInstallingLauncherUpdate
-                  }
-                >
-                  {isCheckingLauncherUpdate ? "Checking..." : "Check Updates"}
-                </button>
-                {launcherUpdate?.available ? (
-                  <button
-                    className="btn ghost"
-                    onClick={() =>
-                      void installLauncherUpdate(
-                        launcherUpdate.latestVersion ?? undefined,
-                      )
-                    }
-                    disabled={isInstallingLauncherUpdate || isPlaying}
-                  >
-                    {isInstallingLauncherUpdate
-                      ? "Installing..."
-                      : "Download & Install"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Current Session</h3>
-            <p className="small-dark">
-              Phase: {sessionStatus.phase.replaceAll("_", " ")}
-            </p>
-            <p className="small-dark">
-              Live dir: {sessionStatus.liveMinecraftDir ?? "--"}
-            </p>
-          </section>
-
-          <section className="panel-card">
-            <h3>Current Transfer</h3>
-            <p className="small-dark">{sync.currentFile ?? sync.phase}</p>
-            <div
-              className="meter"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={hasSyncTotal ? progressPercent : undefined}
-              aria-valuetext={
-                syncHasUnknownTotal
-                  ? "Download progress total unknown"
-                  : undefined
-              }
-            >
-              <div
-                className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
-                style={{
-                  width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
-                }}
-              />
-            </div>
-            <div className="metrics-row">
-              <span>{syncBytesLabel}</span>
-              <span>{bytesToHuman(sync.speedBps)}/s</span>
-              <span>ETA {formatEta(sync.etaSec)}</span>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <h3>Messages</h3>
-            <p className="small-dark">{hint ?? "No recent hints."}</p>
-            <p className="small-dark">{error ?? "No active errors."}</p>
-          </section>
-        </div>
-      </div>
-    );
+  const pageStyles: DesktopWorkspacePageStyles = {
+    blockClass,
+    paneHeadClass,
+    subtitleClass,
+    paneGridClass,
+    panelCardClass,
+    h3Class,
+    dataListClass,
+    dataItemClass,
+    dataLabelClass,
+    dataValueClass,
+    summaryGridClass,
+    summaryItemClass,
+    summaryValueClass,
+    summaryLabelClass,
+    overviewListClass,
+    overviewChipClass,
+    actionsRowClass,
+    primaryButtonClass,
+    ghostButtonClass,
+    inputBaseClass,
+    selectClass,
+    detailsClass,
+    meterClass,
+    metricsClass,
   };
 
   const renderWorkspace = () => {
-    if (activeView === "sourcePaths") return renderSourcePaths();
-    if (activeView === "catalog") return renderCatalogPane();
-    if (activeView === "activity") return renderActivityPane();
-    return renderPrimary();
+    if (activeView === "sourcePaths") {
+      return <SourcePathsPage core={core} styles={pageStyles} />;
+    }
+
+    if (activeView === "catalog") {
+      return <CatalogPage core={core} styles={pageStyles} />;
+    }
+
+    if (activeView === "activity") {
+      return <ActivityPage core={core} styles={pageStyles} />;
+    }
+
+    return <OverviewPage core={core} styles={pageStyles} />;
   };
 
   return (
-    <main className="desktop-shell">
-      <aside className="desktop-nav">
-        <div className="nav-brand">
-          <p className="eyebrow">Desktop Sync Console</p>
-          <h1>{APP_NAME}</h1>
-          <p className="small-dark">Source: {sourceLabel}</p>
+    <main className="grid h-screen grid-cols-[280px_minmax(0,1fr)] gap-6 overflow-hidden p-6 animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] max-[1280px]:grid-cols-[240px_minmax(0,1fr)] max-[1080px]:grid-cols-[80px_minmax(0,1fr)] max-[1080px]:gap-[18px] max-[1080px]:p-[18px]">
+      <aside className="relative grid grid-rows-[auto_1fr_auto] gap-6 overflow-hidden rounded-xl border border-line bg-bg-surface p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] before:absolute before:left-0 before:right-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)] max-[1080px]:items-center max-[1080px]:px-3 max-[1080px]:py-[18px]">
+        <div className="grid gap-1.5 border-b border-b-line pb-4.5 max-[1080px]:flex max-[1080px]:h-12 max-[1080px]:items-center max-[1080px]:justify-center max-[1080px]:border-none max-[1080px]:p-0">
+          <p className="font-mono text-xs font-medium uppercase tracking-widest text-brand-accent max-[1080px]:hidden">
+            Desktop Sync Console
+          </p>
+          <h1 className="bg-[linear-gradient(135deg,#fff,#a5b4fc)] bg-clip-text text-[1.4rem] font-bold tracking-[-0.02em] text-transparent max-[1080px]:hidden">
+            {APP_NAME}
+          </h1>
+          <p className={`${subtitleClass} max-[1080px]:hidden`}>
+            Source: {sourceLabel}
+          </p>
+          <span className="hidden bg-[linear-gradient(135deg,var(--color-brand-indigo),var(--color-brand-accent))] bg-clip-text text-[1.6rem] font-extrabold text-transparent max-[1080px]:inline">
+            M
+          </span>
         </div>
 
-        <nav className="nav-groups" aria-label="Workspace sections">
+        <nav
+          className="grid content-start gap-3"
+          aria-label="Workspace sections"
+        >
           <button
             className={
-              activeView === "overview" ? "nav-item active" : "nav-item"
+              activeView === "overview"
+                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                : navButtonBaseClass
             }
             onClick={() => setActiveView("overview")}
           >
             <svg
-              className="nav-icon"
+              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -841,16 +179,18 @@ export function DesktopWorkspace({
               <rect x="14" y="14" width="7" height="7"></rect>
               <rect x="3" y="14" width="7" height="7"></rect>
             </svg>
-            <span>Overview</span>
+            <span className="max-[1080px]:hidden">Overview</span>
           </button>
           <button
             className={
-              activeView === "sourcePaths" ? "nav-item active" : "nav-item"
+              activeView === "sourcePaths"
+                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                : navButtonBaseClass
             }
             onClick={() => setActiveView("sourcePaths")}
           >
             <svg
-              className="nav-icon"
+              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -862,16 +202,18 @@ export function DesktopWorkspace({
               <line x1="12" y1="11" x2="12" y2="17"></line>
               <line x1="9" y1="14" x2="15" y2="14"></line>
             </svg>
-            <span>Source & Paths</span>
+            <span className="max-[1080px]:hidden">Source & Paths</span>
           </button>
           <button
             className={
-              activeView === "catalog" ? "nav-item active" : "nav-item"
+              activeView === "catalog"
+                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                : navButtonBaseClass
             }
             onClick={() => setActiveView("catalog")}
           >
             <svg
-              className="nav-icon"
+              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -883,16 +225,18 @@ export function DesktopWorkspace({
               <rect x="1" y="3" width="22" height="5"></rect>
               <line x1="10" y1="12" x2="14" y2="12"></line>
             </svg>
-            <span>Catalog</span>
+            <span className="max-[1080px]:hidden">Catalog</span>
           </button>
           <button
             className={
-              activeView === "activity" ? "nav-item active" : "nav-item"
+              activeView === "activity"
+                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                : navButtonBaseClass
             }
             onClick={() => setActiveView("activity")}
           >
             <svg
-              className="nav-icon"
+              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -902,89 +246,104 @@ export function DesktopWorkspace({
             >
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
-            <span>Activity</span>
+            <span className="max-[1080px]:hidden">Activity</span>
           </button>
         </nav>
 
-        <section className="nav-status">
-          <p className="small-dark">Last check: {formatTime(lastCheckAt)}</p>
-          <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
-          <p className="small-dark">
+        <section className="grid gap-2 border-t border-t-[var(--color-line)] pt-6 text-[0.85rem] max-[1080px]:hidden">
+          <p className={subtitleClass}>Last check: {formatTime(lastCheckAt)}</p>
+          <p className={subtitleClass}>Next check: {formatTime(nextCheckAt)}</p>
+          <p className={subtitleClass}>
             Runtime:{" "}
             {versionReadiness?.foundInMinecraftRootDir
               ? "configured"
               : "pending"}
           </p>
-          <p className="small-dark">
+          <p className={subtitleClass}>
             Lock drift: {catalog?.hasUpdates ? "detected" : "none"}
           </p>
-          <p className="small-dark">
+          <p className={subtitleClass}>
             App update:{" "}
             {launcherUpdate?.available
               ? `v${launcherUpdate.latestVersion ?? "new"} ready`
               : "none"}
           </p>
-          <p className="small-dark">
+          <p className={subtitleClass}>
             Launcher version: v{launcherAppVersion ?? "--"}
           </p>
-          <p className="small-dark">
+          <p className={subtitleClass}>
             Session: {sessionStatus.phase.replaceAll("_", " ")}
           </p>
           {sessionStatus.liveMinecraftDir ? (
-            <p className="small-dark">
+            <p className={subtitleClass}>
               Playing dir: {sessionStatus.liveMinecraftDir}
             </p>
           ) : null}
         </section>
       </aside>
 
-      <section className="desktop-workspace">
-        <header className="workspace-header">
-          <div className="workspace-title">
+      <section className="relative grid h-full grid-rows-[auto_1fr_auto] gap-6 overflow-x-hidden overflow-y-auto rounded-[28px] border border-[var(--color-line)] bg-[var(--color-bg-surface)] p-8 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] [scrollbar-color:var(--color-line-strong)_transparent] [scrollbar-width:thin] before:pointer-events-none before:absolute before:right-0 before:top-0 before:h-[300px] before:w-[300px] before:bg-[radial-gradient(circle,var(--color-brand-indigo-shadow),transparent_70%)] before:opacity-20 before:blur-[40px] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:my-4 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-[10px] [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-line-strong)] [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[var(--color-text-muted)] max-[1280px]:p-6 max-[1080px]:p-[18px] max-[920px]:p-3">
+        <header className="flex items-start justify-between gap-6 border-b border-b-[var(--color-line)] pb-6 animate-[slideIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] max-[1080px]:flex-col max-[1080px]:items-stretch">
+          <div className="flex items-center gap-4">
             {canRenderLogo ? (
               <img
-                className="server-logo"
+                className="h-[54px] w-[54px] rounded-[14px] border border-[var(--color-line-strong)] bg-[var(--color-bg-card)] object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:rotate-[-2deg] hover:scale-105 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-[10px]"
                 src={catalog?.logoUrl}
                 alt={`${catalog?.serverName ?? SERVER_ID} logo`}
                 onError={() => markLogoAsBroken(catalog?.logoUrl)}
               />
             ) : (
               <img
-                className="server-logo"
+                className="h-[54px] w-[54px] rounded-[14px] border border-[var(--color-line-strong)] bg-[var(--color-bg-card)] object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:rotate-[-2deg] hover:scale-105 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-[10px]"
                 src="/minerelay-logo.svg"
                 alt={`${APP_NAME} logo`}
               />
             )}
             <div>
-              <span className="eyebrow">MineRelay</span>
-              <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
+              <span className="font-mono text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-brand-accent)]">
+                MineRelay
+              </span>
+              <h2 className="bg-[linear-gradient(to_right,#fff,#e2e8f0)] bg-clip-text text-[1.8rem] font-bold leading-[1.2] text-transparent max-[1080px]:text-[1.4rem]">
+                {catalog?.serverName ?? `Server ${SERVER_ID}`}
+              </h2>
               {sessionStatus.phase === "playing" ? (
-                <p className="playing-status">
+                <p className="mt-1.5 flex items-center gap-1.5 text-[0.9rem] font-medium text-[var(--color-success)] before:block before:h-2 before:w-2 before:rounded-full before:bg-[var(--color-success)] before:shadow-[0_0_8px_var(--color-success)] before:animate-[pulseGlow_2s_infinite]">
                   Playing in{" "}
                   {sessionStatus.liveMinecraftDir ?? "Minecraft directory"}
                 </p>
               ) : null}
             </div>
           </div>
-          <div className="workspace-header-actions">
-            <div className="version-pill">
+          <div className="mt-0 flex flex-wrap items-center gap-[18px] max-[1080px]:mt-3 max-[1080px]:justify-between">
+            <div className="rounded-[28px] border border-[var(--color-info-border)] bg-[var(--color-info-tint)] px-[14px] py-1.5 font-mono text-[0.8rem] text-[var(--color-brand-accent)] shadow-[inset_0_0_10px_rgba(14,165,233,0.05)] backdrop-blur-[4px]">
               v{launcherAppVersion ?? "--"} | {catalog?.loader ?? "fabric"}{" "}
               {catalog?.loaderVersion ?? "--"} | MC{" "}
               {catalog?.minecraftVersion ?? "--"}
             </div>
-            <button
-              className="btn ghost"
+            <Button
+              className={ghostButtonClass}
               onClick={() => void returnToMainWindow()}
               disabled={isActionBusy("window:returnMain")}
             >
               {isActionBusy("window:returnMain")
                 ? "Opening..."
                 : "Back to Launcher"}
-            </button>
+            </Button>
           </div>
         </header>
 
-        {renderWorkspace()}
+        <Suspense
+          fallback={
+            <div className={blockClass}>
+              <h2 className="text-[1.4rem] font-semibold tracking-[0.01em] text-white">
+                Loading View
+              </h2>
+              <p className={subtitleClass}>Preparing workspace section...</p>
+            </div>
+          }
+        >
+          {renderWorkspace()}
+        </Suspense>
       </section>
     </main>
   );

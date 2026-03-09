@@ -5,15 +5,6 @@ import type { useAppCore } from "../hooks/useAppCore";
 import { formatTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
 
-const compactServerBadgeToneClasses = {
-  online: "border-success-border bg-success-bg text-success-bright",
-  offline: "border-line bg-surface-subtle text-text-muted",
-  busy: "border-warning-border bg-warning-bg text-warning-bright",
-  error: "border-danger-border bg-danger-bg text-danger-soft-text",
-  disabled: "border-danger-border bg-danger-bg text-danger-soft-text",
-  unknown: "border-line bg-surface-subtle text-text-secondary",
-} as const;
-
 export function CompactWindow({
   core,
 }: {
@@ -237,14 +228,7 @@ export function CompactWindow({
                 launcherServerControls={launcherServerControls}
                 isServerActionBusy={isServerActionBusy}
                 runLauncherServerAction={runLauncherServerAction}
-                shellClassName="relative rounded-[12px] border border-dashed border-brand-indigo-border px-2 pb-2 pt-2.5"
-                labelClassName="absolute left-3 top-[-9px] bg-bg-surface px-2 text-[0.66rem] font-medium uppercase tracking-[0.08em] text-brand-accent"
-                controlsClassName="flex min-w-0 items-center justify-start gap-2.5 rounded-full px-2 py-2"
-                statusBadgeClassName="inline-flex shrink-0 rounded-full border px-2 py-1 text-[0.75rem] leading-none"
-                statusBadgeToneClassNames={compactServerBadgeToneClasses}
-                statusTextClassName="min-w-0 truncate text-[0.72rem] leading-none text-text-muted"
-                iconActionsClassName="ml-auto inline-flex items-center gap-1.5 border-l border-line pl-2"
-                iconButtonClassName="inline-flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-line bg-surface-deep-20 text-[0.8rem] leading-none text-text-secondary transition-colors hover:not-disabled:border-brand-accent hover:not-disabled:text-white disabled:cursor-default disabled:opacity-50"
+                variant="compact"
               />
             </div>
           ) : null}
