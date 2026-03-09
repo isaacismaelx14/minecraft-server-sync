@@ -1,4 +1,5 @@
 import { Button, Card, ProgressBar } from "@minerelay/ui";
+import { useEffect, useRef, useState } from "react";
 import { bytesToHuman, formatEta, formatTime } from "../../utils";
 import type { DesktopWorkspaceCore, DesktopWorkspacePageStyles } from "./types";
 
@@ -46,7 +47,24 @@ export function ActivityPage({
     syncBytesLabel,
     hint,
     error,
+    isSyncing,
   } = core;
+
+  const prevIsSyncingRef = useRef(isSyncing);
+  const completedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [justCompleted, setJustCompleted] = useState(false);
+
+  useEffect(() => {
+    if (prevIsSyncingRef.current && !isSyncing) {
+      setJustCompleted(true);
+      if (completedTimerRef.current) clearTimeout(completedTimerRef.current);
+      completedTimerRef.current = setTimeout(
+        () => setJustCompleted(false),
+        4_000,
+      );
+    }
+    prevIsSyncingRef.current = isSyncing;
+  }, [isSyncing]);
 
   return (
     <div className={blockClass}>
@@ -165,25 +183,31 @@ export function ActivityPage({
         <Card className={panelCardClass}>
           <h3 className={h3Class}>Current Transfer</h3>
           <p className={subtitleClass}>
-            {sync.phase === "committing"
-              ? "Committing changes..."
-              : sync.phase === "idle"
-                ? "No active transfer."
-                : "Downloading mods..."}
+            {justCompleted
+              ? "Transfer complete!"
+              : sync.phase === "committing"
+                ? "Committing changes..."
+                : sync.phase === "idle"
+                  ? "No active transfer."
+                  : "Downloading mods..."}
           </p>
           <ProgressBar
-            value={progressPercent}
-            indeterminate={syncHasUnknownTotal}
+            value={justCompleted ? 100 : progressPercent}
+            indeterminate={!justCompleted && syncHasUnknownTotal}
             ariaValueText={
-              syncHasUnknownTotal
+              !justCompleted && syncHasUnknownTotal
                 ? "Download progress total unknown"
                 : undefined
             }
           />
           <div className={metricsClass}>
-            <span>{syncBytesLabel}</span>
-            <span>{bytesToHuman(sync.speedBps)}/s</span>
-            <span>ETA {formatEta(sync.etaSec)}</span>
+            <span>{justCompleted ? syncBytesLabel : syncBytesLabel}</span>
+            <span>
+              {justCompleted ? "--" : `${bytesToHuman(sync.speedBps)}/s`}
+            </span>
+            <span>
+              {justCompleted ? "Done" : `ETA ${formatEta(sync.etaSec)}`}
+            </span>
           </div>
         </Card>
 

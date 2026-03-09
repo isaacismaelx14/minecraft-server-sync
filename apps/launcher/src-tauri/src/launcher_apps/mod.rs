@@ -475,19 +475,19 @@ pub async fn bootstrap_prism_instance(
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize mmc-pack.json: {error}")))?,
   )?;
 
-  let mut cfg = format!(
-    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
-  );
-
-  let mut system = System::new_all();
-  system.refresh_memory();
-  let total_memory = system.total_memory();
-  let has_more_than_16gb = total_memory >= 16 * 1024 * 1024 * 1024
-    || total_memory >= 16 * 1024 * 1024;
-  if has_more_than_16gb {
-    cfg.push_str("OverrideMemory=true\nMinMemAlloc=1024\nMaxMemAlloc=4096\n");
+  let instance_cfg_path = instance_dir.join("instance.cfg");
+  if !instance_cfg_path.exists() {
+    let mut system = System::new_all();
+    system.refresh_memory();
+    let total_memory = system.total_memory();
+    let has_more_than_16gb = total_memory >= 16 * 1024 * 1024 * 1024
+      || total_memory >= 16 * 1024 * 1024;
+    let (max_mem, min_mem): (u32, u32) = if has_more_than_16gb { (4096, 1024) } else { (2048, 512) };
+    let cfg = format!(
+      "[General]\nConfigVersion=1.3\nInstanceType=OneSix\nJoinServerOnLaunch=false\nManagedPack=false\nMaxMemAlloc={max_mem}\nMinMemAlloc={min_mem}\nOverrideCommands=false\nOverrideConsole=false\nOverrideEnv=false\nOverrideGameTime=false\nOverrideJavaArgs=false\nOverrideJavaLocation=false\nOverrideLegacySettings=false\nOverrideMemory=true\nOverrideMiscellaneous=false\nOverrideNativeWorkarounds=false\nOverridePerformance=false\nOverrideWindow=false\nPermGen=128\nUseAccountForInstance=false\niconKey={instance_key}\nname={instance_name}\nnotes=Managed by Minerelay.\n"
+    );
+    fs::write(&instance_cfg_path, cfg)?;
   }
-  fs::write(instance_dir.join("instance.cfg"), cfg)?;
 
   #[cfg(target_os = "macos")]
   let minecraft_folder = "minecraft";
@@ -498,6 +498,11 @@ pub async fn bootstrap_prism_instance(
   let icon_path = minecraft_dir.join("icon.png");
   let instance_icon_path = instance_dir.join("icon.png");
 
+  // PrismLauncher resolves iconKey against its global icons directory.
+  let icons_dir = prism_root.join("icons");
+  let _ = fs::create_dir_all(&icons_dir);
+  let prism_icon_path = icons_dir.join(format!("{instance_key}.png"));
+
   let mut icon_written = false;
   if let Some(logo_url) = lock.branding.logo_url.as_deref() {
     let client = state.http.clone();
@@ -507,6 +512,7 @@ pub async fn bootstrap_prism_instance(
           let _ = fs::create_dir_all(&minecraft_dir);
           let _ = fs::write(&icon_path, &bytes);
           let _ = fs::write(&instance_icon_path, &bytes);
+          let _ = fs::write(&prism_icon_path, &bytes);
           icon_written = true;
         }
       }
@@ -517,7 +523,10 @@ pub async fn bootstrap_prism_instance(
     let _ = fs::create_dir_all(&minecraft_dir);
     let _ = fs::write(&icon_path, FALLBACK_PRISM_ICON_BYTES);
     let _ = fs::write(&instance_icon_path, FALLBACK_PRISM_ICON_BYTES);
+    let _ = fs::write(&prism_icon_path, FALLBACK_PRISM_ICON_BYTES);
   }
+
+  upsert_prism_instance_group(&prism_root, &instance_key);
 
   Ok(LauncherBootstrapResult {
     launcher_id: "prism".to_string(),
@@ -527,7 +536,8 @@ pub async fn bootstrap_prism_instance(
   })
 }
 
-pub fn bootstrap_official_version(
+pub async fn bootstrap_official_version(
+  state: &crate::state::AppState,
   lock: &ProfileLock,
   minecraft_root: &Path,
   minecraft_dir: &Path,
@@ -569,7 +579,33 @@ pub fn bootstrap_official_version(
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize custom version json: {error}")))?,
   )?;
 
-  upsert_official_launcher_profile(minecraft_root, &version_id, &display_name, minecraft_dir)?;
+  let icon_bytes: Option<Vec<u8>> = if let Some(logo_url) = lock.branding.logo_url.as_deref() {
+    let client = state.http.clone();
+    if let Ok(response) = client.get(logo_url).send().await {
+      if response.status().is_success() {
+        response.bytes().await.ok().map(|b| b.to_vec())
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+  } else {
+    None
+  };
+
+  let icon_data_url = icon_bytes
+    .as_deref()
+    .or(Some(FALLBACK_PRISM_ICON_BYTES))
+    .map(|bytes| {
+      use base64::Engine as _;
+      format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes),
+      )
+    });
+
+  upsert_official_launcher_profile(minecraft_root, &version_id, &display_name, minecraft_dir, icon_data_url.as_deref())?;
 
   Ok(LauncherBootstrapResult {
     launcher_id: "official".to_string(),
@@ -1288,12 +1324,7 @@ fn expected_loader_parent(lock: &ProfileLock) -> LauncherResult<String> {
 }
 
 pub fn server_release_name(lock: &ProfileLock) -> String {
-  format!(
-    "release {}-loader-{}-{}",
-    slugify(&lock.branding.server_name),
-    lock.loader_version,
-    lock.minecraft_version
-  )
+  lock.branding.server_name.clone()
 }
 
 fn server_release_key(lock: &ProfileLock) -> String {
@@ -1314,6 +1345,7 @@ fn upsert_official_launcher_profile(
   version_id: &str,
   display_name: &str,
   minecraft_dir: &Path,
+  icon_data_url: Option<&str>,
 ) -> LauncherResult<()> {
   let profiles_path = minecraft_root.join("launcher_profiles.json");
 
@@ -1347,15 +1379,16 @@ fn upsert_official_launcher_profile(
     ));
   };
 
-  profiles_obj.insert(
-    version_id.to_string(),
-    json!({
-      "name": display_name,
-      "type": "custom",
-      "lastVersionId": version_id,
-      "gameDir": minecraft_dir.to_string_lossy().to_string(),
-    }),
-  );
+  let mut profile = json!({
+    "name": display_name,
+    "type": "custom",
+    "lastVersionId": version_id,
+    "gameDir": minecraft_dir.to_string_lossy().to_string(),
+  });
+  if let Some(icon) = icon_data_url {
+    profile["icon"] = serde_json::Value::String(icon.to_string());
+  }
+  profiles_obj.insert(version_id.to_string(), profile);
 
   fs::create_dir_all(minecraft_root)?;
   fs::write(
@@ -1366,6 +1399,49 @@ fn upsert_official_launcher_profile(
   )?;
 
   Ok(())
+}
+
+/// Adds `instance_key` to the "Minerelay" group in PrismLauncher's `instgroups.json`.
+/// Creates the file / group if they don't exist yet. Idempotent.
+fn upsert_prism_instance_group(prism_root: &Path, instance_key: &str) {
+  const GROUP_NAME: &str = "Minerelay";
+  let path = prism_root.join("instances").join("instgroups.json");
+
+  let mut root: serde_json::Value = if path.exists() {
+    fs::read_to_string(&path)
+      .ok()
+      .and_then(|s| serde_json::from_str(&s).ok())
+      .unwrap_or_else(|| json!({ "formatVersion": 1, "groups": {} }))
+  } else {
+    json!({ "formatVersion": 1, "groups": {} })
+  };
+
+  let groups = root
+    .as_object_mut()
+    .and_then(|o| o.entry("groups").or_insert_with(|| json!({})).as_object_mut());
+
+  if let Some(groups) = groups {
+    let group = groups
+      .entry(GROUP_NAME)
+      .or_insert_with(|| json!({ "hidden": false, "instances": [] }));
+
+    if let Some(instances) = group
+      .as_object_mut()
+      .and_then(|o| o.get_mut("instances"))
+      .and_then(|v| v.as_array_mut())
+    {
+      if !instances
+        .iter()
+        .any(|v| v.as_str() == Some(instance_key))
+      {
+        instances.push(serde_json::Value::String(instance_key.to_string()));
+      }
+    }
+  }
+
+  if let Ok(serialized) = serde_json::to_string_pretty(&root) {
+    let _ = fs::write(&path, serialized);
+  }
 }
 
 pub fn slugify(input: &str) -> String {
@@ -1441,10 +1517,12 @@ pub async fn open_game(
         .await
         .map_err(|e| format!("{e}"))?,
       (Some("official"), Some(lock)) => crate::launcher_apps::bootstrap_official_version(
+        &state,
         &lock,
         &minecraft_root,
         &minecraft_root,
       )
+      .await
       .map_err(|e| format!("{e}"))?,
       (Some(id), None::<crate::types::ProfileLock>) => LauncherBootstrapResult {
         launcher_id: id.to_string(),
@@ -1482,6 +1560,16 @@ pub async fn open_game(
   } else {
     minecraft_root.clone()
   };
+
+  // Quick manifest check: if updates are available, apply them before launching.
+  if crate::session::sync_allowed(state.as_ref()).is_ok() {
+    match crate::profile::catalog_snapshot(state.as_ref(), &effective_server).await {
+      Ok(snapshot) if snapshot.has_updates => {
+        let _ = crate::sync::sync_apply(app, state.as_ref(), &effective_server).await;
+      }
+      _ => {}
+    }
+  }
 
   let session = crate::session::start_or_get_session(
     app,

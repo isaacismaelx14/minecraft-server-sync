@@ -228,7 +228,7 @@ export function CompactWindow({
                         ? "Launching..."
                         : compactPlaying
                           ? "Playing"
-                        : "Play"}
+                          : "Play"}
                 </Button>
               )}
               <Button

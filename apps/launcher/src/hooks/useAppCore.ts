@@ -1782,6 +1782,13 @@ export function useAppCore() {
 
       await saveSettings({ ...settings, selectedLauncherId: value || null });
       setHint(null);
+
+      // Re-run bootstrap so the new launcher gets the instance files it needs.
+      try {
+        await invoke("runtime_ensure_fabric", { serverId: SERVER_ID });
+      } catch {
+        // Best-effort — don't surface bootstrap errors here.
+      }
     },
     [saveSettings, settings],
   );
