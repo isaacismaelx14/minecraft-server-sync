@@ -3,7 +3,7 @@ import { getVersion as getAppVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SyncPlan, UpdateSummary } from "@minerelay/shared";
+import type { SyncPlan } from "@minerelay/shared";
 
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MineRelay";
@@ -2008,6 +2008,7 @@ export function useAppCore() {
     pickWizardMinecraftRootPath,
     sourceLabel,
     isApiSourceMode,
+    isWindows,
     refreshLauncherServerControls,
     runLauncherServerAction,
     retryLauncherServerStreamNow,

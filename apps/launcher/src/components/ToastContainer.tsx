@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
+import { useToast } from "@minerelay/ui";
 import type { ToastMessage } from "../types";
 
 interface ToastContainerProps {
@@ -8,21 +9,24 @@ interface ToastContainerProps {
 export const ToastContainer = memo(function ToastContainer({
   toasts,
 }: ToastContainerProps) {
-  if (toasts.length === 0) {
-    return null;
-  }
+  const { pushToast } = useToast();
+  const shownToastIdsRef = useRef<Set<number>>(new Set());
 
-  return (
-    <div className="toast-stack" aria-live="polite" aria-atomic="true">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`toast-item ${toast.tone === "error" ? "error" : "hint"}`}
-          role="status"
-        >
-          {toast.text}
-        </div>
-      ))}
-    </div>
-  );
+  useEffect(() => {
+    const nextIds = new Set<number>();
+
+    for (const toast of toasts) {
+      nextIds.add(toast.id);
+
+      if (shownToastIdsRef.current.has(toast.id)) {
+        continue;
+      }
+
+      pushToast(toast.tone === "error" ? "error" : "info", toast.text);
+    }
+
+    shownToastIdsRef.current = nextIds;
+  }, [pushToast, toasts]);
+
+  return null;
 });

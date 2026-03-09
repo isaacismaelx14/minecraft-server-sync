@@ -1,4 +1,5 @@
-@import "tailwindcss";
+@import "@minerelay/ui/globals.css";
+@source "./"; /* scan launcher source files — globals.css @source only covers the UI package */
 
 /* ------------------------------------------------------------------ */
 /*  Launcher-specific utilities                                       */
