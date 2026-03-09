@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useCallback, useMemo } from "react";
-import { Button, CompactStat, Select } from "@minerelay/ui";
+import { Button, CompactStat, ProgressBar, Select } from "@minerelay/ui";
 import type { useAppCore } from "../hooks/useAppCore";
 import { formatTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
@@ -34,6 +34,11 @@ export function CompactWindow({
     isServerActionBusy,
     runLauncherServerAction,
     isActionBusy,
+    isSyncing,
+    progressPercent,
+    hasSyncTotal,
+    syncHasUnknownTotal,
+    syncBytesLabel,
   } = core;
 
   const filteredLaunchers = useMemo(
@@ -169,9 +174,22 @@ export function CompactWindow({
               ></span>
               <h2>{statusTitle}</h2>
             </div>
-            <p className="text-text-secondary m-0 text-[0.8rem] leading-[1.3]">
-              {statusSubtitle}
-            </p>
+            {isSyncing ? (
+              <div className="mt-1 flex w-full flex-col gap-1.5">
+                <ProgressBar
+                  value={progressPercent}
+                  indeterminate={syncHasUnknownTotal}
+                />
+                <p className="text-text-muted m-0 text-center font-mono text-[0.72rem] tabular-nums">
+                  {hasSyncTotal ? `${progressPercent}%` : "--"} &middot;{" "}
+                  {syncBytesLabel}
+                </p>
+              </div>
+            ) : (
+              <p className="text-text-secondary m-0 text-[0.8rem] leading-[1.3]">
+                {statusSubtitle}
+              </p>
+            )}
             <div className="mt-1 flex w-full flex-col items-center justify-center gap-2">
               {isAwaiting ? (
                 <Button
@@ -197,17 +215,19 @@ export function CompactWindow({
                   disabled={
                     compactNeedsConnect
                       ? isChecking
-                      : compactPlaying || isLaunching
+                      : compactPlaying || isLaunching || isSyncing
                   }
                 >
                   {compactNeedsConnect
                     ? isChecking
                       ? "Connecting..."
                       : "Connect"
-                    : isLaunching
-                      ? "Launching..."
-                      : compactPlaying
-                        ? "Playing"
+                    : isSyncing
+                      ? "Syncing..."
+                      : isLaunching
+                        ? "Launching..."
+                        : compactPlaying
+                          ? "Playing"
                         : "Play"}
                 </Button>
               )}

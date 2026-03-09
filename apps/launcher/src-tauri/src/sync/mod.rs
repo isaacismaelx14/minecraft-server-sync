@@ -10,7 +10,7 @@ use std::{
   time::Instant,
 };
 
-use futures_util::StreamExt;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -124,6 +124,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
   }
   ensure_layout(&paths)?;
   migrate_legacy_encoded_filenames(&paths, &context.remote_lock).await?;
+  migrate_underscore_mangled_filenames(&paths, &context.remote_lock).await?;
 
   emit_sync_progress(
     app,
@@ -1256,7 +1257,7 @@ fn normalize_filename_segment(value: &str) -> String {
     }
 
     match ch {
-      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '%' => normalized.push('_'),
+      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => normalized.push('_'),
       _ => normalized.push(ch),
     }
   }
@@ -1324,6 +1325,87 @@ async fn migrate_legacy_encoded_filenames(paths: &InstancePaths, lock: &ProfileL
   Ok(())
 }
 
+/// Normalizes a decoded filename segment using the old behavior that replaced
+/// `%` with `_`. Used only for migration — to find files that were created
+/// before the `%`-preservation fix and rename them to the correct form.
+fn normalize_filename_segment_legacy(value: &str) -> String {
+  let mut normalized = String::with_capacity(value.len());
+  for ch in value.chars() {
+    if ch.is_control() {
+      continue;
+    }
+
+    match ch {
+      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '%' => normalized.push('_'),
+      _ => normalized.push(ch),
+    }
+  }
+
+  let trimmed = normalized.trim_matches(|ch| ch == ' ' || ch == '.');
+  let mut normalized = trimmed.to_string();
+  if normalized.is_empty() || normalized == "." || normalized == ".." {
+    normalized = "download".to_string();
+  }
+
+  let stem = normalized.split('.').next().unwrap_or_default();
+  if is_reserved_windows_name(stem) {
+    normalized.insert(0, '_');
+  }
+
+  normalized
+}
+
+fn extract_filename_legacy(url: &str) -> LauncherResult<String> {
+  let raw = extract_raw_filename(url)?;
+  let decoded = decode_percent_segment(&raw);
+  let normalized = normalize_filename_segment_legacy(&decoded);
+  if normalized.is_empty() {
+    return Err(LauncherError::InvalidData(format!(
+      "url does not contain a valid filename: {url}"
+    )));
+  }
+  Ok(normalized)
+}
+
+async fn migrate_underscore_mangled_filename(directory: &Path, url: &str) -> LauncherResult<()> {
+  let legacy = extract_filename_legacy(url)?;
+  let normalized = extract_filename(url)?;
+
+  if legacy == normalized {
+    return Ok(());
+  }
+
+  let legacy_path = directory.join(&legacy);
+  let normalized_path = directory.join(&normalized);
+
+  if !legacy_path.exists() || normalized_path.exists() {
+    return Ok(());
+  }
+
+  fs::rename(legacy_path, normalized_path).await?;
+  Ok(())
+}
+
+async fn migrate_underscore_mangled_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
+  for item in &lock.items {
+    migrate_underscore_mangled_filename(&paths.mods, &item.url).await?;
+  }
+
+  for entry in &lock.resources {
+    migrate_underscore_mangled_filename(&paths.resourcepacks, &entry.url).await?;
+  }
+
+  for entry in &lock.shaders {
+    migrate_underscore_mangled_filename(&paths.shaderpacks, &entry.url).await?;
+  }
+
+  for entry in &lock.configs {
+    migrate_underscore_mangled_filename(&paths.config, &entry.url).await?;
+  }
+
+  Ok(())
+}
+
 async fn migrate_legacy_encoded_filename(directory: &Path, url: &str) -> LauncherResult<()> {
   let legacy = extract_raw_filename(url)?;
   let normalized = extract_filename(url)?;
@@ -1344,16 +1426,59 @@ async fn migrate_legacy_encoded_filename(directory: &Path, url: &str) -> Launche
 }
 
 async fn estimate_total_bytes(state: &AppState, files: &[DesiredFile]) -> u64 {
-  let mut total = 0;
+  use std::{future::Future, pin::Pin};
 
-  for file in files {
-    if let Ok(response) = state.http.head(&file.url).send().await {
-      if validate_download_url(&file.provider, response.url().as_str()).is_err() {
-        continue;
+  type SizeFut = Pin<Box<dyn Future<Output = u64> + Send>>;
+  const MAX_CONCURRENT: usize = 8;
+
+  // Use Range GET (bytes=0-0) instead of HEAD — CDNs like Modrinth/CurseForge
+  // often omit Content-Length on HEAD but include total size in Content-Range on
+  // partial GETs. We never read the response body so no real data is transferred.
+  let make_fut = |client: reqwest::Client, url: String, provider: String| -> SizeFut {
+    Box::pin(async move {
+      let Ok(resp) = client
+        .get(&url)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await
+      else {
+        return 0u64;
+      };
+
+      if validate_download_url(&provider, resp.url().as_str()).is_err() {
+        return 0;
       }
-      if let Some(length) = response.content_length() {
-        total += length;
+
+      // 206 Partial Content: extract total from Content-Range: bytes 0-0/TOTAL
+      if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+        if let Some(cr) = resp.headers().get(reqwest::header::CONTENT_RANGE) {
+          if let Ok(s) = cr.to_str() {
+            if let Some(total_str) = s.split('/').nth(1) {
+              if let Ok(total) = total_str.trim().parse::<u64>() {
+                return total;
+              }
+            }
+          }
+        }
       }
+
+      // 200 OK: server ignored the Range header — fall back to Content-Length.
+      resp.content_length().unwrap_or(0)
+    })
+  };
+
+  let mut futs: FuturesUnordered<SizeFut> = FuturesUnordered::new();
+  let mut total = 0u64;
+  let mut iter = files.iter();
+
+  for file in iter.by_ref().take(MAX_CONCURRENT) {
+    futs.push(make_fut(state.http.clone(), file.url.clone(), file.provider.clone()));
+  }
+
+  while let Some(size) = futs.next().await {
+    total += size;
+    if let Some(file) = iter.next() {
+      futs.push(make_fut(state.http.clone(), file.url.clone(), file.provider.clone()));
     }
   }
 
@@ -1464,11 +1589,11 @@ fn recommended_download_workers() -> usize {
   let total_memory_mb = system.total_memory() / (1024 * 1024);
 
   if cpu_cores <= 4 || (total_memory_mb > 0 && total_memory_mb <= 8_192) {
-    1
-  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
     2
+  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
+    4
   } else {
-    3
+    6
   }
 }
 
@@ -1714,9 +1839,19 @@ mod tests {
 
   #[test]
   fn extract_filename_sanitizes_windows_unsafe_characters() {
+    // %20 → space, %2B → +, %3F → ?; only '?' is unsafe so it becomes '_'
     let url = "https://example.com/files/Connected-Paths%201.21.9%2B%20v2.1.1%3F.zip";
     let filename = extract_filename(url).expect("filename should sanitize");
     assert_eq!(filename, "Connected-Paths 1.21.9+ v2.1.1_.zip");
+  }
+
+  #[test]
+  fn extract_filename_preserves_literal_percent() {
+    // %25 decodes to literal '%'; the character is valid on all major filesystems
+    // and must be preserved rather than replaced with '_'.
+    let url = "https://example.com/files/some-mod-100%25-boost.jar";
+    let filename = extract_filename(url).expect("filename should preserve percent");
+    assert_eq!(filename, "some-mod-100%-boost.jar");
   }
 
   #[test]

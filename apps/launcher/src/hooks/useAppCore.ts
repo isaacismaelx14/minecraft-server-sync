@@ -281,6 +281,10 @@ export function useAppCore() {
   const hasSyncTotal = sync.totalBytes > 0;
   const syncHasUnknownTotal =
     !hasSyncTotal && sync.phase === "downloading" && sync.completedBytes > 0;
+  const isSyncing =
+    sync.phase === "downloading" ||
+    sync.phase === "committing" ||
+    sync.phase === "planning";
   const syncBytesLabel = hasSyncTotal
     ? `${bytesToHuman(sync.completedBytes)} / ${bytesToHuman(sync.totalBytes)}`
     : sync.completedBytes > 0
@@ -1738,7 +1742,7 @@ export function useAppCore() {
 
   const openLauncherFromCompact = useCallback(async () => {
     await runLockedAction("launcher:open", async () => {
-      if (compactPlaying) {
+      if (compactPlaying || isSyncing) {
         return;
       }
 
@@ -1768,7 +1772,7 @@ export function useAppCore() {
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     });
-  }, [compactPlaying, runLockedAction]);
+  }, [compactPlaying, isSyncing, runLockedAction]);
 
   const updateLauncherSelection = useCallback(
     async (value: string) => {
@@ -1968,6 +1972,7 @@ export function useAppCore() {
     progressPercent,
     hasSyncTotal,
     syncHasUnknownTotal,
+    isSyncing,
     syncBytesLabel,
     hasFancyMenuMod,
     fancyMenuMode,

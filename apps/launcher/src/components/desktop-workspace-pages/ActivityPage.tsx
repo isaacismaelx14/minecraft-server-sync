@@ -1,4 +1,4 @@
-import { Button, Card } from "@minerelay/ui";
+import { Button, Card, ProgressBar } from "@minerelay/ui";
 import { bytesToHuman, formatEta, formatTime } from "../../utils";
 import type { DesktopWorkspaceCore, DesktopWorkspacePageStyles } from "./types";
 
@@ -22,7 +22,6 @@ export function ActivityPage({
     dataValueClass,
     actionsRowClass,
     ghostButtonClass,
-    meterClass,
     metricsClass,
   } = styles;
 
@@ -165,29 +164,22 @@ export function ActivityPage({
 
         <Card className={panelCardClass}>
           <h3 className={h3Class}>Current Transfer</h3>
-          <p className={subtitleClass}>{sync.currentFile ?? sync.phase}</p>
-          <div
-            className={meterClass}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={hasSyncTotal ? progressPercent : undefined}
-            aria-valuetext={
+          <p className={subtitleClass}>
+            {sync.phase === "committing"
+              ? "Committing changes..."
+              : sync.phase === "idle"
+                ? "No active transfer."
+                : "Downloading mods..."}
+          </p>
+          <ProgressBar
+            value={progressPercent}
+            indeterminate={syncHasUnknownTotal}
+            ariaValueText={
               syncHasUnknownTotal
                 ? "Download progress total unknown"
                 : undefined
             }
-          >
-            <div
-              className={`relative h-full rounded-[999px] bg-[linear-gradient(90deg,var(--color-brand-indigo),var(--color-brand-accent))] shadow-[0_0_10px_var(--color-brand-indigo-shadow)] transition-[width] duration-400 ease-[cubic-bezier(0.1,0.8,0.2,1)] after:absolute after:inset-0 after:animate-[meterShine_2s_infinite_linear] after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]${
-                syncHasUnknownTotal
-                  ? " w-1/2! animate-[meterIndeterminate_1.5s_ease-in-out_infinite]"
-                  : ""
-              }`}
-              style={{
-                width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
-              }}
-            />
-          </div>
+          />
           <div className={metricsClass}>
             <span>{syncBytesLabel}</span>
             <span>{bytesToHuman(sync.speedBps)}/s</span>
