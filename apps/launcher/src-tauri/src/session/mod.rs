@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use sysinfo::System;
 use tauri::AppHandle;
 use tokio::time::sleep;
-use url::Url;
 use uuid::Uuid;
 
 use crate::{
@@ -734,36 +733,11 @@ fn collect_session_paths(paths: &InstancePaths, lock: &ProfileLock) -> LauncherR
 }
 
 fn filename_from_url(url: &str) -> LauncherResult<Option<String>> {
-  let parsed = Url::parse(url).map_err(|error| LauncherError::InvalidData(error.to_string()))?;
-  let last = parsed
-    .path_segments()
-    .and_then(|mut segments| segments.next_back())
-    .unwrap_or_default()
-    .trim();
-
-  if last.is_empty() {
-    return Ok(None);
+  match crate::sync::extract_filename(url) {
+    Ok(name) => Ok(Some(name)),
+    Err(LauncherError::InvalidData(_)) => Ok(None),
+    Err(e) => Err(e),
   }
-
-  if !is_safe_filename_segment(last) {
-    return Err(LauncherError::InvalidData(format!(
-      "unsafe filename segment in URL: {url}"
-    )));
-  }
-
-  Ok(Some(last.to_string()))
-}
-
-fn is_safe_filename_segment(value: &str) -> bool {
-  if value == "." || value == ".." {
-    return false;
-  }
-
-  if value.contains('/') || value.contains('\\') {
-    return false;
-  }
-
-  !value.chars().any(|ch| ch.is_control())
 }
 
 fn backup_path_for_live(live: &Path, session_id: &str) -> LauncherResult<PathBuf> {
@@ -843,5 +817,62 @@ fn is_empty_dir(path: &Path) -> bool {
   match fs::read_dir(path) {
     Ok(mut entries) => entries.next().is_none(),
     Err(_) => false,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::filename_from_url;
+
+  // Regression: filename_from_url previously returned the raw percent-encoded
+  // URL segment (e.g. "sodium-fabric-0.8.6%2Bmc1.21.11.jar") instead of the
+  // decoded name that sync writes to disk ("sodium-fabric-0.8.6+mc1.21.11.jar").
+  // That mismatch caused collect_session_paths to drop all entries whose names
+  // contain characters encoded as %XX, so no files were ever promoted on Play.
+
+  #[test]
+  fn filename_from_url_decodes_plus_sign() {
+    // %2B is a common encoding for '+' in mod filenames (e.g. Fabric version strings).
+    let url = "https://cdn.modrinth.com/data/AANobbMI/versions/xyz/sodium-fabric-0.8.6%2Bmc1.21.11.jar";
+    let name = filename_from_url(url).expect("should not error").expect("should have a name");
+    assert_eq!(name, "sodium-fabric-0.8.6+mc1.21.11.jar");
+  }
+
+  #[test]
+  fn filename_from_url_decodes_percent_encoding_matches_sync() {
+    // The session and sync modules must produce the same filename for identitcal URLs.
+    let url = "https://cdn.modrinth.com/data/YL57xq9U/versions/TSXvi2yD/iris-fabric-1.10.6%2Bmc1.21.11.jar";
+    let session_name = filename_from_url(url).expect("should not error").expect("should have a name");
+    let sync_name = crate::sync::extract_filename(url).expect("should not error");
+    assert_eq!(session_name, sync_name, "session and sync must agree on the filename");
+  }
+
+  #[test]
+  fn filename_from_url_decodes_resourcepack_url() {
+    let url = "https://example.com/packs/Faithful%2B32x-1.21.zip";
+    let name = filename_from_url(url).expect("should not error").expect("should have a name");
+    assert_eq!(name, "Faithful+32x-1.21.zip");
+  }
+
+  #[test]
+  fn filename_from_url_decodes_shaderpack_url() {
+    let url = "https://example.com/shaders/BSL_v8.4%2B.zip";
+    let name = filename_from_url(url).expect("should not error").expect("should have a name");
+    assert_eq!(name, "BSL_v8.4+.zip");
+  }
+
+  #[test]
+  fn filename_from_url_plain_name_unchanged() {
+    // URLs without any percent-encoding must still work.
+    let url = "https://example.com/mods/sodium-fabric-0.8.6.jar";
+    let name = filename_from_url(url).expect("should not error").expect("should have a name");
+    assert_eq!(name, "sodium-fabric-0.8.6.jar");
+  }
+
+  #[test]
+  fn filename_from_url_returns_none_for_empty_path() {
+    let url = "https://example.com/";
+    let result = filename_from_url(url).expect("should not error");
+    assert!(result.is_none());
   }
 }

@@ -109,7 +109,7 @@ pub async fn check_updates(state: &AppState, server_id: &str) -> LauncherResult<
 pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> LauncherResult<SyncApplyResponse> {
   state.cancel_sync.store(false, Ordering::SeqCst);
 
-  let context = plan_context(state, server_id).await?;
+  let mut context = plan_context(state, server_id).await?;
   let settings = state.settings.lock().clone();
   let mut paths = InstancePaths::new(
     &state.config,
@@ -125,6 +125,37 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
   ensure_layout(&paths)?;
   migrate_legacy_encoded_filenames(&paths, &context.remote_lock).await?;
   migrate_underscore_mangled_filenames(&paths, &context.remote_lock).await?;
+
+  // After migrations, verify that files marked "keep" actually exist on disk.
+  // The manifest lock may reference files that are physically absent (e.g. the
+  // user's instance was recreated, or a previous partial migration left only
+  // the old `_`-named file without the new `%`-named one). Re-classify any
+  // phantom "keep" entries as "add" so they get downloaded in this pass.
+  let phantom_indices: Vec<(usize, String)> = context
+    .plan
+    .operations
+    .iter()
+    .enumerate()
+    .filter_map(|(i, op)| {
+      if op.op != "keep" {
+        return None;
+      }
+      let target = resolve_target_path(&paths, &op.path);
+      if target.exists() { None } else { Some((i, op.path.clone())) }
+    })
+    .collect();
+
+  for (i, path) in &phantom_indices {
+    if let Some(desired) = context.desired.get(path.as_str()) {
+      context.plan.operations[*i].op = "add".to_string();
+      context.plan.operations[*i].url = Some(desired.url.clone());
+    }
+  }
+  let phantom_count = phantom_indices.len() as i64;
+  if phantom_count > 0 {
+    context.plan.summary.add += phantom_count;
+    context.plan.summary.keep -= phantom_count;
+  }
 
   emit_sync_progress(
     app,
@@ -1190,7 +1221,7 @@ fn extract_raw_filename(url: &str) -> LauncherResult<String> {
   Ok(last.to_string())
 }
 
-fn extract_filename(url: &str) -> LauncherResult<String> {
+pub fn extract_filename(url: &str) -> LauncherResult<String> {
   let raw = extract_raw_filename(url)?;
   let decoded = decode_percent_segment(&raw);
   let normalized = normalize_filename_segment(&decoded);
