@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
-pnpm typecheck:affected
-pnpm test:affected
-pnpm build:affected
+pnpm typecheck
+pnpm test
+pnpm build
