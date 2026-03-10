@@ -17,15 +17,15 @@ export function SectionHeader({
   className,
 }: SectionHeaderProps): ReactElement {
   return (
-    <div className={cn("flex items-start gap-3", className)}>
-      <div className="shrink-0 mt-0.5 w-9 h-9 rounded-[var(--radius-sm)] bg-brand-primary/10 border border-brand-primary/20 grid place-items-center text-brand-primary">
+    <div className={cn("flex items-start gap-3.5", className)}>
+      <div className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-md)] border border-brand-primary/20 bg-brand-primary-ring text-brand-primary shadow-[inset_0_1px_0_var(--color-line-strong)]">
         {icon}
       </div>
-      <div className="min-w-0">
-        <h3 className="text-base font-semibold leading-tight tracking-tight m-0">
+      <div className="min-w-0 flex-1">
+        <h3 className="m-0 text-base font-semibold leading-tight tracking-tight">
           {title}
         </h3>
-        <p className="m-0 mt-1 text-sm text-text-muted leading-snug">
+        <p className="m-0 mt-1 max-w-[65ch] text-sm leading-6 text-text-secondary">
           {description}
         </p>
       </div>

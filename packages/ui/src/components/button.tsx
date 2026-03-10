@@ -9,11 +9,11 @@ import { cn } from "../cn";
 
 const variantClasses = {
   primary:
-    "bg-brand-primary text-white border-line-emphasis shadow-[0_1px_2px_var(--color-surface-deep-30),inset_0_1px_0_var(--color-line-strong)] hover:not-disabled:brightness-110 hover:not-disabled:shadow-[0_2px_12px_var(--color-brand-primary-shadow-hover),inset_0_1px_0_var(--color-line-emphasis)] hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 active:not-disabled:shadow-[0_0px_4px_var(--color-brand-primary-shadow-soft),inset_0_1px_3px_var(--color-shadow-md)]",
+    "bg-brand-primary text-white border-line-emphasis shadow-[0_10px_28px_var(--color-brand-primary-shadow-soft),inset_0_1px_0_var(--color-line-strong)] hover:not-disabled:brightness-110 hover:not-disabled:shadow-[0_14px_34px_var(--color-brand-primary-shadow-hover),inset_0_1px_0_var(--color-line-emphasis)] hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 active:not-disabled:shadow-[0_6px_16px_var(--color-brand-primary-shadow-soft),inset_0_1px_3px_var(--color-shadow-md)]",
   ghost:
-    "bg-surface-subtle text-text-secondary border-line backdrop-blur-sm hover:not-disabled:bg-surface-subtle-hover hover:not-disabled:border-line-strong hover:not-disabled:text-white",
+    "bg-surface-subtle text-text-secondary border-line backdrop-blur-sm hover:not-disabled:bg-surface-subtle-hover hover:not-disabled:border-line-strong hover:not-disabled:text-white hover:not-disabled:-translate-y-px",
   outline:
-    "bg-surface-soft text-text-secondary border-line hover:not-disabled:bg-surface-subtle hover:not-disabled:border-line-strong hover:not-disabled:text-white",
+    "bg-surface-soft text-text-secondary border-line hover:not-disabled:bg-surface-subtle hover:not-disabled:border-line-strong hover:not-disabled:text-white hover:not-disabled:-translate-y-px",
   danger:
     "bg-danger-bg text-danger-text border-danger-border-strong backdrop-blur-sm hover:not-disabled:bg-danger-bg-strong hover:not-disabled:text-white hover:not-disabled:border-danger-border-heavy",
   "danger-ghost":
@@ -49,7 +49,7 @@ export type ButtonEffect = keyof typeof effectClasses;
 /* ------------------------------------------------------------------ */
 
 const base =
-  "inline-flex items-center justify-center font-semibold cursor-pointer border transition-all duration-200 ease-out disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.5] shrink-0";
+  "inline-flex items-center justify-center font-semibold cursor-pointer border transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary-ring focus-visible:ring-offset-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.5] shrink-0";
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */

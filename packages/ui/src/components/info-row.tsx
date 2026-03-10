@@ -14,8 +14,8 @@ export function InfoRow({
   highlight,
 }: InfoRowProps): ReactElement {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg bg-surface-deep-15 border border-line-subtle">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted shrink-0">
+    <div className="grid gap-2 rounded-[var(--radius-md)] border border-line bg-surface-deep-20 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
         {label}
       </span>
       <span

@@ -5,17 +5,17 @@
 export const ui = {
   /* Buttons */
   buttonPrimary:
-    "border border-line-hover rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-[0_4px_12px_var(--color-brand-primary-shadow)] hover:not-disabled:shadow-[0_8px_20px_var(--color-brand-primary-shadow-hover),0_0_12px_var(--color-brand-primary-shadow-soft)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]",
+    "border border-line-hover rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-200 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-[0_10px_30px_var(--color-brand-primary-shadow-soft),inset_0_1px_0_var(--color-line-strong)] hover:not-disabled:shadow-[0_14px_34px_var(--color-brand-primary-shadow-hover),0_0_16px_var(--color-brand-primary-shadow-soft)] hover:not-disabled:-translate-y-px focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary-ring disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]",
   buttonGhost:
-    "border border-line-soft rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-surface-subtle text-text-secondary shadow-none backdrop-blur-[4px] hover:not-disabled:bg-surface-subtle-hover hover:not-disabled:border-line-emphasis hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]",
+    "border border-line-soft rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-200 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-surface-subtle text-text-secondary shadow-none backdrop-blur-[4px] hover:not-disabled:bg-surface-subtle-hover hover:not-disabled:border-line-emphasis hover:not-disabled:text-white hover:not-disabled:-translate-y-px focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-primary-ring disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]",
   buttonDanger:
     "border border-danger-border-emphasis rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-danger-bg text-danger-text shadow-none backdrop-blur-[4px] hover:not-disabled:bg-danger-bg-strong hover:not-disabled:text-white hover:not-disabled:border-danger-border-heavy hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]",
 
   /* Panels */
   panel:
-    "bg-bg-card border border-line rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150",
+    "bg-bg-card border border-line rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-200 shadow-[0_16px_40px_var(--color-shadow-panel)] backdrop-blur-[var(--blur-soft)]",
   panelHover:
-    "bg-bg-card border border-line rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 hover:bg-bg-card-hover hover:border-line-strong hover:-translate-y-[2px]",
+    "bg-bg-card border border-line rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-200 shadow-[0_16px_40px_var(--color-shadow-panel)] backdrop-blur-[var(--blur-soft)] hover:bg-bg-card-hover hover:border-line-strong hover:-translate-y-px hover:shadow-[0_20px_48px_var(--color-shadow-xl)]",
 
   /* Text */
   hint: "m-0 text-[0.9rem] text-text-muted leading-[1.5]",

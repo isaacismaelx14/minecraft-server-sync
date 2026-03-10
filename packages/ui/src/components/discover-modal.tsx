@@ -42,7 +42,7 @@ export function DiscoverModal({
           {title}
         </h3>
         <button
-          className="bg-transparent border-none text-text-muted cursor-pointer text-[1.2rem] flex items-center justify-center w-8 h-8 rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-surface-subtle-hover hover:text-white"
+          className="bg-transparent border-none text-text-muted cursor-pointer text-[1.2rem] flex items-center justify-center w-8 h-8 rounded-sm transition-all duration-200 hover:bg-surface-subtle-hover hover:text-white"
           type="button"
           onClick={onClose}
           aria-label="Close"
@@ -56,7 +56,7 @@ export function DiscoverModal({
         <input
           type="text"
           className={cn(
-            "w-full px-4 py-3 bg-bg-card border border-line rounded-[var(--radius-sm)] text-sm transition-all outline-none",
+            "w-full px-4 py-3 bg-bg-card border border-line rounded-sm text-sm transition-all outline-none",
             "text-text-primary placeholder:text-text-muted",
             "focus:border-brand-primary focus:ring-1 focus:ring-brand-primary",
           )}
