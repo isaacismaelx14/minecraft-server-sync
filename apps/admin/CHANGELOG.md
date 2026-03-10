@@ -2,6 +2,14 @@
 
 All notable changes to this package will be documented in this file.
 
+## [@minerelay/admin/v0.1.4](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.4) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.3...%40minerelay%2Fadmin%2Fv0.1.4)
+
+## Refactoring
+
+- **admin:** migrate admin views to shared ui components ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
 ## [@minerelay/admin/v0.1.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.3) (2026-03-08)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.2...%40minerelay%2Fadmin%2Fv0.1.3)
