@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -20,7 +21,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@minerelay/shared": ["../../packages/shared/src/index.ts"],
+      "@minerelay/ui": ["../../packages/ui/src/index.ts"]
     }
   },
   "include": [

@@ -26,6 +26,7 @@
     "release:auto": "pnpm release:target -- --target auto",
     "release:api": "pnpm release:target -- --target api",
     "release:admin": "pnpm release:target -- --target admin",
+    "release:admin:from-tag": "pnpm release:target -- --target admin",
     "release:launcher": "pnpm release:target -- --target launcher",
     "release:shared": "pnpm release:target -- --target shared",
     "prepare": "husky",

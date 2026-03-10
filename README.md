@@ -230,6 +230,22 @@ Tag-based release flow:
 2. Push a tag like `@minerelay/launcher/v0.2.0`.
 3. GitHub Actions workflow `launcher-release` builds Windows + macOS bundles, generates updater artifacts + `latest.json`, and publishes them to the tagged release.
 
+## Scoped Releases
+
+Run a normal admin release from `main`:
+
+```bash
+pnpm release:admin -- --channel release
+```
+
+Re-run the admin release from an existing admin tag while staying on `main`:
+
+```bash
+pnpm release:admin:from-tag -- --from-tag @minerelay/admin/v0.1.3 --channel release
+```
+
+Use `--from-tag` only with a single explicit target. This is useful when you need to rebuild release notes or replay a scoped admin release window without using `auto`.
+
 ## Build Fabric Mod
 
 ```bash

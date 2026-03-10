@@ -1,12 +1,10 @@
 name: launcher-build
 
 on:
-  push:
-    tags:
-      - "@minerelay/launcher/v*"
+  workflow_dispatch:
 
 # Beta channel launcher distribution flow.
-# Triggered by @minerelay/launcher/v* tags emitted by semantic-release.
+# Manual only to avoid overlapping with launcher-release on stable launcher tags.
 # Shared tags must not fan out builds directly.
 
 jobs:
