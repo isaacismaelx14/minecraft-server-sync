@@ -2,8 +2,14 @@ name: admin-build
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "@minerelay/admin/v*"
+    paths:
+      - "apps/admin/**"
+      - "packages/ui/**"
+      - ".github/workflows/admin-build.yml"
   workflow_dispatch:
     inputs:
       run_from_main:
@@ -72,7 +78,7 @@ jobs:
         run: pnpm --filter @minerelay/admin build
 
   deploy-admin:
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true' || github.event.inputs.tag != ''
+    if: startsWith(github.ref, 'refs/tags/@minerelay/admin/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main != 'true' && github.event.inputs.tag != '')
     needs: build-admin
     runs-on: ubuntu-latest
     permissions:
