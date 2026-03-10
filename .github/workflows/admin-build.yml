@@ -4,16 +4,47 @@ on:
   push:
     tags:
       - "@minerelay/admin/v*"
+  workflow_dispatch:
+    inputs:
+      run_from_main:
+        description: Build from the current main branch instead of checking out a tag
+        required: false
+        default: false
+        type: boolean
+      tag:
+        description: Existing @minerelay/admin tag to build or deploy
+        required: false
+        type: string
 
 jobs:
   build-admin:
     runs-on: ubuntu-latest
     env:
+      RUN_FROM_MAIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      VALIDATION_ONLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && github.event.inputs.tag == '' }}
       NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN || 'https://api.example.com' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && 'main' || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Validate manual dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.run_from_main }}" != "true" ] && [ -z "${{ github.event.inputs.tag }}" ]; then
+            echo "Provide an admin tag or enable 'run_from_main'." >&2
+            exit 1
+          fi
+
+      - name: Warn for main validation runs
+        if: env.VALIDATION_ONLY == 'true'
+        shell: bash
+        run: |
+          echo "::warning::This 'run from main' mode is for admin workflow validation only. It skips deploy and should not be used to represent a tagged release build."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,18 +72,21 @@ jobs:
         run: pnpm --filter @minerelay/admin build
 
   deploy-admin:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/@minerelay/admin/v')
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true' || github.event.inputs.tag != ''
     needs: build-admin
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
