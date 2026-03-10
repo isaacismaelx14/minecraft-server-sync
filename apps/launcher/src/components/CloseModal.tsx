@@ -87,7 +87,7 @@ export const CloseModal = memo(function CloseModal({
       <h2 className="m-0 text-[1.2rem] leading-tight font-semibold text-white">
         Close MineRelay?
       </h2>
-      <p className="m-0 text-[0.92rem] leading-normal text-text-muted">
+      <p className="text-text-muted m-0 text-[0.92rem] leading-normal">
         You can quit the app completely, or keep it running in the background so
         it stays ready.
       </p>
