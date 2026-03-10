@@ -4,6 +4,7 @@ WORKDIR /app
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json ./
 COPY apps/admin/package.json apps/admin/package.json
 COPY packages/ui/package.json packages/ui/package.json
 
@@ -18,4 +19,4 @@ RUN pnpm build
 ENV PORT=3001
 EXPOSE 3001
 
-CMD ["sh", "-c", "node ./scripts/run-vinext.mjs start --port ${PORT}"]
+CMD ["sh", "-c", "node ./scripts/run-vinext.mjs start --port ${PORT} --hostname 0.0.0.0"]

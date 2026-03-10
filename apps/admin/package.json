@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node ./scripts/run-vinext.mjs dev --port 3001",
     "build": "node ./scripts/run-vinext.mjs build",
-    "start": "node ./scripts/run-vinext.mjs start --port 3001",
+    "start": "node ./scripts/run-vinext.mjs start --port 3001 --hostname 0.0.0.0",
     "deploy": "node ./scripts/run-vinext.mjs deploy",
     "lint": "node ./scripts/run-vinext.mjs lint",
     "test": "vitest run",

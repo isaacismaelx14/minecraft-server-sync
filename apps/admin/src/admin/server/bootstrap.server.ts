@@ -15,7 +15,25 @@ const bootstrapCache = new Map<
 export type ServerBootstrapResult = {
   payload: BootstrapPayload | null;
   isRscTransition: boolean;
+  authState: "authenticated" | "unauthorized" | "unknown";
 };
+
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
+const BOOTSTRAP_MAX_ATTEMPTS = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function hasAdminSessionCookie(cookieHeader: string | null): boolean {
+  if (!cookieHeader) {
+    return false;
+  }
+
+  return /(?:^|;\s*)mvl_admin_(?:access|refresh)=/.test(cookieHeader);
+}
 
 function normalizeApiOrigin(raw: string): string {
   const value = raw.trim();
@@ -64,6 +82,8 @@ function buildSessionCacheKey(cookie: string | null): string {
 
 export async function readServerBootstrapResult(): Promise<ServerBootstrapResult> {
   const requestHeaders = await headers();
+  const cookie = requestHeaders.get("cookie");
+  const hasSessionCookie = hasAdminSessionCookie(cookie);
 
   // During in-app route transitions we keep existing client state and avoid
   // a blocking SSR bootstrap network hop for every navigation.
@@ -71,10 +91,10 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
     return {
       payload: null,
       isRscTransition: true,
+      authState: "unknown",
     };
   }
 
-  const cookie = requestHeaders.get("cookie");
   const cacheKey = buildSessionCacheKey(cookie);
   const cached = bootstrapCache.get(cacheKey);
   const now = Date.now();
@@ -83,18 +103,35 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
     return {
       payload: cached.payload,
       isRscTransition: false,
+      authState: cached.payload ? "authenticated" : "unknown",
     };
   }
 
   try {
-    const response = await fetch(
-      buildAdminApiUrl("/v1/admin/bootstrap?includeLoaders=true"),
-      {
-        method: "GET",
-        headers: cookie ? { cookie } : undefined,
-        cache: "no-store",
-      },
-    );
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= BOOTSTRAP_MAX_ATTEMPTS; attempt += 1) {
+      response = await fetch(
+        buildAdminApiUrl("/v1/admin/bootstrap?includeLoaders=true"),
+        {
+          method: "GET",
+          headers: cookie ? { cookie } : undefined,
+          cache: "no-store",
+        },
+      );
+
+      if (
+        !RETRYABLE_STATUS_CODES.has(response.status) ||
+        attempt === BOOTSTRAP_MAX_ATTEMPTS
+      ) {
+        break;
+      }
+
+      await sleep(150 * attempt);
+    }
+
+    if (!response) {
+      throw new Error("Bootstrap response missing.");
+    }
 
     if (response.status === 401) {
       bootstrapCache.set(cacheKey, {
@@ -104,6 +141,7 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
       return {
         payload: null,
         isRscTransition: false,
+        authState: hasSessionCookie ? "unauthorized" : "unknown",
       };
     }
 
@@ -119,6 +157,7 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
       return {
         payload: null,
         isRscTransition: false,
+        authState: "unknown",
       };
     }
 
@@ -130,6 +169,7 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
     return {
       payload,
       isRscTransition: false,
+      authState: "authenticated",
     };
   } catch (error) {
     console.error("[admin] bootstrap request threw:", error);
@@ -140,6 +180,7 @@ export async function readServerBootstrapResult(): Promise<ServerBootstrapResult
     return {
       payload: null,
       isRscTransition: false,
+      authState: "unknown",
     };
   }
 }

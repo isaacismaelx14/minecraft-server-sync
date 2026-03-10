@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const { payload: initialBootstrap, isRscTransition } =
+  const { payload: initialBootstrap, isRscTransition, authState } =
     await readServerBootstrapResult();
 
-  if (!isRscTransition && !initialBootstrap) {
+  if (!isRscTransition && authState === "unauthorized") {
     redirect("/login");
   }
 
