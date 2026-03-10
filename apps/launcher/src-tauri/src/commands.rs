@@ -30,7 +30,7 @@ use crate::{
     LauncherUpdateErrorCode,
     LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
     LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
-    SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
+    DiskConflictReport, FixConflictsResult, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -879,6 +879,30 @@ pub async fn sync_apply(
 #[tauri::command]
 pub fn sync_cancel(state: State<'_, Arc<AppState>>) {
   sync::cancel_sync(state.inner());
+}
+
+#[tauri::command]
+pub async fn sync_check_disk_conflicts(
+  state: State<'_, Arc<AppState>>,
+  server_id: String,
+  minecraft_dir: Option<String>,
+) -> Result<DiskConflictReport, String> {
+  let effective_server = effective_server_id(state.inner(), &server_id);
+  sync::check_disk_conflicts(state.inner(), &effective_server, minecraft_dir)
+    .await
+    .map_err(|e| format!("{e}"))
+}
+
+#[tauri::command]
+pub async fn sync_fix_disk_conflicts(
+  state: State<'_, Arc<AppState>>,
+  server_id: String,
+  minecraft_dir: Option<String>,
+) -> Result<FixConflictsResult, String> {
+  let effective_server = effective_server_id(state.inner(), &server_id);
+  sync::fix_disk_conflicts(state.inner(), &effective_server, minecraft_dir)
+    .await
+    .map_err(|e| format!("{e}"))
 }
 
 #[tauri::command]

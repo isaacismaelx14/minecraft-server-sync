@@ -2,7 +2,6 @@ import { Card, Details, ProgressBar } from "@minerelay/ui";
 import { ServerControlBar } from "../ServerControlBar";
 import { bytesToHuman, formatEta } from "../../utils";
 import type { DesktopWorkspaceCore, DesktopWorkspacePageStyles } from "./types";
-
 export function OverviewPage({
   core,
   styles,
@@ -28,6 +27,9 @@ export function OverviewPage({
     overviewChipClass,
     detailsClass,
     metricsClass,
+    actionsRowClass,
+    ghostButtonClass,
+    primaryButtonClass,
   } = styles;
 
   const {
@@ -52,6 +54,13 @@ export function OverviewPage({
     settings,
     versionReadiness,
     instance,
+    isActionBusy,
+    diskConflictReport,
+    checkDiskConflicts,
+    fixDiskConflicts,
+    dismissDiskConflictReport,
+    fixConflictsResult,
+    dismissFixConflictsResult,
   } = core;
 
   if (screen === "booting") {
@@ -175,6 +184,195 @@ export function OverviewPage({
           <span className={summaryLabelClass}>Keep</span>
         </li>
       </ul>
+
+      {/* Fix Conflicts action row */}
+      <div className={actionsRowClass}>
+        <button
+          className={ghostButtonClass}
+          onClick={() => void checkDiskConflicts()}
+          disabled={
+            isActionBusy("disk:checkConflicts") ||
+            isActionBusy("disk:fixConflicts")
+          }
+        >
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          {isActionBusy("disk:checkConflicts")
+            ? "Scanning..."
+            : "Check Conflicts"}
+        </button>
+      </div>
+
+      {/* Disk conflict report panel */}
+      {diskConflictReport ? (
+        <Card className={panelCardClass}>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className={h3Class}>
+              {diskConflictReport.hasConflicts
+                ? "Conflicts Detected"
+                : "No Conflicts Found"}
+            </h3>
+            <button
+              onClick={dismissDiskConflictReport}
+              aria-label="Dismiss conflict report"
+              className="shrink-0 rounded-md p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[rgba(255,255,255,0.08)] hover:text-white"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          {!diskConflictReport.hasConflicts ? (
+            <p
+              className={subtitleClass}
+              style={{ color: "var(--color-success)" }}
+            >
+              All mods on disk match the server profile. No extra or missing
+              files detected.
+            </p>
+          ) : null}
+
+          {diskConflictReport.extraFiles.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-[#e0a84a]">
+                Extra files ({diskConflictReport.extraFiles.length}) — may be
+                from a different Minecraft/Fabric/Forge version
+              </p>
+              <div className={overviewListClass}>
+                {diskConflictReport.extraFiles.map((f) => (
+                  <span
+                    key={f.filename}
+                    className="rounded-[8px] border border-[rgba(224,168,74,0.3)] bg-[rgba(224,168,74,0.08)] px-2.5 py-1.5 font-mono text-[0.78rem] text-[#e0a84a]"
+                  >
+                    {f.filename}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {diskConflictReport.missingFiles.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-[#b84e4e]">
+                Missing files ({diskConflictReport.missingFiles.length}) —
+                required by server profile
+              </p>
+              <div className={overviewListClass}>
+                {diskConflictReport.missingFiles.map((f) => (
+                  <span
+                    key={f.filename}
+                    className="rounded-[8px] border border-[rgba(184,78,78,0.3)] bg-[rgba(184,78,78,0.08)] px-2.5 py-1.5 font-mono text-[0.78rem] text-[#e07a7a]"
+                  >
+                    {f.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {diskConflictReport.hasConflicts ? (
+            <div className="flex flex-wrap gap-3 pt-1">
+              <button
+                className={primaryButtonClass}
+                onClick={() => void fixDiskConflicts()}
+                disabled={
+                  isActionBusy("disk:fixConflicts") ||
+                  isActionBusy("disk:checkConflicts")
+                }
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {isActionBusy("disk:fixConflicts")
+                  ? "Fixing..."
+                  : `Fix Conflicts${diskConflictReport.extraFiles.length > 0 ? ` (move ${diskConflictReport.extraFiles.length} extra to _mvl_orphaned)` : ""}${diskConflictReport.missingFiles.length > 0 ? " + sync missing" : ""}`}
+              </button>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {/* Fix conflicts result notification */}
+      {fixConflictsResult ? (
+        <Card className={panelCardClass}>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className={h3Class}>Conflicts Fixed</h3>
+            <button
+              onClick={dismissFixConflictsResult}
+              aria-label="Dismiss fix result"
+              className="shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-line-muted hover:text-white"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          {fixConflictsResult.movedCount > 0 ? (
+            <p
+              className={subtitleClass}
+              style={{ color: "var(--color-success)" }}
+            >
+              Moved {fixConflictsResult.movedCount} file
+              {fixConflictsResult.movedCount !== 1 ? "s" : ""} to{" "}
+              <span className="font-mono">
+                {fixConflictsResult.orphanedDir}
+              </span>
+            </p>
+          ) : (
+            <p
+              className={subtitleClass}
+              style={{ color: "var(--color-success)" }}
+            >
+              No extra files to move.
+            </p>
+          )}
+          {fixConflictsResult.missingCount > 0 ? (
+            <p className={subtitleClass}>
+              {fixConflictsResult.missingCount} missing file
+              {fixConflictsResult.missingCount !== 1 ? "s" : ""} — syncing from
+              server profile&hellip;
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
 
       <div className={paneGridClass}>
         <Card className={panelCardClass}>

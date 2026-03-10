@@ -115,6 +115,8 @@ pub fn run() {
       commands::sync_plan,
       commands::sync_apply,
       commands::sync_cancel,
+      commands::sync_check_disk_conflicts,
+      commands::sync_fix_disk_conflicts,
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,

@@ -1817,6 +1817,189 @@ fn progress_done(completed_bytes: u64, total_bytes: u64, speed_bps: u64) -> Sync
   }
 }
 
+/// Scans the mods/resourcepacks/shaderpacks directory of the given minecraft directory
+/// (or the managed instance directory when `minecraft_dir_override` is None) and compares
+/// against what the remote lock requires.
+///
+/// Pass `minecraft_dir_override` = `Some(liveMinecraftDir)` when a game session is active
+/// so conflicts are checked against the directory the game is actually running from.
+pub async fn check_disk_conflicts(
+  state: &AppState,
+  server_id: &str,
+  minecraft_dir_override: Option<String>,
+) -> LauncherResult<crate::types::DiskConflictReport> {
+  let mut remote_lock = fetch_remote_lock(state, server_id).await?;
+  strip_server_lock_items(&mut remote_lock);
+
+  let settings = state.settings.lock().clone();
+  let mut paths = InstancePaths::new(
+    &state.config,
+    server_id,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote_lock);
+  }
+
+  let minecraft_dir = match minecraft_dir_override {
+    Some(ref override_dir) if !override_dir.trim().is_empty() => {
+      std::path::PathBuf::from(override_dir.trim())
+    }
+    _ => paths.minecraft_dir.clone(),
+  };
+
+  let desired = flatten_remote(&remote_lock)?;
+  let (extra_files, missing_files) = scan_disk_vs_lock(&minecraft_dir, &desired).await?;
+  let has_conflicts = !extra_files.is_empty() || !missing_files.is_empty();
+  let checked_dir = minecraft_dir.to_string_lossy().to_string();
+
+  Ok(crate::types::DiskConflictReport { extra_files, missing_files, has_conflicts, checked_dir })
+}
+
+/// Moves extra files (files on disk that are NOT in the server lock) into a
+/// `_mvl_orphaned` subfolder inside their respective directory, then reports
+/// how many were moved and where.  Call `sync_apply` afterwards to restore
+/// any missing files.
+pub async fn fix_disk_conflicts(
+  state: &AppState,
+  server_id: &str,
+  minecraft_dir_override: Option<String>,
+) -> LauncherResult<crate::types::FixConflictsResult> {
+  let mut remote_lock = fetch_remote_lock(state, server_id).await?;
+  strip_server_lock_items(&mut remote_lock);
+
+  let settings = state.settings.lock().clone();
+  let mut paths = InstancePaths::new(
+    &state.config,
+    server_id,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote_lock);
+  }
+
+  let minecraft_dir = match minecraft_dir_override {
+    Some(ref override_dir) if !override_dir.trim().is_empty() => {
+      std::path::PathBuf::from(override_dir.trim())
+    }
+    _ => paths.minecraft_dir.clone(),
+  };
+
+  let desired = flatten_remote(&remote_lock)?;
+  let (extra_files, missing_files) = scan_disk_vs_lock(&minecraft_dir, &desired).await?;
+
+  // Move each extra file into a `_mvl_orphaned` subdirectory inside the same folder
+  let mut moved_count = 0usize;
+  for file in &extra_files {
+    let source_dir = match file.kind.as_str() {
+      "resourcepack" => minecraft_dir.join("resourcepacks"),
+      "shaderpack" => minecraft_dir.join("shaderpacks"),
+      _ => minecraft_dir.join("mods"),
+    };
+    let from_path = source_dir.join(&file.filename);
+    if !from_path.exists() {
+      continue;
+    }
+    let orphaned_subdir = source_dir.join("_mvl_orphaned");
+    if fs::create_dir_all(&orphaned_subdir).await.is_err() {
+      continue;
+    }
+    let to_path = orphaned_subdir.join(&file.filename);
+    if fs::rename(&from_path, &to_path).await.is_ok() {
+      moved_count += 1;
+    }
+  }
+
+  let orphaned_dir = minecraft_dir.join("mods").join("_mvl_orphaned");
+  Ok(crate::types::FixConflictsResult {
+    moved_count,
+    orphaned_dir: orphaned_dir.to_string_lossy().to_string(),
+    missing_count: missing_files.len(),
+  })
+}
+
+/// Scans the mods, resourcepacks and shaderpacks subdirectories of `minecraft_dir` and
+/// compares them against `desired`.  Config entries are intentionally excluded —
+/// they are managed separately (e.g. FancyMenu bundles) and should not trigger
+/// false-positive "missing" reports.
+async fn scan_disk_vs_lock(
+  minecraft_dir: &Path,
+  desired: &HashMap<String, DesiredFile>,
+) -> LauncherResult<(Vec<crate::types::DiskConflictFile>, Vec<crate::types::DiskConflictFile>)> {
+  const SCANNABLE: &[&str] = &["mods/", "resourcepacks/", "shaderpacks/"];
+
+  // Only compare entries that live in a directory we actually scan
+  let expected: HashSet<String> = desired
+    .keys()
+    .filter(|path| SCANNABLE.iter().any(|p| path.starts_with(p)))
+    .cloned()
+    .collect();
+
+  let scan_dirs = [
+    ("mods", minecraft_dir.join("mods")),
+    ("resourcepacks", minecraft_dir.join("resourcepacks")),
+    ("shaderpacks", minecraft_dir.join("shaderpacks")),
+  ];
+
+  let mut on_disk: HashSet<String> = HashSet::new();
+
+  for (prefix, dir) in &scan_dirs {
+    if !dir.exists() {
+      continue;
+    }
+    let mut entries = match fs::read_dir(dir).await {
+      Ok(e) => e,
+      Err(_) => continue,
+    };
+    while let Some(entry) = entries.next_entry().await? {
+      let file_path = entry.path();
+      // Only look at actual files — skip subdirectories (incl. _mvl_orphaned)
+      if !file_path.is_file() {
+        continue;
+      }
+      if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
+        if name.starts_with('.') {
+          continue;
+        }
+        on_disk.insert(format!("{prefix}/{name}"));
+      }
+    }
+  }
+
+  // extra = on disk but NOT expected by the server lock
+  let mut extra_files: Vec<crate::types::DiskConflictFile> = on_disk
+    .iter()
+    .filter(|rel| !expected.contains(*rel))
+    .map(|rel| {
+      let filename = rel.split('/').next_back().unwrap_or(rel).to_string();
+      let kind = rel.split('/').next().unwrap_or("mods").to_string();
+      crate::types::DiskConflictFile { filename: filename.clone(), name: filename, kind }
+    })
+    .collect();
+  extra_files.sort_by(|a, b| a.filename.cmp(&b.filename));
+
+  // missing = expected by lock but NOT found on disk
+  let mut missing_files: Vec<crate::types::DiskConflictFile> = desired
+    .iter()
+    .filter(|(rel, _)| SCANNABLE.iter().any(|p| rel.starts_with(p)) && !on_disk.contains(*rel))
+    .map(|(_, df)| {
+      let filename = df.path.split('/').next_back().unwrap_or(&df.path).to_string();
+      crate::types::DiskConflictFile { filename, name: df.name.clone(), kind: df.kind.clone() }
+    })
+    .collect();
+  missing_files.sort_by(|a, b| a.name.cmp(&b.name));
+
+  Ok((extra_files, missing_files))
+}
+
 #[cfg(test)]
 mod tests {
   use super::{extract_filename, normalize_filename_segment};

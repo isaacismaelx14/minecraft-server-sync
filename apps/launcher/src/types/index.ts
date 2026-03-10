@@ -225,3 +225,24 @@ export interface CatalogSnapshot {
   shaderpacks: string[];
   configs: string[];
 }
+
+export interface DiskConflictFile {
+  filename: string;
+  name: string;
+  kind: string;
+}
+
+export interface DiskConflictReport {
+  extraFiles: DiskConflictFile[];
+  missingFiles: DiskConflictFile[];
+  hasConflicts: boolean;
+  /** Absolute path to the minecraft directory that was scanned */
+  checkedDir: string;
+}
+
+export interface FixConflictsResult {
+  movedCount: number;
+  /** Absolute path to the _mvl_orphaned folder where extra files were moved */
+  orphanedDir: string;
+  missingCount: number;
+}

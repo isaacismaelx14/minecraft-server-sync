@@ -50,6 +50,8 @@ import {
   type CatalogSnapshot,
   type LauncherServerControlsState,
   type LauncherServerStatus,
+  type DiskConflictReport,
+  type FixConflictsResult,
 } from "../types";
 
 import type { CloseModalVariant } from "../components/CloseModal";
@@ -186,6 +188,10 @@ export function useAppCore() {
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closeModalVariant, setCloseModalVariant] =
     useState<CloseModalVariant>("normal");
+  const [diskConflictReport, setDiskConflictReport] =
+    useState<DiskConflictReport | null>(null);
+  const [fixConflictsResult, setFixConflictsResult] =
+    useState<FixConflictsResult | null>(null);
 
   const cycleInFlight = useRef(false);
   const checkingLauncherUpdateRef = useRef(false);
@@ -1031,6 +1037,52 @@ export function useAppCore() {
     [executeSyncApply, refreshDashboardState, sessionActive],
   );
 
+  const checkDiskConflicts = useCallback(async () => {
+    await runLockedAction("disk:checkConflicts", async () => {
+      setError(null);
+      setFixConflictsResult(null);
+      const report = await invoke<DiskConflictReport>(
+        "sync_check_disk_conflicts",
+        {
+          serverId: SERVER_ID,
+          minecraftDir: sessionStatus.liveMinecraftDir ?? undefined,
+        },
+      );
+      setDiskConflictReport(report);
+    });
+  }, [runLockedAction, SERVER_ID, sessionStatus.liveMinecraftDir]);
+
+  const fixDiskConflicts = useCallback(async () => {
+    await runLockedAction("disk:fixConflicts", async () => {
+      setError(null);
+      const result = await invoke<FixConflictsResult>(
+        "sync_fix_disk_conflicts",
+        {
+          serverId: SERVER_ID,
+          minecraftDir: sessionStatus.liveMinecraftDir ?? undefined,
+        },
+      );
+      setFixConflictsResult(result);
+      setDiskConflictReport(null);
+      if (result.missingCount > 0) {
+        await runSyncCycle(false);
+      }
+    });
+  }, [
+    runLockedAction,
+    runSyncCycle,
+    SERVER_ID,
+    sessionStatus.liveMinecraftDir,
+  ]);
+
+  const dismissDiskConflictReport = useCallback(() => {
+    setDiskConflictReport(null);
+  }, []);
+
+  const dismissFixConflictsResult = useCallback(() => {
+    setFixConflictsResult(null);
+  }, []);
+
   const startWizardDetection = useCallback(async () => {
     await runLockedAction("wizard:detect", async () => {
       setError(null);
@@ -1103,7 +1155,7 @@ export function useAppCore() {
       }
 
       setWizardActive(false);
-      setScreen("ready");
+      await runSyncCycle(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setScreen("ready");
@@ -1113,6 +1165,7 @@ export function useAppCore() {
     loadSettingsAndLaunchers,
     refreshPerformanceProfile,
     refreshSessionStatus,
+    runSyncCycle,
   ]);
 
   useEffect(() => {
@@ -1956,5 +2009,11 @@ export function useAppCore() {
     handleCloseModalCancel,
     APP_NAME,
     SERVER_ID,
+    diskConflictReport,
+    checkDiskConflicts,
+    fixDiskConflicts,
+    dismissDiskConflictReport,
+    fixConflictsResult,
+    dismissFixConflictsResult,
   };
 }

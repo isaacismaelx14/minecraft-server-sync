@@ -573,6 +573,33 @@ pub struct CatalogSnapshot {
   pub configs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiskConflictFile {
+  pub filename: String,
+  pub name: String,
+  pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiskConflictReport {
+  pub extra_files: Vec<DiskConflictFile>,
+  pub missing_files: Vec<DiskConflictFile>,
+  pub has_conflicts: bool,
+  /// Absolute path to the minecraft directory that was scanned
+  pub checked_dir: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FixConflictsResult {
+  pub moved_count: usize,
+  /// Absolute path to the orphaned folder where extra files were moved
+  pub orphaned_dir: String,
+  pub missing_count: usize,
+}
+
 fn default_true() -> bool {
   true
 }

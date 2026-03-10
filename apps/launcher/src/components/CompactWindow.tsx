@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useCallback, useMemo } from "react";
-import { Button, CompactStat, ProgressBar, Select } from "@minerelay/ui";
+import { Alert, Button, CompactStat, ProgressBar, Select } from "@minerelay/ui";
 import type { useAppCore } from "../hooks/useAppCore";
 import { formatTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
@@ -201,34 +201,65 @@ export function CompactWindow({
                 >
                   {isCancellingLaunch ? "Cancelling..." : "Cancel Launch"}
                 </Button>
-              ) : (
+              ) : compactNeedsConnect ? (
                 <Button
-                  variant={compactNeedsConnect ? "success" : "primary"}
+                  variant="success"
                   effect="glass"
                   size="md"
                   className="w-full text-[0.95rem]"
-                  onClick={() =>
-                    compactNeedsConnect
-                      ? void runSyncCycle(false)
-                      : void openLauncherFromCompact()
-                  }
-                  disabled={
-                    compactNeedsConnect
-                      ? isChecking
-                      : compactPlaying || isLaunching || isSyncing
-                  }
+                  onClick={() => void runSyncCycle(false)}
+                  disabled={isChecking}
                 >
-                  {compactNeedsConnect
-                    ? isChecking
-                      ? "Connecting..."
-                      : "Connect"
-                    : isSyncing
-                      ? "Syncing..."
-                      : isLaunching
-                        ? "Launching..."
-                        : compactPlaying
-                          ? "Playing"
-                          : "Play"}
+                  {isChecking ? "Connecting..." : "Connect"}
+                </Button>
+              ) : catalog?.hasUpdates && !compactPlaying ? (
+                <>
+                  <Alert
+                    tone="info"
+                    className="w-full text-left text-[0.78rem] py-2 px-3"
+                  >
+                    {isSyncing
+                      ? "Applying updates…"
+                      : (() => {
+                          const parts: string[] = [];
+                          if ((catalog.summary.add ?? 0) > 0)
+                            parts.push(`${catalog.summary.add} to add`);
+                          if ((catalog.summary.update ?? 0) > 0)
+                            parts.push(`${catalog.summary.update} to update`);
+                          if ((catalog.summary.remove ?? 0) > 0)
+                            parts.push(`${catalog.summary.remove} to remove`);
+                          return parts.length > 0
+                            ? parts.join(" · ")
+                            : "Updates available";
+                        })()}
+                  </Alert>
+                  <Button
+                    variant="primary"
+                    effect="glass"
+                    size="md"
+                    className="w-full text-[0.95rem]"
+                    onClick={() => void runSyncCycle(true)}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? "Syncing..." : "Sync Now"}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  effect="glass"
+                  size="md"
+                  className="w-full text-[0.95rem]"
+                  onClick={() => void openLauncherFromCompact()}
+                  disabled={compactPlaying || isLaunching || isSyncing}
+                >
+                  {isSyncing
+                    ? "Syncing..."
+                    : isLaunching
+                      ? "Launching..."
+                      : compactPlaying
+                        ? "Playing"
+                        : "Play"}
                 </Button>
               )}
               <Button
