@@ -1,5 +1,21 @@
 # Changelog
 
+## [@minerelay/launcher/v0.6.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.2) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.6.1...%40minerelay%2Flauncher%2Fv0.6.2)
+
+## Chores
+
+- **core:** add commit message guidelines for repository ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Refactoring
+
+- **core:** improve file handling in check-staged-format and lint-staged scripts ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## CI
+
+- **core:** disable incompatible react rules to stabilize CI ([449b956](https://github.com/isaacismaelx14/minerelay/commit/449b956c4b53363224136d1c537ddb276ee2a330))
+
 ## [@minerelay/launcher/v0.6.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.1) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.6.0...%40minerelay%2Flauncher%2Fv0.6.1)
