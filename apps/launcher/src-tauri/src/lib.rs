@@ -1,3 +1,4 @@
+mod background_runtime;
 mod commands;
 mod config;
 mod error;
@@ -95,12 +96,6 @@ pub fn run() {
 
       show_primary_window(app.handle());
 
-      let app_handle = app.handle().clone();
-      let app_state = app.state::<Arc<state::AppState>>().inner().clone();
-      tauri::async_runtime::spawn(async move {
-        let _ = session::recover_on_startup(&app_handle, app_state).await;
-      });
-
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -120,6 +115,8 @@ pub fn run() {
       commands::sync_plan,
       commands::sync_apply,
       commands::sync_cancel,
+      commands::sync_check_disk_conflicts,
+      commands::sync_fix_disk_conflicts,
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,
@@ -264,6 +261,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn show_primary_window(app: &tauri::AppHandle) {
   let app_state = app.state::<Arc<state::AppState>>();
+  background_runtime::on_ui_started(app_state.as_ref());
   let settings = app_state.settings.lock().clone();
   let target = if onboarding_required(&settings) {
     "setup"

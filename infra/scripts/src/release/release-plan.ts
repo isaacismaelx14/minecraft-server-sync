@@ -103,7 +103,7 @@ export function buildReleasePlan(params: {
   reverseDependencyGraph: Map<string, string[]>;
   requestedTarget: string;
   autoTarget: string;
-  sharedTarget?: string;
+  dependencyRootTargets?: string[];
 }): PlannedRelease[] {
   const configuredTargets = new Set(params.targetOrder);
   const directTargets = new Set(
@@ -116,9 +116,10 @@ export function buildReleasePlan(params: {
       .map((analysis) => analysis.target),
   );
 
+  const dependencyRootTargets = new Set(params.dependencyRootTargets ?? []);
   const shouldOverrideRequestedTarget =
     params.requestedTarget !== params.autoTarget &&
-    Boolean(params.sharedTarget && directTargets.has(params.sharedTarget));
+    [...dependencyRootTargets].some((target) => directTargets.has(target));
 
   const planned = new Map<string, PlannedRelease>();
   const directSourceTargets =

@@ -1,4 +1,9 @@
 import { memo, useCallback } from "react";
+import {
+  ServerControlBar as UiServerControlBar,
+  type ServerControlBarVariant,
+  type ServerControlTone,
+} from "@minerelay/ui";
 import type { LauncherServerControlsState } from "../types";
 
 type Props = {
@@ -7,22 +12,14 @@ type Props = {
   runLauncherServerAction: (
     action: "start" | "stop" | "restart",
   ) => Promise<void>;
-  shellClassName?: string;
-  labelClassName?: string;
-  controlsClassName?: string;
-  iconActionsClassName?: string;
-  iconButtonClassName?: string;
+  variant?: ServerControlBarVariant;
 };
 
 export const ServerControlBar = memo(function ServerControlBar({
   launcherServerControls,
   isServerActionBusy,
   runLauncherServerAction,
-  shellClassName = "compact-server-shell",
-  labelClassName = "launcher-server-section-label compact-server-section-label",
-  controlsClassName = "launcher-server-controls compact-server-controls",
-  iconActionsClassName = "compact-server-icon-actions",
-  iconButtonClassName = "compact-server-icon-btn",
+  variant = "desktop",
 }: Props) {
   const handleStart = useCallback(
     () => void runLauncherServerAction("start"),
@@ -37,17 +34,17 @@ export const ServerControlBar = memo(function ServerControlBar({
     [runLauncherServerAction],
   );
 
-  const statusToneClass = (() => {
+  const statusTone: ServerControlTone = (() => {
     if (!launcherServerControls?.enabled) {
-      return "is-disabled";
+      return "disabled";
     }
 
     const status = launcherServerControls.selectedServer?.status;
-    if (status === 1) return "is-online";
-    if (status === 0) return "is-offline";
-    if (status === 7) return "is-error";
-    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "is-busy";
-    return "is-unknown";
+    if (status === 1) return "online";
+    if (status === 0) return "offline";
+    if (status === 7) return "error";
+    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "busy";
+    return "unknown";
   })();
 
   const launcherServerStatus = launcherServerControls?.selectedServer?.status;
@@ -61,67 +58,33 @@ export const ServerControlBar = memo(function ServerControlBar({
     launcherServerStatus ?? -1,
   );
 
+  const statusText = launcherServerControls.reason
+    ? launcherServerControls.reason
+    : launcherServerControls.permissions.canViewOnlinePlayers &&
+        launcherServerControls.selectedServer
+      ? `${launcherServerControls.selectedServer.players.count}/${launcherServerControls.selectedServer.players.max} online`
+      : undefined;
+
+  const statusLabel =
+    launcherServerControls.selectedServer?.statusLabel ??
+    (launcherServerControls.enabled ? "Unknown" : "Unavailable");
+
   return (
-    <div className={shellClassName}>
-      <span className={labelClassName}>Live Server Control</span>
-      <section className={controlsClassName}>
-        <span className={`launcher-server-badge ${statusToneClass}`}>
-          {launcherServerControls.selectedServer?.statusLabel ??
-            (launcherServerControls.enabled ? "Unknown" : "Unavailable")}
-        </span>
-
-        {launcherServerControls.reason ? (
-          <span className="compact-server-online">
-            {launcherServerControls.reason}
-          </span>
-        ) : launcherServerControls.permissions.canViewOnlinePlayers &&
-          launcherServerControls.selectedServer ? (
-          <span className="compact-server-online">
-            {launcherServerControls.selectedServer.players.count}/
-            {launcherServerControls.selectedServer.players.max} online
-          </span>
-        ) : null}
-
-        {(launcherServerControls.permissions.canStartServer ||
-          launcherServerControls.permissions.canStopServer ||
-          launcherServerControls.permissions.canRestartServer) && (
-          <div className={iconActionsClassName}>
-            {launcherServerControls.permissions.canStartServer && (
-              <button
-                className={iconButtonClassName}
-                onClick={handleStart}
-                disabled={isServerActionBusy || disableStartByStatus}
-                title="Start server"
-                aria-label="Start server"
-              >
-                ▶
-              </button>
-            )}
-            {launcherServerControls.permissions.canRestartServer && (
-              <button
-                className={iconButtonClassName}
-                onClick={handleRestart}
-                disabled={isServerActionBusy || disableRestartByStatus}
-                title="Restart server"
-                aria-label="Restart server"
-              >
-                ↻
-              </button>
-            )}
-            {launcherServerControls.permissions.canStopServer && (
-              <button
-                className={iconButtonClassName}
-                onClick={handleStop}
-                disabled={isServerActionBusy || disableStopByStatus}
-                title="Stop server"
-                aria-label="Stop server"
-              >
-                ■
-              </button>
-            )}
-          </div>
-        )}
-      </section>
-    </div>
+    <UiServerControlBar
+      variant={variant}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      statusText={statusText}
+      isActionBusy={isServerActionBusy}
+      canStart={launcherServerControls.permissions.canStartServer}
+      canRestart={launcherServerControls.permissions.canRestartServer}
+      canStop={launcherServerControls.permissions.canStopServer}
+      disableStart={disableStartByStatus}
+      disableRestart={disableRestartByStatus}
+      disableStop={disableStopByStatus}
+      onStart={handleStart}
+      onRestart={handleRestart}
+      onStop={handleStop}
+    />
   );
 });

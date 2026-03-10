@@ -66,6 +66,7 @@ const releaseableManifests: TargetManifest[] = [
 ];
 
 const releaseTargetOrder = ["shared", "api", "admin", "launcher"];
+const dependencyRootTargets = ["shared", "ui"];
 
 function baseAnalyses(overrides?: Partial<Record<string, ChangeItem[]>>) {
   return {
@@ -109,7 +110,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -150,7 +151,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -190,7 +191,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -226,7 +227,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -267,7 +268,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -304,7 +305,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -348,7 +349,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([]);
@@ -361,7 +362,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "launcher",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -399,7 +400,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "launcher",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -418,7 +419,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -433,7 +434,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -452,7 +453,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -483,7 +484,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -532,7 +533,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -589,7 +590,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(plan).toEqual([
@@ -627,7 +628,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(toNotesSourceMap(plan)).toEqual({
@@ -653,7 +654,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(toNotesSourceMap(plan)).toEqual({
@@ -679,7 +680,7 @@ describe("release-plan", () => {
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTarget: "auto",
       autoTarget: "auto",
-      sharedTarget: "shared",
+      dependencyRootTargets,
     });
 
     expect(toNotesSourceMap(plan)).toEqual({
@@ -691,5 +692,113 @@ describe("release-plan", () => {
     expect(
       plan.every((entry) => entry.target === entry.releaseNotesSourceTarget),
     ).toBe(true);
+  });
+
+  it("fans out ui-only changes to configured dependents in auto mode", () => {
+    const manifests: TargetManifest[] = [
+      {
+        target: "ui",
+        packageName: "@minerelay/ui",
+        dependencies: [],
+      },
+      {
+        target: "admin",
+        packageName: "@minerelay/admin",
+        dependencies: ["@minerelay/ui"],
+      },
+      {
+        target: "launcher",
+        packageName: "@minerelay/launcher",
+        dependencies: ["@minerelay/ui"],
+      },
+    ];
+
+    const plan = buildReleasePlan({
+      targetOrder: ["admin", "launcher", "ui"],
+      analyses: {
+        ui: analysis("ui", [change("feat")]),
+        admin: analysis("admin", []),
+        launcher: analysis("launcher", []),
+      },
+      reverseDependencyGraph: buildReverseDependencyGraph(manifests),
+      requestedTarget: "auto",
+      autoTarget: "auto",
+      dependencyRootTargets,
+    });
+
+    expect(plan).toEqual([
+      {
+        target: "admin",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "launcher",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "ui",
+        reason: "direct",
+        releaseNotesSourceTarget: "ui",
+      },
+    ]);
+    expectUniqueTargets(plan);
+  });
+
+  it("overrides explicit target when ui changed", () => {
+    const manifests: TargetManifest[] = [
+      {
+        target: "ui",
+        packageName: "@minerelay/ui",
+        dependencies: [],
+      },
+      {
+        target: "admin",
+        packageName: "@minerelay/admin",
+        dependencies: ["@minerelay/ui"],
+      },
+      {
+        target: "launcher",
+        packageName: "@minerelay/launcher",
+        dependencies: ["@minerelay/ui"],
+      },
+    ];
+
+    const plan = buildReleasePlan({
+      targetOrder: ["admin", "launcher", "ui"],
+      analyses: {
+        ui: analysis("ui", [change("fix")]),
+        admin: analysis("admin", []),
+        launcher: analysis("launcher", []),
+      },
+      reverseDependencyGraph: buildReverseDependencyGraph(manifests),
+      requestedTarget: "launcher",
+      autoTarget: "auto",
+      dependencyRootTargets,
+    });
+
+    expect(plan).toEqual([
+      {
+        target: "admin",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "launcher",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "ui",
+        reason: "direct",
+        releaseNotesSourceTarget: "ui",
+      },
+    ]);
+    expectUniqueTargets(plan);
   });
 });

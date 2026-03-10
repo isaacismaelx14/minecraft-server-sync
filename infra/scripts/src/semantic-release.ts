@@ -121,7 +121,9 @@ async function main(): Promise<void> {
   const releaseHead = getCurrentHead();
   const repo = getGithubRepoFromGitRemote();
   const targetsToEvaluate = allowedTargets;
-  const sharedTarget = config.targets.shared ? "shared" : undefined;
+  const dependencyRootTargets = ["shared", "ui"].filter((target) =>
+    Boolean(config.targets[target]),
+  );
 
   const targetContexts = loadTargetContexts({
     repoRoot,
@@ -190,7 +192,7 @@ async function main(): Promise<void> {
     reverseDependencyGraph,
     requestedTarget: args.target,
     autoTarget: AUTO_TARGET,
-    sharedTarget,
+    dependencyRootTargets,
   });
 
   if (releasePlan.length > 1 && args.nextVersion) {

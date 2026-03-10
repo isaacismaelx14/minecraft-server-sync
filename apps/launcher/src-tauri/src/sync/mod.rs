@@ -10,7 +10,7 @@ use std::{
   time::Instant,
 };
 
-use futures_util::StreamExt;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -42,10 +42,10 @@ use crate::{
   },
 };
 
-const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
+pub(crate) const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
 const FANCYMENU_TITLE_SCREEN_IDENTIFIER: &str = "net.minecraft.class_442";
 const FANCYMENU_CUSTOM_BUNDLE_CONFIG_NAME: &str = "FancyMenu Custom Bundle";
-const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
+pub(crate) const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
 const FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH: &str = "config/fancymenu/customization.txt";
 const FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH: &str = "config/fancymenu/customization/main.txt";
 const FANCYMENU_SERVER_URL_TOKEN: &str = "{{server_url}}";
@@ -54,13 +54,13 @@ const FANCYMENU_CUSTOMIZATION_DIR_PREFIX: &str = "config/fancymenu/customization
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct FancyMenuBundleManifest {
-  bundle_sha256: String,
-  files: Vec<String>,
+pub(crate) struct FancyMenuBundleManifest {
+  pub(crate) bundle_sha256: String,
+  pub(crate) files: Vec<String>,
   #[serde(default)]
-  has_server_url_template: bool,
+  pub(crate) has_server_url_template: bool,
   #[serde(default)]
-  last_injected_server_url: Option<String>,
+  pub(crate) last_injected_server_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +87,33 @@ struct PlanContext {
   desired: HashMap<String, DesiredFile>,
 }
 
+/// A common interface over asset types that share url/name/sha256 fields,
+/// allowing a single generic `extend_assets` to replace the three separate
+/// `extend_resources` / `extend_shaders` / `extend_configs` functions.
+trait SyncableAsset {
+  fn asset_url(&self) -> &str;
+  fn asset_name(&self) -> &str;
+  fn asset_sha256(&self) -> &str;
+}
+
+impl SyncableAsset for ResourcePack {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
+}
+
+impl SyncableAsset for ShaderPack {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
+}
+
+impl SyncableAsset for ConfigTemplate {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
+}
+
 pub fn cancel_sync(state: &AppState) {
   state.cancel_sync.store(true, Ordering::SeqCst);
 }
@@ -109,7 +136,7 @@ pub async fn check_updates(state: &AppState, server_id: &str) -> LauncherResult<
 pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> LauncherResult<SyncApplyResponse> {
   state.cancel_sync.store(false, Ordering::SeqCst);
 
-  let context = plan_context(state, server_id).await?;
+  let mut context = plan_context(state, server_id).await?;
   let settings = state.settings.lock().clone();
   let mut paths = InstancePaths::new(
     &state.config,
@@ -124,18 +151,40 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
   }
   ensure_layout(&paths)?;
   migrate_legacy_encoded_filenames(&paths, &context.remote_lock).await?;
+  migrate_underscore_mangled_filenames(&paths, &context.remote_lock).await?;
 
-  emit_sync_progress(
-    app,
-    &SyncProgressEvent {
-      phase: "planning".to_string(),
-      completed_bytes: 0,
-      total_bytes: 0,
-      current_file: None,
-      speed_bps: 0,
-      eta_sec: None,
-    },
-  );
+  // After migrations, verify that files marked "keep" actually exist on disk.
+  // The manifest lock may reference files that are physically absent (e.g. the
+  // user's instance was recreated, or a previous partial migration left only
+  // the old `_`-named file without the new `%`-named one). Re-classify any
+  // phantom "keep" entries as "add" so they get downloaded in this pass.
+  let phantom_indices: Vec<(usize, String)> = context
+    .plan
+    .operations
+    .iter()
+    .enumerate()
+    .filter_map(|(i, op)| {
+      if op.op != "keep" {
+        return None;
+      }
+      let target = resolve_target_path(&paths, &op.path);
+      if target.exists() { None } else { Some((i, op.path.clone())) }
+    })
+    .collect();
+
+  for (i, path) in &phantom_indices {
+    if let Some(desired) = context.desired.get(path.as_str()) {
+      context.plan.operations[*i].op = "add".to_string();
+      context.plan.operations[*i].url = Some(desired.url.clone());
+    }
+  }
+  let phantom_count = phantom_indices.len() as i64;
+  if phantom_count > 0 {
+    context.plan.summary.add += phantom_count;
+    context.plan.summary.keep -= phantom_count;
+  }
+
+  emit_sync_progress(app, &progress_planning());
 
   if !context.plan.summary.has_work() {
     write_manifest_lock(&paths, &context.remote_lock)?;
@@ -144,14 +193,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "done".to_string(),
-        completed_bytes: 0,
-        total_bytes: 0,
-        current_file: None,
-        speed_bps: 0,
-        eta_sec: Some(0),
-      },
+      &progress_done(0, 0, 0),
     );
 
     return Ok(SyncApplyResponse {
@@ -185,14 +227,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "downloading".to_string(),
-        completed_bytes: 0,
-        total_bytes,
-        current_file: None,
-        speed_bps: 0,
-        eta_sec: None,
-      },
+      &progress_downloading_start(total_bytes),
     );
 
     download_with_concurrency(
@@ -208,14 +243,11 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "committing".to_string(),
-        completed_bytes: completed_bytes.load(Ordering::SeqCst),
+      &progress_committing(
+        completed_bytes.load(Ordering::SeqCst),
         total_bytes,
-        current_file: None,
-        speed_bps: compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
-        eta_sec: Some(0),
-      },
+        compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
+      ),
     );
 
     commit_plan(state, &context, &paths, &staging_root, &backup_root).await?;
@@ -226,14 +258,11 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "done".to_string(),
-        completed_bytes: total_bytes,
+      &progress_done(
         total_bytes,
-        current_file: None,
-        speed_bps: compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
-        eta_sec: Some(0),
-      },
+        total_bytes,
+        compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
+      ),
     );
 
     Ok::<(), LauncherError>(())
@@ -1029,29 +1058,26 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
     );
   }
 
-  extend_resources(&mut map, "resourcepack", &lock.resources, "resourcepacks")?;
-  extend_shaders(&mut map, &lock.shaders)?;
-  extend_configs(&mut map, &lock.configs)?;
+  extend_assets(&mut map, "resourcepack", &lock.resources, "resourcepacks")?;
+  extend_assets(&mut map, "shaderpack", &lock.shaders, "shaderpacks")?;
+  extend_assets(&mut map, "config", &lock.configs, "config")?;
 
   Ok(map)
 }
 
 fn should_sync_mod_to_client(item: &LockItem) -> bool {
-  match item.side.as_deref() {
-    Some("server") => false,
-    _ => true,
-  }
+  item.side.as_deref() != Some("server")
 }
 
-fn extend_resources(
+fn extend_assets<T: SyncableAsset>(
   map: &mut HashMap<String, DesiredFile>,
   kind: &str,
-  resources: &[ResourcePack],
+  assets: &[T],
   target_dir: &str,
 ) -> LauncherResult<()> {
-  for entry in resources {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
+  for entry in assets {
+    validate_download_url("direct", entry.asset_url())?;
+    let filename = extract_filename(entry.asset_url())?;
     let path = format!("{target_dir}/{filename}");
 
     map.insert(
@@ -1059,54 +1085,10 @@ fn extend_resources(
       DesiredFile {
         path,
         kind: kind.to_string(),
-        name: entry.name.clone(),
+        name: entry.asset_name().to_string(),
         provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
-  }
-
-  Ok(())
-}
-
-fn extend_shaders(map: &mut HashMap<String, DesiredFile>, shaders: &[ShaderPack]) -> LauncherResult<()> {
-  for entry in shaders {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
-    let path = format!("shaderpacks/{filename}");
-
-    map.insert(
-      path.clone(),
-      DesiredFile {
-        path,
-        kind: "shaderpack".to_string(),
-        name: entry.name.clone(),
-        provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
-  }
-
-  Ok(())
-}
-
-fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTemplate]) -> LauncherResult<()> {
-  for entry in configs {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
-    let path = format!("config/{filename}");
-
-    map.insert(
-      path.clone(),
-      DesiredFile {
-        path,
-        kind: "config".to_string(),
-        name: entry.name.clone(),
-        provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
+        url: entry.asset_url().to_string(),
+        sha256: entry.asset_sha256().to_string(),
       },
     );
   }
@@ -1117,51 +1099,27 @@ fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTempl
 fn flatten_local(lock: &ProfileLock) -> LauncherResult<HashMap<String, LocalFile>> {
   let mut map = HashMap::new();
 
+  // Collect (dir_prefix, kind, url, name, sha256) tuples for all asset types to
+  // avoid repeating the same insert pattern four times (DRY).
+  let mut raw: Vec<(&str, &str, &str, &str, &str)> = Vec::new();
   for item in &lock.items {
-    let filename = extract_filename(&item.url)?;
-    map.insert(
-      format!("mods/{filename}"),
-      LocalFile {
-        kind: "mod".to_string(),
-        name: item.name.clone(),
-        sha256: item.sha256.clone(),
-      },
-    );
+    raw.push(("mods", "mod", &item.url, &item.name, &item.sha256));
   }
-
   for entry in &lock.resources {
-    let filename = extract_filename(&entry.url)?;
-    map.insert(
-      format!("resourcepacks/{filename}"),
-      LocalFile {
-        kind: "resourcepack".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
+    raw.push(("resourcepacks", "resourcepack", &entry.url, &entry.name, &entry.sha256));
   }
-
   for entry in &lock.shaders {
-    let filename = extract_filename(&entry.url)?;
-    map.insert(
-      format!("shaderpacks/{filename}"),
-      LocalFile {
-        kind: "shaderpack".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
+    raw.push(("shaderpacks", "shaderpack", &entry.url, &entry.name, &entry.sha256));
+  }
+  for entry in &lock.configs {
+    raw.push(("config", "config", &entry.url, &entry.name, &entry.sha256));
   }
 
-  for entry in &lock.configs {
-    let filename = extract_filename(&entry.url)?;
+  for (dir, kind, url, name, sha256) in raw {
+    let filename = extract_filename(url)?;
     map.insert(
-      format!("config/{filename}"),
-      LocalFile {
-        kind: "config".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
+      format!("{dir}/{filename}"),
+      LocalFile { kind: kind.to_string(), name: name.to_string(), sha256: sha256.to_string() },
     );
   }
 
@@ -1189,7 +1147,7 @@ fn extract_raw_filename(url: &str) -> LauncherResult<String> {
   Ok(last.to_string())
 }
 
-fn extract_filename(url: &str) -> LauncherResult<String> {
+pub fn extract_filename(url: &str) -> LauncherResult<String> {
   let raw = extract_raw_filename(url)?;
   let decoded = decode_percent_segment(&raw);
   let normalized = normalize_filename_segment(&decoded);
@@ -1256,7 +1214,7 @@ fn normalize_filename_segment(value: &str) -> String {
     }
 
     match ch {
-      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '%' => normalized.push('_'),
+      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => normalized.push('_'),
       _ => normalized.push(ch),
     }
   }
@@ -1304,23 +1262,90 @@ fn is_reserved_windows_name(value: &str) -> bool {
   )
 }
 
+/// Returns `(directory, url)` pairs for every asset in the lock, in the order
+/// mods → resourcepacks → shaderpacks → configs. Used by migration helpers to
+/// avoid repeating the same four-collection iteration pattern.
+fn lock_asset_dirs_and_urls<'a>(paths: &'a InstancePaths, lock: &'a ProfileLock) -> Vec<(&'a Path, &'a str)> {
+  let mut pairs: Vec<(&'a Path, &'a str)> = Vec::new();
+  for item in &lock.items { pairs.push((paths.mods.as_path(), item.url.as_str())); }
+  for entry in &lock.resources { pairs.push((paths.resourcepacks.as_path(), entry.url.as_str())); }
+  for entry in &lock.shaders { pairs.push((paths.shaderpacks.as_path(), entry.url.as_str())); }
+  for entry in &lock.configs { pairs.push((paths.config.as_path(), entry.url.as_str())); }
+  pairs
+}
+
 async fn migrate_legacy_encoded_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
-  for item in &lock.items {
-    migrate_legacy_encoded_filename(&paths.mods, &item.url).await?;
+  for (dir, url) in lock_asset_dirs_and_urls(paths, lock) {
+    migrate_legacy_encoded_filename(dir, url).await?;
+  }
+  Ok(())
+}
+
+/// Normalizes a decoded filename segment using the old behavior that replaced
+/// `%` with `_`. Used only for migration — to find files that were created
+/// before the `%`-preservation fix and rename them to the correct form.
+fn normalize_filename_segment_legacy(value: &str) -> String {
+  let mut normalized = String::with_capacity(value.len());
+  for ch in value.chars() {
+    if ch.is_control() {
+      continue;
+    }
+
+    match ch {
+      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '%' => normalized.push('_'),
+      _ => normalized.push(ch),
+    }
   }
 
-  for entry in &lock.resources {
-    migrate_legacy_encoded_filename(&paths.resourcepacks, &entry.url).await?;
+  let trimmed = normalized.trim_matches(|ch| ch == ' ' || ch == '.');
+  let mut normalized = trimmed.to_string();
+  if normalized.is_empty() || normalized == "." || normalized == ".." {
+    normalized = "download".to_string();
   }
 
-  for entry in &lock.shaders {
-    migrate_legacy_encoded_filename(&paths.shaderpacks, &entry.url).await?;
+  let stem = normalized.split('.').next().unwrap_or_default();
+  if is_reserved_windows_name(stem) {
+    normalized.insert(0, '_');
   }
 
-  for entry in &lock.configs {
-    migrate_legacy_encoded_filename(&paths.config, &entry.url).await?;
+  normalized
+}
+
+fn extract_filename_legacy(url: &str) -> LauncherResult<String> {
+  let raw = extract_raw_filename(url)?;
+  let decoded = decode_percent_segment(&raw);
+  let normalized = normalize_filename_segment_legacy(&decoded);
+  if normalized.is_empty() {
+    return Err(LauncherError::InvalidData(format!(
+      "url does not contain a valid filename: {url}"
+    )));
+  }
+  Ok(normalized)
+}
+
+async fn migrate_underscore_mangled_filename(directory: &Path, url: &str) -> LauncherResult<()> {
+  let legacy = extract_filename_legacy(url)?;
+  let normalized = extract_filename(url)?;
+
+  if legacy == normalized {
+    return Ok(());
   }
 
+  let legacy_path = directory.join(&legacy);
+  let normalized_path = directory.join(&normalized);
+
+  if !legacy_path.exists() || normalized_path.exists() {
+    return Ok(());
+  }
+
+  fs::rename(legacy_path, normalized_path).await?;
+  Ok(())
+}
+
+async fn migrate_underscore_mangled_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
+  for (dir, url) in lock_asset_dirs_and_urls(paths, lock) {
+    migrate_underscore_mangled_filename(dir, url).await?;
+  }
   Ok(())
 }
 
@@ -1344,16 +1369,59 @@ async fn migrate_legacy_encoded_filename(directory: &Path, url: &str) -> Launche
 }
 
 async fn estimate_total_bytes(state: &AppState, files: &[DesiredFile]) -> u64 {
-  let mut total = 0;
+  use std::{future::Future, pin::Pin};
 
-  for file in files {
-    if let Ok(response) = state.http.head(&file.url).send().await {
-      if validate_download_url(&file.provider, response.url().as_str()).is_err() {
-        continue;
+  type SizeFut = Pin<Box<dyn Future<Output = u64> + Send>>;
+  const MAX_CONCURRENT: usize = 8;
+
+  // Use Range GET (bytes=0-0) instead of HEAD — CDNs like Modrinth/CurseForge
+  // often omit Content-Length on HEAD but include total size in Content-Range on
+  // partial GETs. We never read the response body so no real data is transferred.
+  let make_fut = |client: reqwest::Client, url: String, provider: String| -> SizeFut {
+    Box::pin(async move {
+      let Ok(resp) = client
+        .get(&url)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await
+      else {
+        return 0u64;
+      };
+
+      if validate_download_url(&provider, resp.url().as_str()).is_err() {
+        return 0;
       }
-      if let Some(length) = response.content_length() {
-        total += length;
+
+      // 206 Partial Content: extract total from Content-Range: bytes 0-0/TOTAL
+      if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+        if let Some(cr) = resp.headers().get(reqwest::header::CONTENT_RANGE) {
+          if let Ok(s) = cr.to_str() {
+            if let Some(total_str) = s.split('/').nth(1) {
+              if let Ok(total) = total_str.trim().parse::<u64>() {
+                return total;
+              }
+            }
+          }
+        }
       }
+
+      // 200 OK: server ignored the Range header — fall back to Content-Length.
+      resp.content_length().unwrap_or(0)
+    })
+  };
+
+  let mut futs: FuturesUnordered<SizeFut> = FuturesUnordered::new();
+  let mut total = 0u64;
+  let mut iter = files.iter();
+
+  for file in iter.by_ref().take(MAX_CONCURRENT) {
+    futs.push(make_fut(state.http.clone(), file.url.clone(), file.provider.clone()));
+  }
+
+  while let Some(size) = futs.next().await {
+    total += size;
+    if let Some(file) = iter.next() {
+      futs.push(make_fut(state.http.clone(), file.url.clone(), file.provider.clone()));
     }
   }
 
@@ -1464,11 +1532,11 @@ fn recommended_download_workers() -> usize {
   let total_memory_mb = system.total_memory() / (1024 * 1024);
 
   if cpu_cores <= 4 || (total_memory_mb > 0 && total_memory_mb <= 8_192) {
-    1
-  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
     2
+  } else if cpu_cores <= 8 || total_memory_mb < 16_384 {
+    4
   } else {
-    3
+    6
   }
 }
 
@@ -1701,6 +1769,237 @@ fn compute_speed(start: Instant, completed: u64) -> u64 {
   completed / elapsed
 }
 
+// ── SyncProgressEvent builders ────────────────────────────────────────────────
+// Centralised constructors so that sync_apply does not repeat the same struct
+// literal with five different field combinations (DRY).
+
+fn progress_planning() -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "planning".to_string(),
+    completed_bytes: 0,
+    total_bytes: 0,
+    current_file: None,
+    speed_bps: 0,
+    eta_sec: None,
+  }
+}
+
+fn progress_downloading_start(total_bytes: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "downloading".to_string(),
+    completed_bytes: 0,
+    total_bytes,
+    current_file: None,
+    speed_bps: 0,
+    eta_sec: None,
+  }
+}
+
+fn progress_committing(completed_bytes: u64, total_bytes: u64, speed_bps: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "committing".to_string(),
+    completed_bytes,
+    total_bytes,
+    current_file: None,
+    speed_bps,
+    eta_sec: Some(0),
+  }
+}
+
+fn progress_done(completed_bytes: u64, total_bytes: u64, speed_bps: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "done".to_string(),
+    completed_bytes,
+    total_bytes,
+    current_file: None,
+    speed_bps,
+    eta_sec: Some(0),
+  }
+}
+
+/// Scans the mods/resourcepacks/shaderpacks directory of the given minecraft directory
+/// (or the managed instance directory when `minecraft_dir_override` is None) and compares
+/// against what the remote lock requires.
+///
+/// Pass `minecraft_dir_override` = `Some(liveMinecraftDir)` when a game session is active
+/// so conflicts are checked against the directory the game is actually running from.
+pub async fn check_disk_conflicts(
+  state: &AppState,
+  server_id: &str,
+  minecraft_dir_override: Option<String>,
+) -> LauncherResult<crate::types::DiskConflictReport> {
+  let mut remote_lock = fetch_remote_lock(state, server_id).await?;
+  strip_server_lock_items(&mut remote_lock);
+
+  let settings = state.settings.lock().clone();
+  let mut paths = InstancePaths::new(
+    &state.config,
+    server_id,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote_lock);
+  }
+
+  let minecraft_dir = match minecraft_dir_override {
+    Some(ref override_dir) if !override_dir.trim().is_empty() => {
+      std::path::PathBuf::from(override_dir.trim())
+    }
+    _ => paths.minecraft_dir.clone(),
+  };
+
+  let desired = flatten_remote(&remote_lock)?;
+  let (extra_files, missing_files) = scan_disk_vs_lock(&minecraft_dir, &desired).await?;
+  let has_conflicts = !extra_files.is_empty() || !missing_files.is_empty();
+  let checked_dir = minecraft_dir.to_string_lossy().to_string();
+
+  Ok(crate::types::DiskConflictReport { extra_files, missing_files, has_conflicts, checked_dir })
+}
+
+/// Moves extra files (files on disk that are NOT in the server lock) into a
+/// `_mvl_orphaned` subfolder inside their respective directory, then reports
+/// how many were moved and where.  Call `sync_apply` afterwards to restore
+/// any missing files.
+pub async fn fix_disk_conflicts(
+  state: &AppState,
+  server_id: &str,
+  minecraft_dir_override: Option<String>,
+) -> LauncherResult<crate::types::FixConflictsResult> {
+  let mut remote_lock = fetch_remote_lock(state, server_id).await?;
+  strip_server_lock_items(&mut remote_lock);
+
+  let settings = state.settings.lock().clone();
+  let mut paths = InstancePaths::new(
+    &state.config,
+    server_id,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote_lock);
+  }
+
+  let minecraft_dir = match minecraft_dir_override {
+    Some(ref override_dir) if !override_dir.trim().is_empty() => {
+      std::path::PathBuf::from(override_dir.trim())
+    }
+    _ => paths.minecraft_dir.clone(),
+  };
+
+  let desired = flatten_remote(&remote_lock)?;
+  let (extra_files, missing_files) = scan_disk_vs_lock(&minecraft_dir, &desired).await?;
+
+  // Move each extra file into a `_mvl_orphaned` subdirectory inside the same folder
+  let mut moved_count = 0usize;
+  for file in &extra_files {
+    let source_dir = match file.kind.as_str() {
+      "resourcepack" => minecraft_dir.join("resourcepacks"),
+      "shaderpack" => minecraft_dir.join("shaderpacks"),
+      _ => minecraft_dir.join("mods"),
+    };
+    let from_path = source_dir.join(&file.filename);
+    if !from_path.exists() {
+      continue;
+    }
+    let orphaned_subdir = source_dir.join("_mvl_orphaned");
+    if fs::create_dir_all(&orphaned_subdir).await.is_err() {
+      continue;
+    }
+    let to_path = orphaned_subdir.join(&file.filename);
+    if fs::rename(&from_path, &to_path).await.is_ok() {
+      moved_count += 1;
+    }
+  }
+
+  let orphaned_dir = minecraft_dir.join("mods").join("_mvl_orphaned");
+  Ok(crate::types::FixConflictsResult {
+    moved_count,
+    orphaned_dir: orphaned_dir.to_string_lossy().to_string(),
+    missing_count: missing_files.len(),
+  })
+}
+
+/// Scans the mods, resourcepacks and shaderpacks subdirectories of `minecraft_dir` and
+/// compares them against `desired`.  Config entries are intentionally excluded —
+/// they are managed separately (e.g. FancyMenu bundles) and should not trigger
+/// false-positive "missing" reports.
+async fn scan_disk_vs_lock(
+  minecraft_dir: &Path,
+  desired: &HashMap<String, DesiredFile>,
+) -> LauncherResult<(Vec<crate::types::DiskConflictFile>, Vec<crate::types::DiskConflictFile>)> {
+  const SCANNABLE: &[&str] = &["mods/", "resourcepacks/", "shaderpacks/"];
+
+  // Only compare entries that live in a directory we actually scan
+  let expected: HashSet<String> = desired
+    .keys()
+    .filter(|path| SCANNABLE.iter().any(|p| path.starts_with(p)))
+    .cloned()
+    .collect();
+
+  let scan_dirs = [
+    ("mods", minecraft_dir.join("mods")),
+    ("resourcepacks", minecraft_dir.join("resourcepacks")),
+    ("shaderpacks", minecraft_dir.join("shaderpacks")),
+  ];
+
+  let mut on_disk: HashSet<String> = HashSet::new();
+
+  for (prefix, dir) in &scan_dirs {
+    if !dir.exists() {
+      continue;
+    }
+    let mut entries = match fs::read_dir(dir).await {
+      Ok(e) => e,
+      Err(_) => continue,
+    };
+    while let Some(entry) = entries.next_entry().await? {
+      let file_path = entry.path();
+      // Only look at actual files — skip subdirectories (incl. _mvl_orphaned)
+      if !file_path.is_file() {
+        continue;
+      }
+      if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
+        if name.starts_with('.') {
+          continue;
+        }
+        on_disk.insert(format!("{prefix}/{name}"));
+      }
+    }
+  }
+
+  // extra = on disk but NOT expected by the server lock
+  let mut extra_files: Vec<crate::types::DiskConflictFile> = on_disk
+    .iter()
+    .filter(|rel| !expected.contains(*rel))
+    .map(|rel| {
+      let filename = rel.split('/').next_back().unwrap_or(rel).to_string();
+      let kind = rel.split('/').next().unwrap_or("mods").to_string();
+      crate::types::DiskConflictFile { filename: filename.clone(), name: filename, kind }
+    })
+    .collect();
+  extra_files.sort_by(|a, b| a.filename.cmp(&b.filename));
+
+  // missing = expected by lock but NOT found on disk
+  let mut missing_files: Vec<crate::types::DiskConflictFile> = desired
+    .iter()
+    .filter(|(rel, _)| SCANNABLE.iter().any(|p| rel.starts_with(p)) && !on_disk.contains(*rel))
+    .map(|(_, df)| {
+      let filename = df.path.split('/').next_back().unwrap_or(&df.path).to_string();
+      crate::types::DiskConflictFile { filename, name: df.name.clone(), kind: df.kind.clone() }
+    })
+    .collect();
+  missing_files.sort_by(|a, b| a.name.cmp(&b.name));
+
+  Ok((extra_files, missing_files))
+}
+
 #[cfg(test)]
 mod tests {
   use super::{extract_filename, normalize_filename_segment};
@@ -1714,9 +2013,19 @@ mod tests {
 
   #[test]
   fn extract_filename_sanitizes_windows_unsafe_characters() {
+    // %20 → space, %2B → +, %3F → ?; only '?' is unsafe so it becomes '_'
     let url = "https://example.com/files/Connected-Paths%201.21.9%2B%20v2.1.1%3F.zip";
     let filename = extract_filename(url).expect("filename should sanitize");
     assert_eq!(filename, "Connected-Paths 1.21.9+ v2.1.1_.zip");
+  }
+
+  #[test]
+  fn extract_filename_preserves_literal_percent() {
+    // %25 decodes to literal '%'; the character is valid on all major filesystems
+    // and must be preserved rather than replaced with '_'.
+    let url = "https://example.com/files/some-mod-100%25-boost.jar";
+    let filename = extract_filename(url).expect("filename should preserve percent");
+    assert_eq!(filename, "some-mod-100%-boost.jar");
   }
 
   #[test]

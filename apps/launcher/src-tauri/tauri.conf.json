@@ -4,7 +4,7 @@
   "version": "0.5.0",
   "identifier": "com.minerelay.launcher",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm vite:dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"

@@ -1,0 +1,28 @@
+# Commit title format:
+# type(scope): short summary
+#
+# Optional breaking format:
+# type(scope)!: short summary
+#
+# Allowed types:
+# feat, fix, perf, refactor, docs, style, chore, build, ci, test
+#
+# Allowed scopes:
+# api, admin, launcher, platform, desktop, shared, core, ui, release
+#
+# Rules:
+# - use lowercase type and scope
+# - keep summary concise and imperative
+# - do not end the summary with a period
+#
+# If breaking:
+# BREAKING CHANGE: <what changed and migration guidance>
+#
+# If multiple meaningful changes are included in one commit body, use lines like:
+# * feat(api): ...
+# * fix(shared): ...
+#
+# Examples:
+# fix(launcher): show app version in compact header
+# ci(platform): update semantic release workflow inputs
+

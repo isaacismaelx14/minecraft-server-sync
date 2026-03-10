@@ -1,1 +1,3 @@
 apps/launcher/src-tauri/gen/
+pnpm-lock.yaml
+pnpm-*.yaml

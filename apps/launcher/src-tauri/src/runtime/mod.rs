@@ -130,7 +130,8 @@ pub async fn ensure_fabric_and_bootstrap(state: &crate::state::AppState, server_
       .await
       .map_err(|e| format!("{e}"))?
   } else {
-    crate::launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &minecraft_root)
+    crate::launcher_apps::bootstrap_official_version(state, &remote, &minecraft_root, &minecraft_root)
+      .await
       .map_err(|e| format!("{e}"))?
   };
 
