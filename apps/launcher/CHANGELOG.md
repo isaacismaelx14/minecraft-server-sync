@@ -1,5 +1,14 @@
 # Changelog
 
+## [@minerelay/launcher/v0.6.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.1) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.6.0...%40minerelay%2Flauncher%2Fv0.6.1)
+
+## Bug Fixes
+
+- **launcher:** remove duplicate windows instant import ([3268f64](https://github.com/isaacismaelx14/minerelay/commit/3268f64caed7769ef6fda0e563fbf18ad215adab))
+- **launcher:** build ui package before release ([bfa3090](https://github.com/isaacismaelx14/minerelay/commit/bfa3090cb8c61e596d81bf1d1264fd29350fe9b7))
+
 ## [@minerelay/launcher/v0.6.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.0) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.5.0...%40minerelay%2Flauncher%2Fv0.6.0)
