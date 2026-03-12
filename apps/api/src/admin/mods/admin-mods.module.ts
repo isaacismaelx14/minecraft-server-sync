@@ -5,6 +5,7 @@ import { AdminModsContextService } from './admin-mods-context.service';
 import { AssetMetadataHydratorService } from './asset-metadata-hydrator.service';
 import { AssetResolverService } from './asset-resolver.service';
 import { FabricLoaderService } from './fabric-loader.service';
+import { MinecraftVersionsService } from './minecraft-versions.service';
 import { ModrinthClientService } from './modrinth-client.service';
 import { ModsInstallPlannerService } from './mods-install-planner.service';
 
@@ -14,11 +15,12 @@ import { ModsInstallPlannerService } from './mods-install-planner.service';
   providers: [
     AdminModsContextService,
     FabricLoaderService,
+    MinecraftVersionsService,
     ModrinthClientService,
     AssetResolverService,
     AssetMetadataHydratorService,
     ModsInstallPlannerService,
   ],
-  exports: [AdminModsContextService],
+  exports: [AdminModsContextService, MinecraftVersionsService],
 })
 export class AdminModsModule {}

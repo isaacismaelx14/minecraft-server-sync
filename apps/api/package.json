@@ -13,9 +13,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma --config prisma.config.ts generate",
+    "prisma:migrate": "prisma --config prisma.config.ts migrate dev",
+    "prisma:deploy": "prisma --config prisma.config.ts migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "admin:rotate-password": "tsx scripts/rotate-admin-password.ts"
   },
