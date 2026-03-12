@@ -2,6 +2,19 @@
 
 All notable changes to this package will be documented in this file.
 
+## [@minerelay/admin/v0.2.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.2.1) (2026-03-12)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.2.0...%40minerelay%2Fadmin%2Fv0.2.1)
+
+## Refactoring
+
+- **ui:** refresh card styling and package guidance ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **ui:** tune card surface and hover styling for shared panels ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Documentation
+
+- **ui:** update AGENT guidance and component catalog ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
 ## [@minerelay/admin/v0.2.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.2.0) (2026-03-12)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.4...%40minerelay%2Fadmin%2Fv0.2.0)
