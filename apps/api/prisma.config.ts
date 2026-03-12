@@ -1,9 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { defineConfig } from 'prisma/config';
 
-const CONFIG_DIR = dirname(fileURLToPath(import.meta.url));
+const CONFIG_DIR = __dirname;
 
 function loadEnvFile(filePath: string) {
   if (!existsSync(filePath)) {
