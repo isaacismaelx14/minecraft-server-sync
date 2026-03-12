@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { BrandingSchema, ProfileLockSchema } from '@minerelay/shared';
 import { PrismaService } from '../../db/prisma.service';
 import {
@@ -35,9 +35,11 @@ export class AdminBootstrapAssemblerService {
     ]);
 
     if (!server || !latest) {
-      throw new NotFoundException(
-        `No profile version found for server '${serverId}'`,
-      );
+      return {
+        needsOnboarding: true as const,
+        appSettings: settings,
+        exaroton,
+      };
     }
 
     const lock = ProfileLockSchema.parse(latest.lockJson);

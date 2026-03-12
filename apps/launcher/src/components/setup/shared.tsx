@@ -9,7 +9,7 @@ export type SetupStepProps = {
 export const wizardSteps = ["source", "paths", "runtime", "sync"] as const;
 
 export const wizardShellClassName =
-  "grid w-full content-start gap-[var(--space-4)] rounded-[var(--radius-xl)] border border-line bg-surface-deep-20 p-4 shadow-[0_24px_80px_var(--color-shadow-xl)] animate-[fadeIn_var(--transition-smooth)_0.1s_both] sm:p-6";
+  "mx-auto grid w-full max-w-5xl content-start gap-[var(--space-4)] rounded-[var(--radius-xl)] border border-line bg-surface-deep-20 p-4 shadow-[0_24px_80px_var(--color-shadow-xl)] animate-[fadeIn_var(--transition-smooth)_0.1s_both] sm:p-6";
 
 export const wizardShellInnerScrollClassName = "overflow-y-auto";
 

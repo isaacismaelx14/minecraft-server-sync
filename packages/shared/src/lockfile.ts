@@ -62,7 +62,7 @@ export type ConfigTemplate = z.infer<typeof ConfigTemplateSchema>;
 
 export const DefaultServerSchema = z.object({
   name: z.string().min(1),
-  address: z.string().min(1),
+  address: z.string(),
 });
 export type DefaultServer = z.infer<typeof DefaultServerSchema>;
 

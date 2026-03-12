@@ -5,12 +5,17 @@ Overview
 @minerelay/ui is the canonical design system for all MineRelay user interfaces.
 
 It provides a consistent set of React components, design tokens, and utility helpers shared across MineRelay front-end surfaces:
-	•	Admin → Next.js web application
-	•	Launcher → Vite + Tauri desktop client
+• Admin → Next.js web application
+• Launcher → Vite + Tauri desktop client
 
 All styling is implemented using Tailwind CSS v4 and design tokens defined in globals.css.
 
 Consumers must not write custom CSS. Instead, import @minerelay/ui/globals.css once at the application root and compose the UI using the provided components and tokens.
+
+If any AI updates `packages/ui`, it must also update this `AGENT.md` to document:
+• new components
+• new variants or props added to existing components
+• any new package-level usage rules
 
 This ensures visual consistency across all MineRelay applications.
 
@@ -20,43 +25,42 @@ Package Layout
 
 packages/ui/
 ├── src/
-│   ├── globals.css          ← Theme tokens, base styles, animations
-│   ├── cn.ts                ← clsx + tailwind-merge helper
-│   ├── tokens.ts            ← Pre-composed Tailwind class utilities
-│   ├── types.ts             ← Shared component types (Size, BaseProps)
-│   ├── index.ts             ← Barrel export for all components/utilities
-│   └── components/
-│       ├── alert.tsx
-│       ├── avatar.tsx
-│       ├── badge.tsx
-│       ├── button.tsx
-│       ├── card.tsx
-│       ├── data-list.tsx
-│       ├── details.tsx
-│       ├── discover-item-card.tsx
-│       ├── discover-modal.tsx
-│       ├── empty-state.tsx
-│       ├── icon-button.tsx
-│       ├── info-panel.tsx
-│       ├── info-row.tsx
-│       ├── list-row.tsx
-│       ├── modal.tsx
-│       ├── modal-header.tsx
-│       ├── progress-bar.tsx
-│       ├── recent-mods-panel.tsx
-│       ├── section-header.tsx
-│       ├── select.tsx
-│       ├── selectable-card.tsx
-│       ├── setting-row.tsx
-│       ├── stat-card.tsx
-│       ├── tag.tsx
-│       ├── text-input.tsx
-│       ├── toast.tsx
-│       ├── toggle-switch.tsx
-│       └── tooltip.tsx
+│ ├── globals.css ← Theme tokens, base styles, animations
+│ ├── cn.ts ← clsx + tailwind-merge helper
+│ ├── tokens.ts ← Pre-composed Tailwind class utilities
+│ ├── types.ts ← Shared component types (Size, BaseProps)
+│ ├── index.ts ← Barrel export for all components/utilities
+│ └── components/
+│ ├── alert.tsx
+│ ├── avatar.tsx
+│ ├── badge.tsx
+│ ├── button.tsx
+│ ├── card.tsx
+│ ├── data-list.tsx
+│ ├── details.tsx
+│ ├── discover-item-card.tsx
+│ ├── discover-modal.tsx
+│ ├── empty-state.tsx
+│ ├── icon-button.tsx
+│ ├── info-panel.tsx
+│ ├── info-row.tsx
+│ ├── list-row.tsx
+│ ├── modal.tsx
+│ ├── modal-header.tsx
+│ ├── progress-bar.tsx
+│ ├── recent-mods-panel.tsx
+│ ├── section-header.tsx
+│ ├── select.tsx
+│ ├── selectable-card.tsx
+│ ├── setting-row.tsx
+│ ├── stat-card.tsx
+│ ├── tag.tsx
+│ ├── text-input.tsx
+│ ├── toast.tsx
+│ ├── toggle-switch.tsx
+│ └── tooltip.tsx
 ├── package.json
 └── tsconfig.json
-
 
 ⸻
 
@@ -66,16 +70,16 @@ All design tokens are declared inside a single @theme block in globals.css.
 
 These tokens define the canonical visual language of MineRelay.
 
-Token category	Examples
-Backgrounds	--color-bg-base, --color-bg-card, --color-bg-input
-Text	--color-text-primary, --color-text-muted, --color-text-hint
-Brand	--color-brand-primary, --color-brand-accent, --color-brand-soft
-Status	--color-status-ok, --color-status-error, --color-status-warn
-Borders	--color-line
-Radius	--radius-sm, --radius-md, --radius-lg, --radius-xl
-Blur	--blur-glass
-Fonts	--font-body, --font-heading, --font-mono
-Spacing	--space-1 → --space-6
+Token category Examples
+Backgrounds --color-bg-base, --color-bg-card, --color-bg-input
+Text --color-text-primary, --color-text-muted, --color-text-hint
+Brand --color-brand-primary, --color-brand-accent, --color-brand-soft
+Status --color-status-ok, --color-status-error, --color-status-warn
+Borders --color-line
+Radius --radius-sm, --radius-md, --radius-lg, --radius-xl
+Blur --blur-glass
+Fonts --font-body, --font-heading, --font-mono
+Spacing --space-1 → --space-6
 
 These tokens must be considered the single source of truth for visual values.
 
@@ -105,21 +109,21 @@ bg-[#00ffaa]
 Why
 
 Using canonical token utilities:
-	•	Enforces a consistent design language
-	•	Prevents uncontrolled style drift
-	•	Allows global theme changes from a single source
-	•	Keeps Admin and Launcher visually aligned
+• Enforces a consistent design language
+• Prevents uncontrolled style drift
+• Allows global theme changes from a single source
+• Keeps Admin and Launcher visually aligned
 
 If a needed token does not exist, add it to globals.css first instead of introducing arbitrary values.
 
 ⸻
 
 Styling Principles
-	•	No inline styles
-	•	No arbitrary Tailwind values
-	•	No hardcoded colors
-	•	No new CSS variables outside globals.css
-	•	Prefer composition through tokens.ts or components
+• No inline styles
+• No arbitrary Tailwind values
+• No hardcoded colors
+• No new CSS variables outside globals.css
+• Prefer composition through tokens.ts or components
 
 All UI surfaces must be built using the design system primitives.
 
@@ -130,11 +134,11 @@ Component Design Philosophy
 Components should be designed as small, composable primitives rather than monolithic UI blocks.
 
 Guidelines:
-	•	Prefer composition over configuration
-	•	Keep components focused on a single responsibility
-	•	Expose minimal props
-	•	Avoid deeply nested prop APIs
-	•	Use composition patterns when possible
+• Prefer composition over configuration
+• Keep components focused on a single responsibility
+• Expose minimal props
+• Avoid deeply nested prop APIs
+• Use composition patterns when possible
 
 Example:
 
@@ -153,14 +157,14 @@ This keeps the system flexible and predictable.
 When to Create a New Component
 
 Create a new component when:
-	•	The same UI pattern appears 3+ times
-	•	A UI element requires shared behavior
-	•	The pattern needs consistent styling across apps
+• The same UI pattern appears 3+ times
+• A UI element requires shared behavior
+• The pattern needs consistent styling across apps
 
 Avoid creating components when:
-	•	It is a one-off UI
-	•	It introduces unnecessary abstraction
-	•	It can be composed from existing primitives
+• It is a one-off UI
+• It introduces unnecessary abstraction
+• It can be composed from existing primitives
 
 Rule of thumb:
 
@@ -177,20 +181,20 @@ Layer 1 — Tokens
 Defined in globals.css.
 
 These represent:
-	•	colors
-	•	spacing
-	•	typography
-	•	blur
-	•	radius
+• colors
+• spacing
+• typography
+• blur
+• radius
 
 Layer 2 — Utility Composition
 
 Defined in tokens.ts.
 
 These provide reusable Tailwind class combinations such as:
-	•	panel styles
-	•	glass effects
-	•	button states
+• panel styles
+• glass effects
+• button states
 
 Layer 3 — Components
 
@@ -209,11 +213,11 @@ Applications should never bypass the system by introducing their own styles.
 Design System Goal
 
 The goal of @minerelay/ui is to ensure:
-	•	Visual consistency
-	•	Predictable UI composition
-	•	Fast UI development
-	•	Easy global theming
-	•	A single design language across all MineRelay products
+• Visual consistency
+• Predictable UI composition
+• Fast UI development
+• Easy global theming
+• A single design language across all MineRelay products
 
 When in doubt, extend the design system rather than bypassing it.
 
@@ -223,17 +227,17 @@ When in doubt, extend the design system rather than bypassing it.
 
 All tokens live in a single `@theme` block inside `globals.css`.
 
-| Token category | Examples |
-|---|---|
-| Backgrounds | `--color-bg-base`, `--color-bg-card`, `--color-bg-input` |
-| Text | `--color-text-primary`, `--color-text-muted`, `--color-text-hint` |
-| Brand | `--color-brand-primary`, `--color-brand-accent`, `--color-brand-soft` |
-| Status | `--color-status-ok`, `--color-status-error`, `--color-status-warn` |
-| Lines / borders | `--color-line` |
-| Radius | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl` |
-| Blur | `--blur-glass` |
-| Fonts | `--font-body`, `--font-heading`, `--font-mono` |
-| Spacing | `--space-1` through `--space-6` |
+| Token category  | Examples                                                              |
+| --------------- | --------------------------------------------------------------------- |
+| Backgrounds     | `--color-bg-base`, `--color-bg-card`, `--color-bg-input`              |
+| Text            | `--color-text-primary`, `--color-text-muted`, `--color-text-hint`     |
+| Brand           | `--color-brand-primary`, `--color-brand-accent`, `--color-brand-soft` |
+| Status          | `--color-status-ok`, `--color-status-error`, `--color-status-warn`    |
+| Lines / borders | `--color-line`                                                        |
+| Radius          | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`            |
+| Blur            | `--blur-glass`                                                        |
+| Fonts           | `--font-body`, `--font-heading`, `--font-mono`                        |
+| Spacing         | `--space-1` through `--space-6`                                       |
 
 Avoid using arbitrary values for these directly in components; instead, add new tokens as needed.
 If want to use a color you should do `bg-{variable}` or `text-{variable}` with a CSS variable, not an arbitrary value.
@@ -244,37 +248,56 @@ So Instead of `bg-[var(--color-brand-primary)]` must be `bg-brand-primary` and i
 ## Component Catalog
 
 ### Button
+
 ```tsx
 <Button variant="primary" size="md" icon="rocket_launch">
   Launch
 </Button>
 ```
+
 **Variants:** `primary` | `ghost` | `outline` | `danger` | `danger-ghost` | `warn` | `success` | `flat`
 **Sizes:** `xs` | `sm` | `md` | `lg`
 **Features:** Shimmer sweep on hover (primary only), icon + iconRight slots, disabled state.
 
+### Card
+
+```tsx
+<Card surface="strong" hoverable>
+  ...
+</Card>
+```
+
+**Surfaces:** `default` | `strong` | `subtle`
+**Features:** Shared panel chrome, hover lift, top highlight rule, glass blur.
+
 ### IconButton
+
 ```tsx
 <IconButton size="sm" icon="settings" label="Open settings" />
 ```
 
 ### Card
+
 ```tsx
 <Card hoverable>Content here</Card>
 ```
+
 **Props:** `hoverable` — enables lift + glow on hover.
 
 ### Modal
+
 ```tsx
 <Modal onClose={close} wide>
   <ModalHeader title="Edit" subtitle="Change settings" onClose={close} />
   {/* content */}
 </Modal>
 ```
+
 Portal-based, focus-trapped, escape-to-close.
 **Props:** `wide` — 1150 px layout for compound content.
 
 ### DiscoverModal
+
 ```tsx
 <DiscoverModal
   title="Add Plugin"
@@ -290,56 +313,70 @@ Portal-based, focus-trapped, escape-to-close.
 ```
 
 ### Tooltip
+
 ```tsx
 <Tooltip label="Copy link">
   <IconButton icon="link" label="Copy" />
 </Tooltip>
 ```
+
 Wraps Base UI Tooltip. Dark chrome.
 
 ### ToggleSwitch
+
 ```tsx
 <ToggleSwitch enabled={val} onChange={setVal} label="Enable feature" />
 ```
 
 ### TextInput / Select
+
 ```tsx
 <TextInput label="Name" value={v} onChange={setV} />
 <Select label="Region" value={r} onChange={setR} options={regions} />
 ```
 
 ### Details
+
 ```tsx
 <Details summary="Advanced options">
   <TextInput label="Token" value={token} onChange={handleChange} />
 </Details>
 ```
+
 Native disclosure component styled with UI token colors from `globals.css`.
 Use for expandable advanced settings, technical details, and optional sections.
 Supports native `open` and `onToggle`, plus `summaryClassName`, `contentClassName`, and `iconClassName` overrides.
 
 ### Badge
+
 ```tsx
 <Badge tone="online">Running</Badge>
 ```
+
 **Tones:** `online` | `busy` | `offline` | `error` | `warning` | `info` | `neutral`
 
 ### Alert
+
 ```tsx
-<Alert tone="error" icon="error">Something went wrong.</Alert>
+<Alert tone="error" icon="error">
+  Something went wrong.
+</Alert>
 ```
+
 **Tones:** `error` | `hint` | `info`
 
 ### ProgressBar
+
 ```tsx
 <ProgressBar value={65} />
 <ProgressBar indeterminate />
 ```
 
 ### Toast
+
 ```tsx
 // Wrap app root:
-<ToastProvider>{children}</ToastProvider>
+<ToastProvider>{children}</ToastProvider>;
 
 // In any child:
 const { pushToast } = useToast();
@@ -347,6 +384,7 @@ pushToast("success", "Saved!");
 ```
 
 ### DataList / DataItem
+
 ```tsx
 <DataList>
   <DataItem label="Version" value="1.20.4" />
@@ -355,29 +393,40 @@ pushToast("success", "Saved!");
 ```
 
 ### SectionHeader
+
 ```tsx
 <SectionHeader icon="settings" title="General" description="Core settings" />
 ```
 
 ### EmptyState
+
 ```tsx
-<EmptyState icon="inbox" title="No items" description="Create your first item." />
+<EmptyState
+  icon="inbox"
+  title="No items"
+  description="Create your first item."
+/>
 ```
 
 ### Avatar
+
 ```tsx
 <Avatar src={profileUrl} fallback="A" size="md" />
 ```
+
 **Sizes:** `sm` | `md` | `lg`
 **Features:** Supports `overlay` slot for status badges and fallback letter when image is missing.
 
 ### Tag
+
 ```tsx
 <Tag>beta</Tag>
 ```
+
 Compact uppercase metadata chip; useful inside row/card `meta` areas.
 
 ### ListRow
+
 ```tsx
 <ListRow
   leading={<Avatar fallback="M" size="sm" />}
@@ -387,9 +436,11 @@ Compact uppercase metadata chip; useful inside row/card `meta` areas.
   trailing={<Button size="xs">Manage</Button>}
 />
 ```
+
 Generic list primitive with `leading`, `meta`, and `trailing` slots.
 
 ### DiscoverItemCard
+
 ```tsx
 <DiscoverItemCard
   media={<Avatar fallback="P" />}
@@ -403,27 +454,43 @@ Generic list primitive with `leading`, `meta`, and `trailing` slots.
 ```
 
 ### StatCard
+
 ```tsx
 <StatCard label="Active" value={12} icon="rocket_launch" tone="emerald" />
 ```
+
 **Tones:** `emerald` | `red` | `amber` | `indigo`
 
 ### InfoPanel / InfoRow
+
 ```tsx
-<InfoPanel icon="info" title="Server Details" actionLabel="Edit" onAction={openEdit}>
+<InfoPanel
+  icon="info"
+  title="Server Details"
+  actionLabel="Edit"
+  onAction={openEdit}
+>
   <InfoRow label="Version" value="1.21.1" />
   <InfoRow label="Status" value="Healthy" highlight="success" />
 </InfoPanel>
 ```
+
 `InfoRow.highlight`: `success` | `warning`
 
 ### RecentModsPanel
+
 ```tsx
-<RecentModsPanel items={mods.slice(0, 5)} totalCount={mods.length} onViewAll={openMods} />
+<RecentModsPanel
+  items={mods.slice(0, 5)}
+  totalCount={mods.length}
+  onViewAll={openMods}
+/>
 ```
+
 Purpose-built summary panel for recent mod entries with quick "View All" action.
 
 ### SelectableCard
+
 ```tsx
 <SelectableCard
   selected={mode === "auto"}
@@ -433,9 +500,11 @@ Purpose-built summary panel for recent mod entries with quick "View All" action.
   headerRight={<Tag>recommended</Tag>}
 />
 ```
+
 Interactive option card for selection flows.
 
 ### SettingRow
+
 ```tsx
 <SettingRow
   title="Auto update"
@@ -448,10 +517,10 @@ Interactive option card for selection flows.
 
 ## Utility Exports
 
-| Export | Purpose |
-|---|---|
-| `cn(...inputs)` | Merge class names (clsx + tailwind-merge). Use everywhere. |
-| `ui` object | Pre-composed Tailwind class strings for common patterns (panels, rows, status chips, etc.). |
+| Export          | Purpose                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `cn(...inputs)` | Merge class names (clsx + tailwind-merge). Use everywhere.                                  |
+| `ui` object     | Pre-composed Tailwind class strings for common patterns (panels, rows, status chips, etc.). |
 
 ---
 

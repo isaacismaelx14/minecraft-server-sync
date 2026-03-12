@@ -5,6 +5,7 @@ import { AdminExarotonModule } from './exaroton/admin-exaroton.module';
 import { AdminLauncherPairingModule } from './launcher/admin-launcher-pairing.module';
 import { AdminMediaModule } from './media/admin-media.module';
 import { AdminModsModule } from './mods/admin-mods.module';
+import { AdminOnboardingModule } from './onboarding/admin-onboarding.module';
 import { AdminPublishModule } from './publish/admin-publish.module';
 import { AdminSettingsModule } from './settings/admin-settings.module';
 
@@ -17,6 +18,7 @@ import { AdminSettingsModule } from './settings/admin-settings.module';
     AdminModsModule,
     AdminPublishModule,
     AdminMediaModule,
+    AdminOnboardingModule,
   ],
   providers: [AdminService],
   exports: [AdminService],

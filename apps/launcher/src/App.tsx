@@ -22,7 +22,6 @@ export default function App() {
     wizardActive,
     toasts,
     APP_NAME,
-    isWindows,
     isApiSourceMode,
     launcherStreamStatus,
     launcherStreamRetryCount,
@@ -100,24 +99,24 @@ export default function App() {
   if (isSetupWindow && wizardActive) {
     return (
       <ToastProvider>
-        <main
-          className={`setup-onboarding-shell flex h-screen min-h-0 flex-col bg-[radial-gradient(circle_at_top_left,var(--color-brand-primary-ring),transparent_42%),radial-gradient(circle_at_bottom_right,var(--color-brand-secondary),transparent_48%),var(--color-bg-base)] px-4 py-5 ${isWindows ? "overflow-y-auto" : "overflow-hidden"}`}
-        >
-          <header className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 text-center">
-            <p className="text-brand-accent m-0 font-mono text-[0.75rem] font-medium tracking-widest uppercase">
-              First-time setup
-            </p>
-            <h1 className="from-brand-primary to-brand-secondary m-0 bg-linear-to-r bg-clip-text text-[clamp(1.8rem,4vw,2.8rem)] leading-[1.1] font-bold tracking-[-0.02em] text-transparent">
-              {APP_NAME}
-            </h1>
-            <p className="text-text-secondary m-0 text-[0.9rem] leading-normal">
-              Complete onboarding to continue.
-            </p>
-          </header>
+        <main className="setup-onboarding-shell flex h-screen min-h-0 flex-col overflow-y-auto bg-[radial-gradient(circle_at_top_left,var(--color-brand-primary-ring),transparent_42%),radial-gradient(circle_at_bottom_right,var(--color-brand-secondary),transparent_48%),var(--color-bg-base)] px-4 py-5">
+          <div className="my-auto grid w-full content-start gap-4">
+            <header className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 text-center">
+              <p className="text-brand-accent m-0 font-mono text-[0.75rem] font-medium tracking-widest uppercase">
+                First-time setup
+              </p>
+              <h1 className="from-brand-primary to-brand-secondary m-0 bg-linear-to-r bg-clip-text text-[clamp(1.8rem,4vw,2.8rem)] leading-[1.1] font-bold tracking-[-0.02em] text-transparent">
+                {APP_NAME}
+              </h1>
+              <p className="text-text-secondary m-0 text-[0.9rem] leading-normal">
+                Complete onboarding to continue.
+              </p>
+            </header>
 
-          <Suspense>
-            <SetupWizard core={core} />
-          </Suspense>
+            <Suspense>
+              <SetupWizard core={core} />
+            </Suspense>
+          </div>
 
           {showLauncherStreamBadge ? (
             <div

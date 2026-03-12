@@ -7,10 +7,19 @@ import {
 } from '../admin.dto';
 import { AdminApiController } from '../admin-api.controller.decorator';
 import { AdminModsContextService } from './admin-mods-context.service';
+import { MinecraftVersionsService } from './minecraft-versions.service';
 
 @AdminApiController()
 export class AdminModsController {
-  constructor(private readonly mods: AdminModsContextService) {}
+  constructor(
+    private readonly mods: AdminModsContextService,
+    private readonly mcVersions: MinecraftVersionsService,
+  ) {}
+
+  @Get('/admin/minecraft/versions')
+  getMinecraftVersions() {
+    return this.mcVersions.getMinecraftVersions();
+  }
 
   @Get('/admin/fabric/versions')
   getFabricVersions(
