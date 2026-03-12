@@ -23,7 +23,9 @@ jobs:
       contents: read
     timeout-minutes: 20
     env:
-      NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN }}
+      ADMIN_API_ORIGIN_REPO_VAR: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN }}
+      ADMIN_API_ORIGIN_FALLBACK: https://api.minerelay.com
+      NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN || 'https://api.minerelay.com' }}
 
     steps:
       - name: Checkout
@@ -62,7 +64,10 @@ jobs:
       - name: Validate admin API origin
         shell: bash
         run: |
-          node -e 'const value=(process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN||"").trim(); if(!value){console.error("Missing repository variable NEXT_PUBLIC_ADMIN_API_ORIGIN."); process.exit(1)}; let parsed; try { parsed = new URL(value); } catch { console.error(`Invalid NEXT_PUBLIC_ADMIN_API_ORIGIN: ${value}`); process.exit(1) } if(parsed.protocol!=="http:"&&parsed.protocol!=="https:"){console.error(`NEXT_PUBLIC_ADMIN_API_ORIGIN must use http/https: ${value}`); process.exit(1)}'
+          if [ -z "${ADMIN_API_ORIGIN_REPO_VAR:-}" ]; then
+            echo "::warning::Repository variable NEXT_PUBLIC_ADMIN_API_ORIGIN is not set; using fallback ${ADMIN_API_ORIGIN_FALLBACK}."
+          fi
+          node -e 'const value=(process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN||"").trim(); if(!value){console.error("NEXT_PUBLIC_ADMIN_API_ORIGIN resolved to an empty value."); process.exit(1)}; let parsed; try { parsed = new URL(value); } catch { console.error(`Invalid NEXT_PUBLIC_ADMIN_API_ORIGIN: ${value}`); process.exit(1) } if(parsed.protocol!=="http:"&&parsed.protocol!=="https:"){console.error(`NEXT_PUBLIC_ADMIN_API_ORIGIN must use http/https: ${value}`); process.exit(1)}'
 
       - name: Setup Node
         uses: actions/setup-node@v4
