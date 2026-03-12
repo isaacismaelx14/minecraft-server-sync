@@ -1,5 +1,21 @@
 # Changelog
 
+## [@minerelay/shared/v0.2.4](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.4) (2026-03-12)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.3...%40minerelay%2Fshared%2Fv0.2.4)
+
+## Refactoring
+
+- **shared:** update lockfile and profile typings ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Styles
+
+- **core:** normalize turbo outputs formatting ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Chores
+
+- **core:** run full typecheck, test, and build on pre-push ([802625f](https://github.com/isaacismaelx14/minerelay/commit/802625f0a8e9aedca3753bb6179b53aeaa5c6398))
+
 ## [@minerelay/shared/v0.2.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.3) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.2...%40minerelay%2Fshared%2Fv0.2.3)
