@@ -9,7 +9,7 @@ export const ProfileMetadataResponseSchema = z.object({
   loaderVersion: z.string().min(1),
   lockUrl: z.url(),
   serverName: z.string().min(1),
-  serverAddress: z.string().min(1),
+  serverAddress: z.string(),
   allowedMinecraftVersions: z.array(z.string().min(1)).default([]),
   fancyMenuEnabled: z.boolean().default(false),
   fancyMenu: FancyMenuSettingsSchema.optional(),
