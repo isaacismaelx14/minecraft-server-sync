@@ -6,17 +6,29 @@ import { cn } from "../cn";
 export interface CardProps {
   className?: string;
   hoverable?: boolean;
+  surface?: "default" | "strong" | "subtle";
 }
+
+const surfaceClasses = {
+  default:
+    "bg-bg-card border-line shadow-[0_16px_40px_var(--color-shadow-panel)]",
+  strong:
+    "bg-bg-card-strong border-line-strong shadow-[0_20px_48px_var(--color-shadow-xl)]",
+  subtle:
+    "bg-surface-deep-20 border-line shadow-[0_10px_28px_var(--color-shadow-panel)]",
+} as const;
 
 export function Card({
   children,
   className,
   hoverable,
+  surface = "default",
 }: PropsWithChildren<CardProps>): ReactElement {
   return (
     <article
       className={cn(
-        "relative overflow-hidden bg-bg-card border border-line rounded-[var(--radius-lg)] p-5 md:p-6 flex flex-col gap-4 transition-all duration-200 shadow-[0_16px_40px_var(--color-shadow-panel)] backdrop-blur-[var(--blur-soft)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--color-line-strongest),transparent)] before:content-['']",
+        "relative overflow-hidden border rounded-[var(--radius-lg)] p-5 md:p-6 flex flex-col gap-4 transition-all duration-200 backdrop-blur-[var(--blur-soft)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--color-line-strongest),transparent)] before:content-['']",
+        surfaceClasses[surface],
         hoverable &&
           "hover:bg-bg-card-hover hover:border-line-strong hover:-translate-y-px hover:shadow-[0_22px_48px_var(--color-shadow-xl)]",
         className,
