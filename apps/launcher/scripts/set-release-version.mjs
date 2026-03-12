@@ -20,15 +20,11 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
 const repoRoot = process.cwd();
 const launcherRoot = path.join(repoRoot, "apps", "launcher");
 
-updateJson(path.join(launcherRoot, "package.json"), (data) => {
-  data.version = version;
-  return data;
-});
-
-updateJson(path.join(launcherRoot, "src-tauri", "tauri.conf.json"), (data) => {
-  data.version = version;
-  return data;
-});
+updateJsonVersionField(path.join(launcherRoot, "package.json"), version);
+updateJsonVersionField(
+  path.join(launcherRoot, "src-tauri", "tauri.conf.json"),
+  version,
+);
 
 updateCargoPackageVersion(
   path.join(launcherRoot, "src-tauri", "Cargo.toml"),
@@ -37,11 +33,18 @@ updateCargoPackageVersion(
 
 console.log(`Stamped launcher version to ${version}`);
 
-function updateJson(filePath, mutate) {
+function updateJsonVersionField(filePath, nextVersion) {
   const raw = fs.readFileSync(filePath, "utf8");
-  const parsed = JSON.parse(raw);
-  const next = mutate(parsed);
-  fs.writeFileSync(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  const next = raw.replace(
+    /("version"\s*:\s*")([^"]+)(")/u,
+    `$1${nextVersion}$3`,
+  );
+
+  if (next === raw) {
+    throw new Error(`Failed to update version field in ${filePath}`);
+  }
+
+  fs.writeFileSync(filePath, next, "utf8");
 }
 
 function updateCargoPackageVersion(filePath, nextVersion) {
