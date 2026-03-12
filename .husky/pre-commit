@@ -1,5 +1,20 @@
 #!/usr/bin/env sh
 set -eu
 
-pnpm format:check-staged
-pnpm lint:staged
+run_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm "$@"
+    return
+  fi
+
+  if command -v corepack >/dev/null 2>&1; then
+    corepack pnpm "$@"
+    return
+  fi
+
+  echo "pnpm (or corepack) is required to run git hooks." >&2
+  exit 1
+}
+
+run_pnpm format:check-staged
+run_pnpm lint:staged
