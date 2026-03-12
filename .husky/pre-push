@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
+pnpm env:check-node
 pnpm format:check
 pnpm lint
 pnpm typecheck

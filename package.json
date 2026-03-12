@@ -30,6 +30,7 @@
     "release:admin:from-tag": "pnpm release:target -- --target admin",
     "release:launcher": "pnpm release:target -- --target launcher",
     "release:shared": "pnpm release:target -- --target shared",
+    "env:check-node": "node scripts/check-node-version.mjs",
     "prepare": "husky",
     "commitmsg:check": "node scripts/validate-commit-msg.mjs"
   },
