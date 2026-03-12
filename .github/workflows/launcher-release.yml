@@ -106,7 +106,87 @@ jobs:
 
       - name: Stamp launcher version for this release
         shell: bash
-        run: node apps/launcher/scripts/set-release-version.mjs "${{ steps.version.outputs.version || steps.version_main.outputs.version }}"
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version || steps.version_main.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const version = (process.env.RELEASE_VERSION || "").trim();
+          if (!version) {
+            throw new Error("Missing release version for launcher stamping.");
+          }
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+            throw new Error(`Invalid semantic version: "${version}"`);
+          }
+
+          const launcherRoot = path.join(process.cwd(), "apps", "launcher");
+          const packageJsonPath = path.join(launcherRoot, "package.json");
+          const tauriConfPath = path.join(
+            launcherRoot,
+            "src-tauri",
+            "tauri.conf.json",
+          );
+          const cargoTomlPath = path.join(launcherRoot, "src-tauri", "Cargo.toml");
+
+          const updateJsonVersionField = (filePath, nextVersion) => {
+            const raw = fs.readFileSync(filePath, "utf8");
+            if (!/"version"\s*:\s*"[^"]+"/u.test(raw)) {
+              throw new Error(`Failed to find version field in ${filePath}`);
+            }
+            const next = raw.replace(
+              /("version"\s*:\s*")([^"]+)(")/u,
+              `$1${nextVersion}$3`,
+            );
+            if (next !== raw) {
+              fs.writeFileSync(filePath, next, "utf8");
+            }
+          };
+
+          const updateCargoPackageVersion = (filePath, nextVersion) => {
+            const raw = fs.readFileSync(filePath, "utf8");
+            const lines = raw.split(/\r?\n/);
+            if (lines.length > 0 && lines[lines.length - 1] === "") {
+              lines.pop();
+            }
+
+            let inPackage = false;
+            let replaced = false;
+
+            for (let index = 0; index < lines.length; index += 1) {
+              const line = lines[index];
+              const section = line.match(/^\s*\[([^\]]+)\]\s*$/);
+
+              if (section) {
+                inPackage = section[1] === "package";
+                continue;
+              }
+
+              if (!inPackage) {
+                continue;
+              }
+
+              if (/^\s*version\s*=/.test(line)) {
+                lines[index] = `version = "${nextVersion}"`;
+                replaced = true;
+                break;
+              }
+            }
+
+            if (!replaced) {
+              throw new Error(`Failed to find [package] version field in ${filePath}`);
+            }
+
+            fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
+          };
+
+          updateJsonVersionField(packageJsonPath, version);
+          updateJsonVersionField(tauriConfPath, version);
+          updateCargoPackageVersion(cargoTomlPath, version);
+
+          console.log(`Stamped launcher version to ${version}`);
+          NODE
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
