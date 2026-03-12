@@ -102,6 +102,51 @@ jobs:
         with:
           version: 9.12.3
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install launcher test dependencies (Linux)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+
+          WEBKIT_PACKAGE=""
+          for package in libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev; do
+            if apt-cache show "$package" >/dev/null 2>&1; then
+              WEBKIT_PACKAGE="$package"
+              break
+            fi
+          done
+
+          APPINDICATOR_PACKAGE=""
+          for package in libayatana-appindicator3-dev libappindicator3-dev; do
+            if apt-cache show "$package" >/dev/null 2>&1; then
+              APPINDICATOR_PACKAGE="$package"
+              break
+            fi
+          done
+
+          if [ -z "$WEBKIT_PACKAGE" ]; then
+            echo "Unable to find a supported webkit2gtk development package on this runner." >&2
+            exit 1
+          fi
+
+          if [ -z "$APPINDICATOR_PACKAGE" ]; then
+            echo "Unable to find a supported appindicator development package on this runner." >&2
+            exit 1
+          fi
+
+          sudo apt-get install -y \
+            build-essential \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            "$WEBKIT_PACKAGE" \
+            "$APPINDICATOR_PACKAGE" \
+            librsvg2-dev \
+            patchelf \
+            pkg-config
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
